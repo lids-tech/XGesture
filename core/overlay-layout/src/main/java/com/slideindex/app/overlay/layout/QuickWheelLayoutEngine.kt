@@ -223,8 +223,8 @@ object QuickWheelLayoutEngine {
     const val MAX_CONTAINER_CORNER_DP = 44f
     const val MIN_PERCENT = 20
     const val MAX_PERCENT = 100
-    const val MIN_OFFSET_DP = -80f
-    const val MAX_OFFSET_DP = 80f
+    const val MIN_OFFSET_DP = -200f
+    const val MAX_OFFSET_DP = 200f
 
     /** 矩形形态：容器列数（范围 + 默认值）。 */
     const val MIN_COLUMN_COUNT = 2
