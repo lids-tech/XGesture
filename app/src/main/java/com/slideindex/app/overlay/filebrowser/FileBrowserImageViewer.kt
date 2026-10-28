@@ -174,7 +174,7 @@ private suspend fun loadBitmap(
 }
 
 private fun shareBitmap(context: Context, bitmap: Bitmap) {
-    val dir = File(context.cacheDir, "image_share").apply { mkdirs() }
+    val dir = File(context.cacheDir, "filebrowser").apply { mkdirs() }
     val file = File(dir, "share_${System.currentTimeMillis()}.png")
     runCatching {
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -188,6 +188,9 @@ private fun shareBitmap(context: Context, bitmap: Bitmap) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "分享图片"))
+        val chooser = Intent.createChooser(intent, "分享图片").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
     }
 }
