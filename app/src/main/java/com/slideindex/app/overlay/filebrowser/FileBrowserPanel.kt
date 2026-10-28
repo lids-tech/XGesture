@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -1125,7 +1126,11 @@ private fun FileBrowserQuickChips(
     if (paths.isEmpty()) return
     val listState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val spacingPx = with(density) { 8.dp.toPx() }
     var draggingPath by remember { mutableStateOf<String?>(null) }
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
     LazyRow(
         state = listState,
@@ -1153,23 +1158,46 @@ private fun FileBrowserQuickChips(
                 "/data/data" -> Icons.Outlined.Apps
                 else -> Icons.Outlined.Folder
             }
+            val draggedWidth = listState.layoutInfo.visibleItemsInfo
+                .firstOrNull { it.index == draggingIndex }
+                ?.size
+                ?.toFloat()
+                ?: 0f
+            val fromIndex = draggingIndex
+            val toIndex = dragTargetIndex
+            val shiftTarget = when {
+                fromIndex == null || toIndex == null || index == fromIndex -> 0f
+                fromIndex < toIndex && index in (fromIndex + 1)..toIndex ->
+                    -(draggedWidth + spacingPx)
+                fromIndex > toIndex && index in toIndex until fromIndex ->
+                    draggedWidth + spacingPx
+                else -> 0f
+            }
+            val animatedShift by animateFloatAsState(
+                targetValue = shiftTarget,
+                label = "quick-chip-shift",
+            )
             Row(
                 modifier = Modifier
                     .offset {
-                        if (draggingPath == path) IntOffset(dragOffset.roundToInt(), 0) else IntOffset.Zero
+                        if (draggingPath == path) {
+                            IntOffset(dragOffset.roundToInt(), 0)
+                        } else {
+                            IntOffset(animatedShift.roundToInt(), 0)
+                        }
                     }
                     .pointerInput(paths, path, index) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 draggingPath = path
+                                draggingIndex = index
+                                dragTargetIndex = index
                                 dragOffset = 0f
                             },
                             onDrag = { change, amount ->
                                 change.consume()
                                 dragOffset += amount.x
-                            },
-                            onDragEnd = {
                                 val info = listState.layoutInfo.visibleItemsInfo
                                     .firstOrNull { it.index == index }
                                 if (info != null) {
@@ -1181,19 +1209,30 @@ private fun FileBrowserQuickChips(
                                             )
                                         }
                                         ?.index
-                                    if (target != null && target != index) {
-                                        FileBrowserPreferences.moveShortcut(
-                                            index,
-                                            target,
-                                            internalRoot,
-                                        )
+                                    if (target != null && target != dragTargetIndex) {
+                                        dragTargetIndex = target
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
                                 }
+                            },
+                            onDragEnd = {
+                                val target = dragTargetIndex ?: index
+                                if (target != index) {
+                                    FileBrowserPreferences.moveShortcut(
+                                        index,
+                                        target,
+                                        internalRoot,
+                                    )
+                                }
                                 draggingPath = null
+                                draggingIndex = null
+                                dragTargetIndex = null
                                 dragOffset = 0f
                             },
                             onDragCancel = {
                                 draggingPath = null
+                                draggingIndex = null
+                                dragTargetIndex = null
                                 dragOffset = 0f
                             },
                         )
@@ -1233,6 +1272,7 @@ private fun FileBrowserFavoritesOverlay(
         mutableStateOf(FileBrowserPreferences.quickShortcuts(internalRoot))
     }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
@@ -1284,14 +1324,27 @@ private fun FileBrowserFavoritesOverlay(
                     )
                 } else {
                     favorites.forEachIndexed { index, path ->
+                        val fromIndex = draggingIndex
+                        val toIndex = dragTargetIndex
+                        val shiftTarget = when {
+                            fromIndex == null || toIndex == null || index == fromIndex -> 0f
+                            fromIndex < toIndex && index in (fromIndex + 1)..toIndex -> -rowHeightPx
+                            fromIndex > toIndex && index in toIndex until fromIndex -> rowHeightPx
+                            else -> 0f
+                        }
+                        val animatedShift by animateFloatAsState(
+                            targetValue = shiftTarget,
+                            label = "favorite-row-shift",
+                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .offset {
-                                    IntOffset(
-                                        0,
-                                        if (draggingIndex == index) dragOffset.roundToInt() else 0,
-                                    )
+                                    if (draggingIndex == index) {
+                                        IntOffset(0, dragOffset.roundToInt())
+                                    } else {
+                                        IntOffset(0, animatedShift.roundToInt())
+                                    }
                                 }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1304,16 +1357,21 @@ private fun FileBrowserFavoritesOverlay(
                                             onDragStart = {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 draggingIndex = index
+                                                dragTargetIndex = index
                                                 dragOffset = 0f
                                             },
                                             onDrag = { change, amount ->
                                                 change.consume()
                                                 dragOffset += amount.y
+                                                val target = (index + (dragOffset / rowHeightPx).roundToInt())
+                                                    .coerceIn(0, favorites.lastIndex)
+                                                if (target != dragTargetIndex) {
+                                                    dragTargetIndex = target
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                }
                                             },
                                             onDragEnd = {
-                                                val delta = (dragOffset / rowHeightPx).roundToInt()
-                                                val to = (index + delta)
-                                                    .coerceIn(0, favorites.lastIndex)
+                                                val to = dragTargetIndex ?: index
                                                 if (to != index) {
                                                     FileBrowserPreferences.moveShortcut(
                                                         index,
@@ -1323,10 +1381,12 @@ private fun FileBrowserFavoritesOverlay(
                                                     refresh()
                                                 }
                                                 draggingIndex = null
+                                                dragTargetIndex = null
                                                 dragOffset = 0f
                                             },
                                             onDragCancel = {
                                                 draggingIndex = null
+                                                dragTargetIndex = null
                                                 dragOffset = 0f
                                             },
                                         )
