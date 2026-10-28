@@ -2,6 +2,7 @@ package com.slideindex.app.overlay.filebrowser
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -115,7 +116,8 @@ internal fun FileBrowserDetailsOverlay(
                     DetailRow(
                         label = stringResource(R.string.file_browser_detail_path),
                         value = entry.path,
-                        selectable = true,
+                        selectable = false,
+                        onClick = onCopy,
                     )
                     DetailRow(
                         label = stringResource(R.string.file_browser_detail_size),
@@ -226,10 +228,12 @@ private fun DetailRow(
     label: String,
     value: String,
     selectable: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
