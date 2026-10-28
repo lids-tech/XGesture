@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Storage
@@ -918,8 +919,8 @@ private fun FileBrowserTabBar(
                 if (tabs.size > 1) {
                     Box(
                         modifier = Modifier
-                            .size(17.dp)
-                            .clip(RoundedCornerShape(5.dp))
+                            .size(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .clickable { onClose(tab.id) },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1255,49 +1256,60 @@ private fun FileBrowserFavoritesOverlay(
                                         if (draggingIndex == index) dragOffset.roundToInt() else 0,
                                     )
                                 }
-                                .pointerInput(favorites) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            if (!isSystem) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                draggingIndex = index
-                                                dragOffset = 0f
-                                            }
-                                        },
-                                        onDrag = { change, amount ->
-                                            change.consume()
-                                            if (draggingIndex != null) dragOffset += amount.y
-                                        },
-                                        onDragEnd = {
-                                            val fromFavorite = draggingIndex
-                                            if (fromFavorite != null && !isSystem) {
-                                                val draggedPath = favorites.getOrNull(fromFavorite)
-                                                val fromUser = userPaths.indexOf(draggedPath)
-                                                val delta = (dragOffset / rowHeightPx).roundToInt()
-                                                val toUser = (fromUser + delta)
-                                                    .coerceIn(0, userPaths.lastIndex)
-                                                if (fromUser >= 0 && toUser != fromUser) {
-                                                    FileBrowserPreferences.movePin(
-                                                        fromUser,
-                                                        toUser,
-                                                        internalRoot,
-                                                    )
-                                                    refresh()
-                                                }
-                                            }
-                                            draggingIndex = null
-                                            dragOffset = 0f
-                                        },
-                                        onDragCancel = {
-                                            draggingIndex = null
-                                            dragOffset = 0f
-                                        },
-                                    )
-                                }
                                 .clickable { onNavigate(path) }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            if (!isSystem) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .pointerInput(favorites, index) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    draggingIndex = index
+                                                    dragOffset = 0f
+                                                },
+                                                onDrag = { change, amount ->
+                                                    change.consume()
+                                                    dragOffset += amount.y
+                                                },
+                                                onDragEnd = {
+                                                    val draggedPath = favorites.getOrNull(index)
+                                                    val fromUser = userPaths.indexOf(draggedPath)
+                                                    val delta = (dragOffset / rowHeightPx).roundToInt()
+                                                    val toUser = (fromUser + delta)
+                                                        .coerceIn(0, userPaths.lastIndex)
+                                                    if (fromUser >= 0 && toUser != fromUser) {
+                                                        FileBrowserPreferences.movePin(
+                                                            fromUser,
+                                                            toUser,
+                                                            internalRoot,
+                                                        )
+                                                        refresh()
+                                                    }
+                                                    draggingIndex = null
+                                                    dragOffset = 0f
+                                                },
+                                                onDragCancel = {
+                                                    draggingIndex = null
+                                                    dragOffset = 0f
+                                                },
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.DragHandle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.width(24.dp))
+                            }
                             Icon(
                                 imageVector = Icons.Outlined.Folder,
                                 contentDescription = null,
