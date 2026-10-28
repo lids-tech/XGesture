@@ -19,6 +19,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,6 +76,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,6 +90,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -1125,157 +1129,161 @@ private fun FileBrowserQuickChips(
 ) {
     val paths = FileBrowserPreferences.quickShortcuts(internalRoot)
     if (paths.isEmpty()) return
-    val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
     val haptic = LocalHapticFeedback.current
     val actionScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val spacingPx = with(density) { 8.dp.toPx() }
+    val itemBounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
     var draggingPath by remember { mutableStateOf<String?>(null) }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
     var settlingTarget by remember { mutableStateOf<Float?>(null) }
-    LazyRow(
-        state = listState,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
     ) {
-        items(paths.size, key = { paths[it] }) { index ->
-            val path = paths[index]
-            val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
-            val label = when (path) {
-                "/" -> stringResource(R.string.file_browser_quick_root)
-                normalizedRoot -> stringResource(R.string.file_browser_quick_internal)
-                "$normalizedRoot/Android/data" -> stringResource(R.string.file_browser_quick_android_data)
-                "$normalizedRoot/Download" -> stringResource(R.string.file_browser_quick_download)
-                "$normalizedRoot/Android/obb" -> stringResource(R.string.file_browser_quick_obb)
-                "/data/data" -> stringResource(R.string.file_browser_quick_app_data)
-                else -> tabTitle(path)
-            }
-            val icon = when (path) {
-                "/" -> Icons.Outlined.Storage
-                normalizedRoot -> Icons.Outlined.PhoneAndroid
-                "$normalizedRoot/Android/data" -> Icons.Outlined.Android
-                "$normalizedRoot/Download" -> Icons.Outlined.Download
-                "/data/data" -> Icons.Outlined.Apps
-                else -> Icons.Outlined.Folder
-            }
-            val draggedWidth = listState.layoutInfo.visibleItemsInfo
-                .firstOrNull { it.index == draggingIndex }
-                ?.size
-                ?.toFloat()
-                ?: 0f
-            val fromIndex = draggingIndex
-            val toIndex = dragTargetIndex
-            val shiftTarget = when {
-                fromIndex == null || toIndex == null || index == fromIndex -> 0f
-                fromIndex < toIndex && index in (fromIndex + 1)..toIndex ->
-                    -(draggedWidth + spacingPx)
-                fromIndex > toIndex && index in toIndex until fromIndex ->
-                    draggedWidth + spacingPx
-                else -> 0f
-            }
-            val animatedShift by animateFloatAsState(
-                targetValue = shiftTarget,
-                animationSpec = if (draggingIndex == null) snap() else tween(120),
-                label = "quick-chip-shift",
-            )
-            val draggedVisual by animateFloatAsState(
-                targetValue = settlingTarget ?: dragOffset,
-                animationSpec = if (settlingTarget != null) tween(150) else snap(),
-                label = "quick-chip-drag",
-            )
-            Row(
-                modifier = Modifier
-                    .offset {
-                        if (draggingPath == path) {
-                            IntOffset(draggedVisual.roundToInt(), 0)
-                        } else {
-                            IntOffset(animatedShift.roundToInt(), 0)
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            paths.forEachIndexed { index, path ->
+                val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
+                val label = when (path) {
+                    "/" -> stringResource(R.string.file_browser_quick_root)
+                    normalizedRoot -> stringResource(R.string.file_browser_quick_internal)
+                    "$normalizedRoot/Android/data" -> stringResource(R.string.file_browser_quick_android_data)
+                    "$normalizedRoot/Download" -> stringResource(R.string.file_browser_quick_download)
+                    "$normalizedRoot/Android/obb" -> stringResource(R.string.file_browser_quick_obb)
+                    "/data/data" -> stringResource(R.string.file_browser_quick_app_data)
+                    else -> tabTitle(path)
+                }
+                val icon = when (path) {
+                    "/" -> Icons.Outlined.Storage
+                    normalizedRoot -> Icons.Outlined.PhoneAndroid
+                    "$normalizedRoot/Android/data" -> Icons.Outlined.Android
+                    "$normalizedRoot/Download" -> Icons.Outlined.Download
+                    "/data/data" -> Icons.Outlined.Apps
+                    else -> Icons.Outlined.Folder
+                }
+                val draggedWidth = itemBounds[draggingPath]?.width ?: 0f
+                val fromIndex = draggingIndex
+                val toIndex = dragTargetIndex
+                val shiftTarget = when {
+                    fromIndex == null || toIndex == null || index == fromIndex -> 0f
+                    fromIndex < toIndex && index in (fromIndex + 1)..toIndex ->
+                        -(draggedWidth + spacingPx)
+                    fromIndex > toIndex && index in toIndex until fromIndex ->
+                        draggedWidth + spacingPx
+                    else -> 0f
+                }
+                val animatedShift by animateFloatAsState(
+                    targetValue = shiftTarget,
+                    animationSpec = if (draggingIndex == null) snap() else tween(120),
+                    label = "quick-chip-shift",
+                )
+                val draggedVisual by animateFloatAsState(
+                    targetValue = settlingTarget ?: dragOffset,
+                    animationSpec = if (settlingTarget != null) tween(150) else snap(),
+                    label = "quick-chip-drag",
+                )
+                Row(
+                    modifier = Modifier
+                        .onGloballyPositioned { coords ->
+                            val position = coords.positionInParent()
+                            val bounds = androidx.compose.ui.geometry.Rect(
+                                left = position.x,
+                                top = position.y,
+                                right = position.x + coords.size.width,
+                                bottom = position.y + coords.size.height,
+                            )
+                            if (itemBounds[path] != bounds) itemBounds[path] = bounds
                         }
-                    }
-                    .pointerInput(paths, path, index) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                draggingPath = path
-                                draggingIndex = index
-                                dragTargetIndex = index
-                                dragOffset = 0f
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                dragOffset += amount.x
-                                val info = listState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.index == index }
-                                if (info != null) {
-                                    val targetX = info.offset + info.size / 2f + dragOffset
-                                    val target = listState.layoutInfo.visibleItemsInfo
-                                        .minByOrNull {
-                                            kotlin.math.abs(
-                                                (it.offset + it.size / 2f) - targetX,
-                                            )
-                                        }
-                                        ?.index
+                        .offset {
+                            if (draggingPath == path) {
+                                IntOffset(draggedVisual.roundToInt(), 0)
+                            } else {
+                                IntOffset(animatedShift.roundToInt(), 0)
+                            }
+                        }
+                        .pointerInput(paths, path, index) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    draggingPath = path
+                                    draggingIndex = index
+                                    dragTargetIndex = index
+                                    dragOffset = 0f
+                                },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    dragOffset += amount.x
+                                    val draggedCenter = itemBounds[path]?.center?.x ?: return@detectDragGesturesAfterLongPress
+                                    val pointerX = draggedCenter + dragOffset
+                                    val target = paths.indices.minByOrNull { candidate ->
+                                        kotlin.math.abs(
+                                            (itemBounds[paths[candidate]]?.center?.x ?: 0f) - pointerX,
+                                        )
+                                    }
                                     if (target != null && target != dragTargetIndex) {
                                         dragTargetIndex = target
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
-                                }
-                            },
-                            onDragEnd = {
-                                val target = dragTargetIndex ?: index
-                                val width = listState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.index == index }
-                                    ?.size
-                                    ?.toFloat()
-                                    ?: 0f
-                                settlingTarget = (target - index) * (width + spacingPx)
-                                actionScope.launch {
-                                    delay(160)
-                                    if (target != index) {
-                                        FileBrowserPreferences.moveShortcut(
-                                            index,
-                                            target,
-                                            internalRoot,
-                                        )
+                                },
+                                onDragEnd = {
+                                    val target = dragTargetIndex ?: index
+                                    val draggedCenter = itemBounds[path]?.center?.x ?: 0f
+                                    val targetCenter = itemBounds[paths.getOrNull(target)]?.center?.x ?: draggedCenter
+                                    settlingTarget = targetCenter - draggedCenter
+                                    actionScope.launch {
+                                        delay(160)
+                                        if (target != index) {
+                                            FileBrowserPreferences.moveShortcut(
+                                                index,
+                                                target,
+                                                internalRoot,
+                                            )
+                                        }
+                                        draggingPath = null
+                                        draggingIndex = null
+                                        dragTargetIndex = null
+                                        dragOffset = 0f
+                                        settlingTarget = null
                                     }
+                                },
+                                onDragCancel = {
                                     draggingPath = null
                                     draggingIndex = null
                                     dragTargetIndex = null
                                     dragOffset = 0f
                                     settlingTarget = null
-                                }
-                            },
-                            onDragCancel = {
-                                draggingPath = null
-                                draggingIndex = null
-                                dragTargetIndex = null
-                                dragOffset = 0f
-                                settlingTarget = null
-                            },
-                        )
-                    }
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-                    .clickable { onNavigate(path) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(15.dp),
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
+                                },
+                            )
+                        }
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                        .clickable { onNavigate(path) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
