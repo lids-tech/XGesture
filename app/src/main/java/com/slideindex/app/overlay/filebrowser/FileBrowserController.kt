@@ -457,6 +457,38 @@ internal class FileBrowserController(
         }
     }
 
+    fun dropEntryInto(sourcePath: String, targetDir: String, cut: Boolean) {
+        val access = state.access ?: return
+        if (state.operationRunning || sourcePath == targetDir) return
+        state = state.copy(
+            operationRunning = true,
+            operationProgress = 0f,
+            operationMessage = null,
+            selectionMode = false,
+            selectedPaths = emptySet(),
+        )
+        operationJob = scope.launch {
+            val report = FileBrowserOperations.transfer(
+                paths = listOf(sourcePath),
+                targetDir = targetDir,
+                mode = if (cut) FileTransferMode.MOVE else FileTransferMode.COPY,
+                access = access,
+                policy = FileConflictPolicy.RENAME,
+            ) { done, total ->
+                state = state.copy(
+                    operationProgress = if (total == 0) 0f else done.toFloat() / total,
+                )
+            }
+            if (!isActive) return@launch
+            state = state.copy(
+                operationRunning = false,
+                operationProgress = 0f,
+                operationMessage = if (report.failures.isNotEmpty()) "有 ${report.failures.size} 项失败" else null,
+            )
+            refresh()
+        }
+    }
+
     fun cancelOperation() {
         operationJob?.cancel()
         operationJob = null
