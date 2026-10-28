@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -1126,12 +1127,14 @@ private fun FileBrowserQuickChips(
     if (paths.isEmpty()) return
     val listState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
+    val actionScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val spacingPx = with(density) { 8.dp.toPx() }
     var draggingPath by remember { mutableStateOf<String?>(null) }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
+    var settlingTarget by remember { mutableStateOf<Float?>(null) }
     LazyRow(
         state = listState,
         modifier = Modifier.fillMaxWidth(),
@@ -1175,13 +1178,19 @@ private fun FileBrowserQuickChips(
             }
             val animatedShift by animateFloatAsState(
                 targetValue = shiftTarget,
+                animationSpec = if (draggingIndex == null) snap() else tween(120),
                 label = "quick-chip-shift",
+            )
+            val draggedVisual by animateFloatAsState(
+                targetValue = settlingTarget ?: dragOffset,
+                animationSpec = if (settlingTarget != null) tween(150) else snap(),
+                label = "quick-chip-drag",
             )
             Row(
                 modifier = Modifier
                     .offset {
                         if (draggingPath == path) {
-                            IntOffset(dragOffset.roundToInt(), 0)
+                            IntOffset(draggedVisual.roundToInt(), 0)
                         } else {
                             IntOffset(animatedShift.roundToInt(), 0)
                         }
@@ -1217,23 +1226,34 @@ private fun FileBrowserQuickChips(
                             },
                             onDragEnd = {
                                 val target = dragTargetIndex ?: index
-                                if (target != index) {
-                                    FileBrowserPreferences.moveShortcut(
-                                        index,
-                                        target,
-                                        internalRoot,
-                                    )
+                                val width = listState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.index == index }
+                                    ?.size
+                                    ?.toFloat()
+                                    ?: 0f
+                                settlingTarget = (target - index) * (width + spacingPx)
+                                actionScope.launch {
+                                    delay(160)
+                                    if (target != index) {
+                                        FileBrowserPreferences.moveShortcut(
+                                            index,
+                                            target,
+                                            internalRoot,
+                                        )
+                                    }
+                                    draggingPath = null
+                                    draggingIndex = null
+                                    dragTargetIndex = null
+                                    dragOffset = 0f
+                                    settlingTarget = null
                                 }
-                                draggingPath = null
-                                draggingIndex = null
-                                dragTargetIndex = null
-                                dragOffset = 0f
                             },
                             onDragCancel = {
                                 draggingPath = null
                                 draggingIndex = null
                                 dragTargetIndex = null
                                 dragOffset = 0f
+                                settlingTarget = null
                             },
                         )
                     }
@@ -1274,6 +1294,8 @@ private fun FileBrowserFavoritesOverlay(
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
+    var settlingTarget by remember { mutableStateOf<Float?>(null) }
+    val actionScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
     val haptic = LocalHapticFeedback.current
@@ -1334,14 +1356,20 @@ private fun FileBrowserFavoritesOverlay(
                         }
                         val animatedShift by animateFloatAsState(
                             targetValue = shiftTarget,
+                            animationSpec = if (draggingIndex == null) snap() else tween(120),
                             label = "favorite-row-shift",
+                        )
+                        val draggedVisual by animateFloatAsState(
+                            targetValue = settlingTarget ?: dragOffset,
+                            animationSpec = if (settlingTarget != null) tween(150) else snap(),
+                            label = "favorite-row-drag",
                         )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .offset {
                                     if (draggingIndex == index) {
-                                        IntOffset(0, dragOffset.roundToInt())
+                                        IntOffset(0, draggedVisual.roundToInt())
                                     } else {
                                         IntOffset(0, animatedShift.roundToInt())
                                     }
@@ -1372,22 +1400,28 @@ private fun FileBrowserFavoritesOverlay(
                                             },
                                             onDragEnd = {
                                                 val to = dragTargetIndex ?: index
-                                                if (to != index) {
-                                                    FileBrowserPreferences.moveShortcut(
-                                                        index,
-                                                        to,
-                                                        internalRoot,
-                                                    )
-                                                    refresh()
+                                                settlingTarget = (to - index) * rowHeightPx
+                                                actionScope.launch {
+                                                    delay(160)
+                                                    if (to != index) {
+                                                        FileBrowserPreferences.moveShortcut(
+                                                            index,
+                                                            to,
+                                                            internalRoot,
+                                                        )
+                                                        refresh()
+                                                    }
+                                                    draggingIndex = null
+                                                    dragTargetIndex = null
+                                                    dragOffset = 0f
+                                                    settlingTarget = null
                                                 }
-                                                draggingIndex = null
-                                                dragTargetIndex = null
-                                                dragOffset = 0f
                                             },
                                             onDragCancel = {
                                                 draggingIndex = null
                                                 dragTargetIndex = null
                                                 dragOffset = 0f
+                                                settlingTarget = null
                                             },
                                         )
                                     }
