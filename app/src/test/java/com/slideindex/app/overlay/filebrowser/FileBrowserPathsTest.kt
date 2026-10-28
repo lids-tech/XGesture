@@ -27,6 +27,14 @@ class FileBrowserPathsTest {
     }
 
     @Test
+    fun normalize_preservesWhitespaceInFileNames() {
+        assertEquals("/a/b ", FileBrowserPaths.normalize("/a/b "))
+        assertEquals("/a/ b", FileBrowserPaths.normalize("/a/ b/"))
+        assertEquals("/a/b ", FileBrowserPaths.child("/a", "b "))
+        assertEquals("/a", FileBrowserPaths.parent("/a/b "))
+    }
+
+    @Test
     fun normalize_usesCustomInternalRoot() {
         assertEquals(
             "/storage/emulated/10/Download",

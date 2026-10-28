@@ -18,7 +18,7 @@ object FileBrowserPaths {
 
     fun normalize(path: String, internalRoot: String = DEFAULT_INTERNAL_ROOT): String {
         val root = internalRoot.trimEnd('/').ifEmpty { DEFAULT_INTERNAL_ROOT }
-        val raw = path.trim().ifEmpty { "/" }
+        val raw = path.trimEnd('/').ifEmpty { "/" }
         val absolute = if (raw.startsWith("/")) raw else "/$raw"
         val aliased = when {
             absolute == "/sdcard" -> root
