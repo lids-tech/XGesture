@@ -83,10 +83,17 @@ internal object FileBrowserPreferences {
     }
 
     fun togglePin(path: String) {
-        val normalized = FileBrowserPaths.normalize(path)
         val root = FileBrowserStorage.internalStoragePath()
-        val base = current.pinnedPaths.ifEmpty { defaultPins(root) }
-        val existing = base.map { FileBrowserPaths.normalize(it) }.toMutableList()
+        val normalized = FileBrowserPaths.normalize(path, root)
+        if (isSystemShortcut(normalized, root)) {
+            if (normalized in hiddenSystemShortcuts()) {
+                unhideShortcut(normalized)
+            } else {
+                hideShortcut(normalized)
+            }
+            return
+        }
+        val existing = userPinned(root).toMutableList()
         if (existing.contains(normalized)) {
             existing.remove(normalized)
         } else {
@@ -98,8 +105,10 @@ internal object FileBrowserPreferences {
     fun isPinned(path: String): Boolean {
         val normalized = FileBrowserPaths.normalize(path)
         val root = FileBrowserStorage.internalStoragePath()
-        val base = current.pinnedPaths.ifEmpty { defaultPins(root) }
-        return base.any { FileBrowserPaths.normalize(it) == normalized }
+        if (isSystemShortcut(normalized, root)) {
+            return normalized !in hiddenSystemShortcuts()
+        }
+        return userPinned(root).contains(normalized)
     }
 
     fun removeShortcut(path: String) {
@@ -138,10 +147,7 @@ internal object FileBrowserPreferences {
     }
 
     fun movePin(from: Int, to: Int, internalRoot: String) {
-        val base = current.pinnedPaths.ifEmpty { defaultPins(internalRoot) }
-            .map { FileBrowserPaths.normalize(it) }
-            .distinct()
-            .toMutableList()
+        val base = userPinned(internalRoot).toMutableList()
         if (from !in base.indices || to !in base.indices || from == to) return
         val item = base.removeAt(from)
         base.add(to, item)
