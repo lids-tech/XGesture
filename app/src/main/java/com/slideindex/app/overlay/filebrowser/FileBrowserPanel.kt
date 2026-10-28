@@ -25,20 +25,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Android
@@ -78,6 +82,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import com.slideindex.app.R
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.ui.miuix.MiuixSearchField
@@ -124,6 +129,8 @@ internal fun FileBrowserPanel(
     var copied by remember { mutableStateOf(false) }
     var showPathDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showFavorites by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
     var exportBusy by remember { mutableStateOf(false) }
     var exportFailed by remember { mutableStateOf(false) }
     var nameTarget by remember { mutableStateOf<FileBrowserNameTarget?>(null) }
@@ -195,21 +202,16 @@ internal fun FileBrowserPanel(
                     Column(modifier = Modifier.fillMaxSize()) {
                         FileBrowserHeader(
                             access = state.access,
-                            showHidden = state.showHidden,
-                            sort = state.sort,
-                            pinned = FileBrowserPreferences.isPinned(state.path),
                             onRefresh = controller::refresh,
-                            onSortSelected = controller::setSort,
-                            onShowHiddenChange = controller::setShowHidden,
-                            onTogglePin = { FileBrowserPreferences.togglePin(state.path) },
-                            onOpenPathDialog = { showPathDialog = true },
-                            onNewFolder = { nameTarget = FileBrowserNameTarget.Create(state.path) },
-                            onRecursiveSearch = { showSearchDialog = true },
-                            onCopyCurrentPath = {
-                                copyToClipboard(context, state.path)
-                                copied = true
-                            },
+                            onMenuClick = { showMenu = true },
                             onDismiss = onDismiss,
+                        )
+                        FileBrowserTabBar(
+                            tabs = state.tabs,
+                            activeTabId = state.activeTabId,
+                            onSelect = controller::selectTab,
+                            onClose = controller::closeTab,
+                            onNew = controller::newTab,
                         )
                         FileBrowserBreadcrumb(
                             path = state.path,
@@ -482,6 +484,57 @@ internal fun FileBrowserPanel(
                             onClose = controller::clearSearch,
                         )
                     }
+                    if (showFavorites) {
+                        FileBrowserFavoritesOverlay(
+                            currentPath = state.path,
+                            onNavigate = { path ->
+                                showFavorites = false
+                                controller.navigateTo(path)
+                            },
+                            onClose = { showFavorites = false },
+                        )
+                    }
+                    if (showMenu) {
+                        FileBrowserMenuOverlay(
+                            showHidden = state.showHidden,
+                            sort = state.sort,
+                            pinned = FileBrowserPreferences.isPinned(state.path),
+                            onSort = {
+                                controller.setSort(it)
+                                showMenu = false
+                            },
+                            onToggleHidden = {
+                                controller.setShowHidden(!state.showHidden)
+                                showMenu = false
+                            },
+                            onCopyPath = {
+                                copyToClipboard(context, state.path)
+                                copied = true
+                                showMenu = false
+                            },
+                            onJumpPath = {
+                                showMenu = false
+                                showPathDialog = true
+                            },
+                            onNewFolder = {
+                                showMenu = false
+                                nameTarget = FileBrowserNameTarget.Create(state.path)
+                            },
+                            onRecursiveSearch = {
+                                showMenu = false
+                                showSearchDialog = true
+                            },
+                            onFavorites = {
+                                showMenu = false
+                                showFavorites = true
+                            },
+                            onTogglePin = {
+                                FileBrowserPreferences.togglePin(state.path)
+                                showMenu = false
+                            },
+                            onDismiss = { showMenu = false },
+                        )
+                    }
                     nameTarget?.let { target ->
                         val access = state.access
                         FileBrowserNameDialog(
@@ -598,23 +651,206 @@ internal fun FileBrowserPanel(
 }
 
 @Composable
-private fun FileBrowserHeader(
-    access: FileBrowserAccessInfo?,
+private fun FileBrowserMenuOverlay(
     showHidden: Boolean,
     sort: FileSortOrder,
     pinned: Boolean,
-    onRefresh: () -> Unit,
-    onSortSelected: (FileSortOrder) -> Unit,
-    onShowHiddenChange: (Boolean) -> Unit,
-    onTogglePin: () -> Unit,
-    onOpenPathDialog: () -> Unit,
+    onSort: (FileSortOrder) -> Unit,
+    onToggleHidden: () -> Unit,
+    onCopyPath: () -> Unit,
+    onJumpPath: () -> Unit,
     onNewFolder: () -> Unit,
     onRecursiveSearch: () -> Unit,
-    onCopyCurrentPath: () -> Unit,
+    onFavorites: () -> Unit,
+    onTogglePin: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.32f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+            shape = RoundedCornerShape(22.dp),
+            tonalElevation = 6.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.file_browser_menu),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.file_browser_sort_name) + " / " +
+                        stringResource(R.string.file_browser_sort_time) + " / " +
+                        stringResource(R.string.file_browser_sort_size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                listOf(
+                    FileSortOrder.NAME_ASC to R.string.file_browser_sort_name,
+                    FileSortOrder.NAME_DESC to R.string.file_browser_sort_name,
+                    FileSortOrder.TIME_DESC to R.string.file_browser_sort_time,
+                    FileSortOrder.TIME_ASC to R.string.file_browser_sort_time,
+                    FileSortOrder.SIZE_DESC to R.string.file_browser_sort_size,
+                    FileSortOrder.SIZE_ASC to R.string.file_browser_sort_size,
+                ).forEach { (order, labelRes) ->
+                    val arrow = if (order in setOf(
+                            FileSortOrder.NAME_ASC,
+                            FileSortOrder.TIME_ASC,
+                            FileSortOrder.SIZE_ASC,
+                        )
+                    ) " ↑" else " ↓"
+                    TextButton(
+                        onClick = { onSort(order) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(labelRes) + arrow,
+                            color = if (sort == order) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                }
+                HorizontalDivider()
+                TextButton(onClick = onToggleHidden, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.file_browser_show_hidden) +
+                            if (showHidden) " ✓" else "",
+                    )
+                }
+                TextButton(onClick = onCopyPath, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_copy_current_path))
+                }
+                TextButton(onClick = onJumpPath, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_jump_path))
+                }
+                TextButton(onClick = onNewFolder, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_new_folder))
+                }
+                TextButton(onClick = onRecursiveSearch, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_recursive_search))
+                }
+                TextButton(onClick = onFavorites, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_favorites))
+                }
+                TextButton(onClick = onTogglePin, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(
+                            if (pinned) {
+                                R.string.file_browser_unpin_current
+                            } else {
+                                R.string.file_browser_pin_current
+                            },
+                        ),
+                    )
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_cancel))
+                }
+            }
+        }
+    }
+}
 
+@Composable
+private fun FileBrowserTabBar(
+    tabs: List<FileBrowserTab>,
+    activeTabId: Long,
+    onSelect: (Long) -> Unit,
+    onClose: (Long) -> Unit,
+    onNew: () -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(tabs, key = { it.id }) { tab ->
+            val active = tab.id == activeTabId
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(
+                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        else Color.Transparent,
+                    )
+                    .clickable { onSelect(tab.id) }
+                    .padding(start = 10.dp, end = if (tabs.size > 1) 2.dp else 10.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = tabTitle(tab.path),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 130.dp),
+                )
+                if (tabs.size > 1) {
+                    IconButton(
+                        onClick = { onClose(tab.id) },
+                        modifier = Modifier.size(24.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
+        }
+        item {
+            IconButton(onClick = onNew, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun tabTitle(path: String): String = when (path) {
+    "/" -> "/"
+    "/storage/emulated/0" -> "内部存储"
+    else -> path.trimEnd('/').substringAfterLast('/').ifEmpty { path }
+}
+
+@Composable
+private fun FileBrowserHeader(
+    access: FileBrowserAccessInfo?,
+    onRefresh: () -> Unit,
+    onMenuClick: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -642,137 +878,11 @@ private fun FileBrowserHeader(
                 contentDescription = stringResource(R.string.file_browser_refresh),
             )
         }
-        Box {
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = stringResource(R.string.file_browser_menu),
-                )
-            }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-                modifier = Modifier.background(MaterialTheme.colorScheme.surface),
-            ) {
-                SortMenuItem(
-                    labelRes = R.string.file_browser_sort_name,
-                    order = FileSortOrder.NAME_ASC,
-                    selected = sort,
-                    ascending = true,
-                    onSelect = {
-                        onSortSelected(it)
-                        menuExpanded = false
-                    },
-                )
-                SortMenuItem(
-                    labelRes = R.string.file_browser_sort_name,
-                    order = FileSortOrder.NAME_DESC,
-                    selected = sort,
-                    ascending = false,
-                    onSelect = {
-                        onSortSelected(it)
-                        menuExpanded = false
-                    },
-                )
-                SortMenuItem(
-                    labelRes = R.string.file_browser_sort_time,
-                    order = FileSortOrder.TIME_DESC,
-                    selected = sort,
-                    ascending = false,
-                    onSelect = {
-                        onSortSelected(it)
-                        menuExpanded = false
-                    },
-                )
-                SortMenuItem(
-                    labelRes = R.string.file_browser_sort_time,
-                    order = FileSortOrder.TIME_ASC,
-                    selected = sort,
-                    ascending = true,
-                    onSelect = {
-                        onSortSelected(it)
-                        menuExpanded = false
-                    },
-                )
-                SortMenuItem(
-                    labelRes = R.string.file_browser_sort_size,
-                    order = FileSortOrder.SIZE_DESC,
-                    selected = sort,
-                    ascending = false,
-                    onSelect = {
-                        onSortSelected(it)
-                        menuExpanded = false
-                    },
-                )
-                SortMenuItem(
-                    labelRes = R.string.file_browser_sort_size,
-                    order = FileSortOrder.SIZE_ASC,
-                    selected = sort,
-                    ascending = true,
-                    onSelect = {
-                        onSortSelected(it)
-                        menuExpanded = false
-                    },
-                )
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.file_browser_show_hidden)) },
-                    onClick = {
-                        onShowHiddenChange(!showHidden)
-                        menuExpanded = false
-                    },
-                    trailingIcon = {
-                        if (showHidden) {
-                            Icon(Icons.Filled.Check, contentDescription = null)
-                        }
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.file_browser_copy_current_path)) },
-                    onClick = {
-                        onCopyCurrentPath()
-                        menuExpanded = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.file_browser_jump_path)) },
-                    onClick = {
-                        onOpenPathDialog()
-                        menuExpanded = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.file_browser_new_folder)) },
-                    onClick = {
-                        onNewFolder()
-                        menuExpanded = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.file_browser_recursive_search)) },
-                    onClick = {
-                        onRecursiveSearch()
-                        menuExpanded = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            stringResource(
-                                if (pinned) {
-                                    R.string.file_browser_unpin_current
-                                } else {
-                                    R.string.file_browser_pin_current
-                                },
-                            ),
-                        )
-                    },
-                    onClick = {
-                        onTogglePin()
-                        menuExpanded = false
-                    },
-                )
-            }
+        IconButton(onClick = onMenuClick) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = stringResource(R.string.file_browser_menu),
+            )
         }
         IconButton(onClick = onDismiss) {
             Icon(
@@ -966,6 +1076,131 @@ private fun FileBrowserQuickChips(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileBrowserFavoritesOverlay(
+    currentPath: String,
+    onNavigate: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    val internalRoot = FileBrowserStorage.internalStoragePath()
+    var favorites by remember {
+        mutableStateOf(FileBrowserPreferences.pinnedOrDefault(internalRoot))
+    }
+    fun refresh() {
+        favorites = FileBrowserPreferences.pinnedOrDefault(internalRoot)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.32f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClose,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+            shape = RoundedCornerShape(22.dp),
+            tonalElevation = 6.dp,
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.file_browser_favorites),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onClose, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = null)
+                    }
+                }
+                if (favorites.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.file_browser_favorites_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 10.dp),
+                    )
+                } else {
+                    favorites.forEach { path ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onNavigate(path) }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = tabTitle(path),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = path,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    FileBrowserPreferences.togglePin(path)
+                                    refresh()
+                                },
+                                modifier = Modifier.size(30.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = {
+                        FileBrowserPreferences.togglePin(currentPath)
+                        refresh()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        stringResource(
+                            if (FileBrowserPreferences.isPinned(currentPath)) {
+                                R.string.file_browser_favorite_remove
+                            } else {
+                                R.string.file_browser_favorite_add
+                            },
+                        ),
+                    )
+                }
             }
         }
     }

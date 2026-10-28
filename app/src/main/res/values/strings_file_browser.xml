@@ -119,4 +119,8 @@
     <string name="file_browser_conflict_skip">Skip</string>
     <string name="file_browser_trash_count">%1$d item(s) moved to trash</string>
     <string name="file_browser_undo">Undo</string>
+    <string name="file_browser_favorites">Favorites</string>
+    <string name="file_browser_favorite_add">Favorite this folder</string>
+    <string name="file_browser_favorite_remove">Remove from favorites</string>
+    <string name="file_browser_favorites_empty">No favorites yet</string>
 </resources>

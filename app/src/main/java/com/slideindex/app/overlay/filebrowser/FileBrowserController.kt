@@ -38,11 +38,18 @@ data class FileBrowserUiState(
     val pendingPaste: FileClipboard? = null,
     val pendingConflicts: Int = 0,
     val lastTrash: List<TrashedItem> = emptyList(),
+    val tabs: List<FileBrowserTab> = emptyList(),
+    val activeTabId: Long = 0L,
 )
 
 data class FileClipboard(
     val mode: FileTransferMode,
     val paths: List<String>,
+)
+
+data class FileBrowserTab(
+    val id: Long,
+    val path: String,
 )
 
 /**
@@ -61,6 +68,7 @@ internal class FileBrowserController(
     private var sizeJob: Job? = null
     private var searchJob: Job? = null
     private var operationJob: Job? = null
+    private var nextTabId: Long = 1L
 
     val internalRoot: String get() = dataSource.internalRoot
 
@@ -80,18 +88,22 @@ internal class FileBrowserController(
                     path = target,
                     showHidden = prefs.showHidden,
                     sort = prefs.sortOrderOrDefault(),
+                    tabs = tabsWithActivePath(target),
                 )
                 reload()
             }
         }
         val prefs = FileBrowserPreferences.current
+        val initialPath = FileBrowserPaths.normalize(
+            prefs.lastPath ?: dataSource.initialPath(),
+            dataSource.internalRoot,
+        )
         state = FileBrowserUiState(
-            path = FileBrowserPaths.normalize(
-                prefs.lastPath ?: dataSource.initialPath(),
-                dataSource.internalRoot,
-            ),
+            path = initialPath,
             showHidden = prefs.showHidden,
             sort = prefs.sortOrderOrDefault(),
+            tabs = listOf(FileBrowserTab(id = 0L, path = initialPath)),
+            activeTabId = 0L,
         )
     }
 
@@ -114,6 +126,7 @@ internal class FileBrowserController(
             directorySizeBytes = null,
             directorySizeLoading = false,
             directorySizeComputed = false,
+            tabs = tabsWithActivePath(target),
         )
         reload(resolveAccess = true)
     }
@@ -140,6 +153,7 @@ internal class FileBrowserController(
             searchLoading = false,
             selectionMode = false,
             selectedPaths = emptySet(),
+            tabs = tabsWithActivePath(normalized),
         )
         FileBrowserPreferences.rememberLastPath(normalized)
         reload(resolveAccess = false)
@@ -148,6 +162,49 @@ internal class FileBrowserController(
     fun goParent() {
         FileBrowserPaths.parent(state.path, internalRoot)?.let(::navigateTo)
     }
+
+    fun selectTab(id: Long) {
+        if (id == state.activeTabId) return
+        val tabs = state.tabs.map {
+            if (it.id == state.activeTabId) it.copy(path = state.path) else it
+        }
+        val target = tabs.firstOrNull { it.id == id } ?: return
+        state = state.copy(tabs = tabs, activeTabId = id)
+        navigateTo(target.path)
+    }
+
+    fun newTab() {
+        val tabs = state.tabs.map {
+            if (it.id == state.activeTabId) it.copy(path = state.path) else it
+        }
+        val id = nextTabId++
+        state = state.copy(
+            tabs = tabs + FileBrowserTab(id = id, path = state.path),
+            activeTabId = id,
+            selectionMode = false,
+            selectedPaths = emptySet(),
+            details = null,
+        )
+    }
+
+    fun closeTab(id: Long) {
+        if (state.tabs.size <= 1) return
+        val index = state.tabs.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val remaining = state.tabs.filterNot { it.id == id }
+        if (id != state.activeTabId) {
+            state = state.copy(tabs = remaining)
+            return
+        }
+        val next = remaining[(index - 1).coerceAtLeast(0)]
+        state = state.copy(tabs = remaining, activeTabId = next.id)
+        navigateTo(next.path)
+    }
+
+    private fun tabsWithActivePath(path: String): List<FileBrowserTab> =
+        state.tabs.map {
+            if (it.id == state.activeTabId) it.copy(path = path) else it
+        }
 
     fun refresh() {
         reload(resolveAccess = true)

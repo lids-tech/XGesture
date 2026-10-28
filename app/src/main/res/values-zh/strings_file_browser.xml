@@ -119,4 +119,8 @@
     <string name="file_browser_conflict_skip">跳过</string>
     <string name="file_browser_trash_count">%1$d 项已移到回收站</string>
     <string name="file_browser_undo">撤销</string>
+    <string name="file_browser_favorites">收藏夹</string>
+    <string name="file_browser_favorite_add">收藏当前文件夹</string>
+    <string name="file_browser_favorite_remove">取消收藏</string>
+    <string name="file_browser_favorites_empty">还没有收藏</string>
 </resources>
