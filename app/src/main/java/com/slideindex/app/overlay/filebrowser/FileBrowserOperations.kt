@@ -10,13 +10,16 @@ import kotlinx.coroutines.withContext
 
 enum class FileTransferMode { COPY, MOVE }
 
+enum class FileConflictPolicy { RENAME, OVERWRITE, SKIP }
+
 data class FileOperationFailure(val path: String, val reason: String)
 
 data class FileOperationReport(
     val succeeded: Int,
     val failures: List<FileOperationFailure>,
+    val skipped: Int = 0,
 ) {
-    val total: Int get() = succeeded + failures.size
+    val total: Int get() = succeeded + skipped + failures.size
 }
 
 /**
@@ -33,6 +36,7 @@ internal object FileBrowserOperations {
         targetDir: String,
         mode: FileTransferMode,
         access: FileBrowserAccessInfo,
+        policy: FileConflictPolicy = FileConflictPolicy.RENAME,
         onProgress: (done: Int, total: Int) -> Unit,
     ): FileOperationReport = withContext(Dispatchers.IO) {
         val target = File(targetDir)
@@ -44,6 +48,7 @@ internal object FileBrowserOperations {
         }
         var done = 0
         var succeeded = 0
+        var skipped = 0
         val failures = mutableListOf<FileOperationFailure>()
         for (path in paths) {
             onProgress(done, paths.size)
@@ -61,13 +66,43 @@ internal object FileBrowserOperations {
                 done++
                 continue
             }
-            val destination = uniqueDestination(target, source.name)
+            val directDestination = File(target, source.name)
+            val destination = when {
+                !directDestination.exists() -> directDestination
+                policy == FileConflictPolicy.SKIP -> {
+                    skipped++
+                    done++
+                    continue
+                }
+                policy == FileConflictPolicy.OVERWRITE -> {
+                    if (!removeDestination(directDestination, access)) {
+                        failures += FileOperationFailure(path, "无法覆盖目标")
+                        done++
+                        continue
+                    }
+                    directDestination
+                }
+                else -> uniqueDestination(target, source.name)
+            }
             val ok = transferOne(source, destination, mode, access)
             if (ok) succeeded++ else failures += FileOperationFailure(path, "操作失败")
             done++
         }
         onProgress(paths.size, paths.size)
-        FileOperationReport(succeeded, failures)
+        FileOperationReport(succeeded, failures, skipped)
+    }
+
+    /** 目标目录里已经存在的同名项数量。 */
+    fun conflicts(paths: List<String>, targetDir: String): Int {
+        val target = File(targetDir)
+        return paths.count { File(target, File(it).name).exists() }
+    }
+
+    private fun removeDestination(destination: File, access: FileBrowserAccessInfo): Boolean {
+        if (!destination.exists()) return true
+        if (destination.canWrite() && destination.deleteRecursively()) return true
+        if (access.mode != AccessMode.ROOT) return false
+        return deleteRoot(destination.absolutePath)
     }
 
     suspend fun delete(

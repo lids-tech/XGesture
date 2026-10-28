@@ -112,4 +112,9 @@
     <string name="file_browser_clipboard_move">已剪切 %1$d 项</string>
     <string name="file_browser_selection_details">详情</string>
     <string name="file_browser_delete_selected_message">确定删除已选的 %1$d 项？此操作不可撤销。</string>
+    <string name="file_browser_conflict_title">同名冲突</string>
+    <string name="file_browser_conflict_message">目标目录已有 %1$d 个同名项。</string>
+    <string name="file_browser_conflict_rename">保留两者</string>
+    <string name="file_browser_conflict_overwrite">覆盖</string>
+    <string name="file_browser_conflict_skip">跳过</string>
 </resources>

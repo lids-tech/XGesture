@@ -35,6 +35,8 @@ data class FileBrowserUiState(
     val operationRunning: Boolean = false,
     val operationProgress: Float = 0f,
     val operationMessage: String? = null,
+    val pendingPaste: FileClipboard? = null,
+    val pendingConflicts: Int = 0,
 )
 
 data class FileClipboard(
@@ -218,6 +220,31 @@ internal class FileBrowserController(
 
     fun paste() {
         val clipboard = state.clipboard ?: return
+        if (state.operationRunning) return
+        val conflicts = FileBrowserOperations.conflicts(clipboard.paths, state.path)
+        if (conflicts > 0) {
+            state = state.copy(
+                pendingPaste = clipboard,
+                pendingConflicts = conflicts,
+                selectionMode = false,
+                selectedPaths = emptySet(),
+            )
+            return
+        }
+        executePaste(clipboard, FileConflictPolicy.RENAME)
+    }
+
+    fun resolvePaste(policy: FileConflictPolicy) {
+        val clipboard = state.pendingPaste ?: return
+        state = state.copy(pendingPaste = null, pendingConflicts = 0)
+        executePaste(clipboard, policy)
+    }
+
+    fun cancelPaste() {
+        state = state.copy(pendingPaste = null, pendingConflicts = 0)
+    }
+
+    private fun executePaste(clipboard: FileClipboard, policy: FileConflictPolicy) {
         val access = state.access ?: return
         if (state.operationRunning) return
         val target = state.path
@@ -234,6 +261,7 @@ internal class FileBrowserController(
                 targetDir = target,
                 mode = clipboard.mode,
                 access = access,
+                policy = policy,
             ) { done, total ->
                 state = state.copy(
                     operationProgress = if (total == 0) 0f else done.toFloat() / total,
@@ -243,8 +271,11 @@ internal class FileBrowserController(
             state = state.copy(
                 operationRunning = false,
                 operationProgress = 0f,
-                operationMessage = if (report.failures.isEmpty()) null else
-                    "有 ${report.failures.size} 项失败",
+                operationMessage = when {
+                    report.failures.isNotEmpty() -> "有 ${report.failures.size} 项失败"
+                    report.skipped > 0 -> "已跳过 ${report.skipped} 项"
+                    else -> null
+                },
                 clipboard = if (report.failures.isEmpty()) null else clipboard,
             )
             refresh()

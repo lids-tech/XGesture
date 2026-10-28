@@ -548,6 +548,15 @@ internal fun FileBrowserPanel(
                             )
                         }
                     }
+                    if (state.pendingPaste != null) {
+                        FileBrowserConflictDialog(
+                            count = state.pendingConflicts,
+                            onRename = { controller.resolvePaste(FileConflictPolicy.RENAME) },
+                            onOverwrite = { controller.resolvePaste(FileConflictPolicy.OVERWRITE) },
+                            onSkip = { controller.resolvePaste(FileConflictPolicy.SKIP) },
+                            onCancel = controller::cancelPaste,
+                        )
+                    }
                     if (operationError) {
                         Text(
                             text = stringResource(R.string.file_browser_operation_failed),
@@ -936,6 +945,71 @@ private fun FileBrowserQuickChips(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileBrowserConflictDialog(
+    count: Int,
+    onRename: () -> Unit,
+    onOverwrite: () -> Unit,
+    onSkip: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.32f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onCancel,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+            shape = RoundedCornerShape(22.dp),
+            tonalElevation = 6.dp,
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = stringResource(R.string.file_browser_conflict_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.file_browser_conflict_message, count),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onRename, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.file_browser_conflict_rename))
+                    }
+                    TextButton(onClick = onOverwrite, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = stringResource(R.string.file_browser_conflict_overwrite),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.file_browser_conflict_skip))
+                    }
+                    TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.file_browser_cancel))
+                    }
+                }
             }
         }
     }

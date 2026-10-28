@@ -30,11 +30,18 @@ class FileBrowserOperationsTest {
     }
 
     @Test
-    fun uniqueDestination_handlesDirectoryWithoutExtension() {
+    fun conflicts_countsExistingNames() {
         val dir = Files.createTempDirectory("filebrowser-ops").toFile()
         try {
-            dir.resolve("folder").mkdirs()
-            assertEquals("folder (1)", FileBrowserOperations.uniqueDestination(dir, "folder").name)
+            dir.resolve("a.txt").writeText("x")
+            dir.resolve("b.txt").writeText("x")
+            assertEquals(
+                1,
+                FileBrowserOperations.conflicts(
+                    listOf("/source/a.txt", "/source/c.txt"),
+                    dir.absolutePath,
+                ),
+            )
         } finally {
             dir.deleteRecursively()
         }

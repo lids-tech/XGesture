@@ -112,4 +112,9 @@
     <string name="file_browser_clipboard_move">%1$d item(s) cut</string>
     <string name="file_browser_selection_details">Details</string>
     <string name="file_browser_delete_selected_message">Delete %1$d selected item(s)? This cannot be undone.</string>
+    <string name="file_browser_conflict_title">Name conflict</string>
+    <string name="file_browser_conflict_message">%1$d item(s) already exist in this folder.</string>
+    <string name="file_browser_conflict_rename">Keep both</string>
+    <string name="file_browser_conflict_overwrite">Replace</string>
+    <string name="file_browser_conflict_skip">Skip</string>
 </resources>
