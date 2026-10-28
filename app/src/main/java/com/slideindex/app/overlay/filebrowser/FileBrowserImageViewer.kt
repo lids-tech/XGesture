@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -174,15 +176,18 @@ private suspend fun loadBitmap(
 }
 
 private fun shareBitmap(context: Context, bitmap: Bitmap) {
-    val dir = File(context.cacheDir, "filebrowser").apply { mkdirs() }
-    val file = File(dir, "share_${System.currentTimeMillis()}.png")
-    runCatching {
+    Log.d("FileBrowserShare", "shareBitmap start")
+    try {
+        val dir = File(context.cacheDir, "filebrowser").apply { mkdirs() }
+        val file = File(dir, "share_${System.currentTimeMillis()}.png")
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        Log.d("FileBrowserShare", "written ${file.absolutePath} ${file.length()}")
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
             file,
         )
+        Log.d("FileBrowserShare", "uri=$uri")
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -194,5 +199,11 @@ private fun shareBitmap(context: Context, bitmap: Bitmap) {
         // 悬浮窗是 TYPE_APPLICATION_OVERLAY，会盖住系统分享面板；先关掉再拉起。
         FileBrowserOverlayWindow.dismiss()
         context.startActivity(chooser)
+        Log.d("FileBrowserShare", "chooser started")
+    } catch (t: Throwable) {
+        Log.e("FileBrowserShare", "share failed", t)
+        runCatching {
+            Toast.makeText(context, "分享失败：${t.message}", Toast.LENGTH_LONG).show()
+        }
     }
 }
