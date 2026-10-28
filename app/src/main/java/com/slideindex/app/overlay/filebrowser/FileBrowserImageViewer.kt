@@ -191,6 +191,8 @@ private fun shareBitmap(context: Context, bitmap: Bitmap) {
         val chooser = Intent.createChooser(intent, "分享图片").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        // 悬浮窗是 TYPE_APPLICATION_OVERLAY，会盖住系统分享面板；先关掉再拉起。
+        FileBrowserOverlayWindow.dismiss()
         context.startActivity(chooser)
     }
 }
