@@ -160,12 +160,6 @@ internal fun FileBrowserDetailsOverlay(
                             Text(stringResource(R.string.file_browser_image_open))
                         }
                     }
-                    TextButton(
-                        onClick = onClose,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.file_browser_close))
-                    }
                     if (onOpenWith != null) {
                         OutlinedButton(
                             onClick = onOpenWith,
