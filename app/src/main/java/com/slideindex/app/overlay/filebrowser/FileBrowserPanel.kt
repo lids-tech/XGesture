@@ -319,7 +319,6 @@ internal fun FileBrowserPanel(
                                     focusManager.clearFocus()
                                     controller.navigateTo(target)
                                 },
-                                onManage = { showFavorites = true },
                             )
                         }
                         if (state.loading && state.entries.isNotEmpty()) {
@@ -1121,39 +1120,9 @@ private data class QuickTarget(
 private fun FileBrowserQuickChips(
     internalRoot: String,
     onNavigate: (String) -> Unit,
-    onManage: () -> Unit,
 ) {
     val paths = FileBrowserPreferences.quickShortcuts(internalRoot)
-    if (paths.isEmpty()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 3.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-                    .clickable(onClick = onManage)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Folder,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(15.dp),
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = stringResource(R.string.file_browser_favorites),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        return
-    }
+    if (paths.isEmpty()) return
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp),
