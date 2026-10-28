@@ -490,7 +490,6 @@ internal fun FileBrowserPanel(
                         }
                         FileBrowserDetailsOverlay(
                             entry = details,
-                            copied = copied,
                             onCopy = {
                                 copyToClipboard(context, details.path)
                                 copied = true
@@ -1190,18 +1189,14 @@ private fun FileBrowserFavoritesOverlay(
 ) {
     val internalRoot = FileBrowserStorage.internalStoragePath()
     var favorites by remember {
-        mutableStateOf(FileBrowserPreferences.quickShortcuts(internalRoot))
+        mutableStateOf(FileBrowserPreferences.pinnedOrDefault(internalRoot))
     }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
-    val haptic = LocalHapticFeedback.current
-    val userPaths = favorites.filterNot {
-        FileBrowserPreferences.isSystemShortcut(it, internalRoot)
-    }
     fun refresh() {
-        favorites = FileBrowserPreferences.quickShortcuts(internalRoot)
+        favorites = FileBrowserPreferences.pinnedOrDefault(internalRoot)
     }
     Box(
         modifier = Modifier
@@ -1247,7 +1242,6 @@ private fun FileBrowserFavoritesOverlay(
                     )
                 } else {
                     favorites.forEachIndexed { index, path ->
-                        val isSystem = FileBrowserPreferences.isSystemShortcut(path, internalRoot)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1257,59 +1251,43 @@ private fun FileBrowserFavoritesOverlay(
                                         if (draggingIndex == index) dragOffset.roundToInt() else 0,
                                     )
                                 }
+                                .pointerInput(favorites) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggingIndex = index
+                                            dragOffset = 0f
+                                        },
+                                        onDrag = { _, amount ->
+                                            dragOffset += amount.y
+                                        },
+                                        onDragEnd = {
+                                            val from = draggingIndex
+                                            if (from != null) {
+                                                val delta = (dragOffset / rowHeightPx).roundToInt()
+                                                val to = (from + delta)
+                                                    .coerceIn(0, favorites.lastIndex)
+                                                if (to != from) {
+                                                    FileBrowserPreferences.movePin(
+                                                        from,
+                                                        to,
+                                                        internalRoot,
+                                                    )
+                                                    refresh()
+                                                }
+                                            }
+                                            draggingIndex = null
+                                            dragOffset = 0f
+                                        },
+                                        onDragCancel = {
+                                            draggingIndex = null
+                                            dragOffset = 0f
+                                        },
+                                    )
+                                }
+                                .clickable { onNavigate(path) }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (!isSystem) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .pointerInput(favorites, index) {
-                                            detectDragGesturesAfterLongPress(
-                                                onDragStart = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    draggingIndex = index
-                                                    dragOffset = 0f
-                                                },
-                                                onDrag = { change, amount ->
-                                                    change.consume()
-                                                    dragOffset += amount.y
-                                                },
-                                                onDragEnd = {
-                                                    val draggedPath = favorites.getOrNull(index)
-                                                    val fromUser = userPaths.indexOf(draggedPath)
-                                                    val delta = (dragOffset / rowHeightPx).roundToInt()
-                                                    val toUser = (fromUser + delta)
-                                                        .coerceIn(0, userPaths.lastIndex)
-                                                    if (fromUser >= 0 && toUser != fromUser) {
-                                                        FileBrowserPreferences.movePin(
-                                                            fromUser,
-                                                            toUser,
-                                                            internalRoot,
-                                                        )
-                                                        refresh()
-                                                    }
-                                                    draggingIndex = null
-                                                    dragOffset = 0f
-                                                },
-                                                onDragCancel = {
-                                                    draggingIndex = null
-                                                    dragOffset = 0f
-                                                },
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.DragHandle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.width(24.dp))
-                            }
                             Icon(
                                 imageVector = Icons.Outlined.Folder,
                                 contentDescription = null,
@@ -1317,11 +1295,7 @@ private fun FileBrowserFavoritesOverlay(
                                 modifier = Modifier.size(20.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { onNavigate(path) },
-                            ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = tabTitle(path),
                                     style = MaterialTheme.typography.bodyMedium,
@@ -1336,25 +1310,17 @@ private fun FileBrowserFavoritesOverlay(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .clickable {
-                                        if (FileBrowserPreferences.isSystemShortcut(path, internalRoot)) {
-                                            FileBrowserPreferences.hideShortcut(path)
-                                        } else {
-                                            FileBrowserPreferences.togglePin(path)
-                                        }
-                                        refresh()
-                                    },
-                                contentAlignment = Alignment.Center,
+                            IconButton(
+                                onClick = {
+                                    FileBrowserPreferences.togglePin(path)
+                                    refresh()
+                                },
+                                modifier = Modifier.size(30.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Close,
                                     contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp),
                                 )
                             }
                         }
@@ -1377,17 +1343,6 @@ private fun FileBrowserFavoritesOverlay(
                             },
                         ),
                     )
-                }
-                if (FileBrowserPreferences.hiddenSystemShortcuts().isNotEmpty()) {
-                    TextButton(
-                        onClick = {
-                            FileBrowserPreferences.resetHiddenShortcuts()
-                            refresh()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.file_browser_restore_shortcuts))
-                    }
                 }
             }
         }
