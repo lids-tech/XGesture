@@ -104,4 +104,12 @@
     <string name="file_browser_search_empty">没有匹配项</string>
     <string name="file_browser_search_hint_recursive">名称包含…</string>
     <string name="file_browser_quick_obb">Android/obb</string>
+    <string name="file_browser_selected_count">已选 %1$d 项</string>
+    <string name="file_browser_copy">复制</string>
+    <string name="file_browser_move">移动</string>
+    <string name="file_browser_paste_here">粘贴到此处</string>
+    <string name="file_browser_clipboard_copy">已复制 %1$d 项</string>
+    <string name="file_browser_clipboard_move">已剪切 %1$d 项</string>
+    <string name="file_browser_selection_details">详情</string>
+    <string name="file_browser_delete_selected_message">确定删除已选的 %1$d 项？此操作不可撤销。</string>
 </resources>

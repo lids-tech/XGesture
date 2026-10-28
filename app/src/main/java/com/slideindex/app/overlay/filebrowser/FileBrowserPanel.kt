@@ -129,6 +129,7 @@ internal fun FileBrowserPanel(
     var nameTarget by remember { mutableStateOf<FileBrowserNameTarget?>(null) }
     var deleteTarget by remember { mutableStateOf<FileBrowserEntry?>(null) }
     var operationError by remember { mutableStateOf(false) }
+    var showBatchDelete by remember { mutableStateOf(false) }
     val actionScope = rememberCoroutineScope()
 
     LaunchedEffect(operationError) {
@@ -260,23 +261,70 @@ internal fun FileBrowserPanel(
                                 listState = listState,
                                 onEntryClick = { entry ->
                                     focusManager.clearFocus()
-                                    when (entry.kind) {
-                                        FileEntryKind.DIRECTORY,
-                                        FileEntryKind.SYMLINK,
-                                        -> controller.navigateTo(entry.path)
+                                    if (state.selectionMode) {
+                                        controller.toggleSelection(entry.path)
+                                    } else {
+                                        when (entry.kind) {
+                                            FileEntryKind.DIRECTORY,
+                                            FileEntryKind.SYMLINK,
+                                            -> controller.navigateTo(entry.path)
 
-                                        FileEntryKind.FILE,
-                                        FileEntryKind.OTHER,
-                                        -> controller.showDetails(entry)
+                                            FileEntryKind.FILE,
+                                            FileEntryKind.OTHER,
+                                            -> controller.showDetails(entry)
+                                        }
                                     }
                                 },
                                 onEntryLongClick = { entry ->
                                     focusManager.clearFocus()
-                                    controller.showDetails(entry)
+                                    controller.enterSelection(entry)
                                 },
+                                selectionMode = state.selectionMode,
+                                selectedPaths = state.selectedPaths,
                                 onRetry = controller::refresh,
                                 onRequestAllFiles = onRequestAllFiles,
                                 onRequestShizuku = onRequestShizuku,
+                            )
+                        }
+                        if (state.selectionMode) {
+                            FileBrowserSelectionBar(
+                                count = state.selectedPaths.size,
+                                onCopy = { controller.copySelection(cut = false) },
+                                onMove = { controller.copySelection(cut = true) },
+                                onDelete = { showBatchDelete = true },
+                                onDetails = if (state.selectedPaths.size == 1) {
+                                    {
+                                        state.entries
+                                            .firstOrNull { it.path in state.selectedPaths }
+                                            ?.let(controller::showDetails)
+                                    }
+                                } else {
+                                    null
+                                },
+                                onCancel = controller::exitSelection,
+                            )
+                        }
+                        if (!state.selectionMode && state.clipboard != null) {
+                            FileBrowserClipboardBar(
+                                clipboard = state.clipboard,
+                                onPaste = controller::paste,
+                                onCancel = controller::clearClipboard,
+                            )
+                        }
+                        if (state.operationRunning) {
+                            LinearProgressIndicator(
+                                progress = { state.operationProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp),
+                            )
+                        }
+                        if (state.operationMessage != null) {
+                            Text(
+                                text = state.operationMessage,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             )
                         }
                         if (state.error == null && (filtered.isNotEmpty() || state.truncated)) {
@@ -477,6 +525,25 @@ internal fun FileBrowserPanel(
                                 stringResource(
                                     R.string.file_browser_delete_message,
                                     target.name,
+                                ),
+                            )
+                        }
+                    }
+                    if (showBatchDelete) {
+                        FileBrowserDialog(
+                            title = stringResource(R.string.file_browser_delete),
+                            onDismiss = { showBatchDelete = false },
+                            confirmLabel = stringResource(R.string.file_browser_delete),
+                            confirmColor = MaterialTheme.colorScheme.error,
+                            onConfirm = {
+                                showBatchDelete = false
+                                controller.deleteSelected()
+                            },
+                        ) {
+                            Text(
+                                stringResource(
+                                    R.string.file_browser_delete_selected_message,
+                                    state.selectedPaths.size,
                                 ),
                             )
                         }
@@ -870,6 +937,84 @@ private fun FileBrowserQuickChips(
                     maxLines = 1,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun FileBrowserSelectionBar(
+    count: Int,
+    onCopy: () -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit,
+    onDetails: (() -> Unit)?,
+    onCancel: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.file_browser_selected_count, count),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onCopy) {
+            Text(stringResource(R.string.file_browser_copy))
+        }
+        TextButton(onClick = onMove) {
+            Text(stringResource(R.string.file_browser_move))
+        }
+        if (onDetails != null) {
+            TextButton(onClick = onDetails) {
+                Text(stringResource(R.string.file_browser_selection_details))
+            }
+        }
+        TextButton(onClick = onDelete) {
+            Text(
+                text = stringResource(R.string.file_browser_delete),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        TextButton(onClick = onCancel) {
+            Text(stringResource(R.string.file_browser_cancel))
+        }
+    }
+}
+
+@Composable
+private fun FileBrowserClipboardBar(
+    clipboard: FileClipboard,
+    onPaste: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(
+                if (clipboard.mode == FileTransferMode.MOVE) {
+                    R.string.file_browser_clipboard_move
+                } else {
+                    R.string.file_browser_clipboard_copy
+                },
+                clipboard.paths.size,
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onPaste) {
+            Text(stringResource(R.string.file_browser_paste_here))
+        }
+        TextButton(onClick = onCancel) {
+            Text(stringResource(R.string.file_browser_cancel))
         }
     }
 }

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOff
@@ -56,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -75,6 +77,8 @@ internal fun FileBrowserListContent(
     listState: LazyListState,
     onEntryClick: (FileBrowserEntry) -> Unit,
     onEntryLongClick: (FileBrowserEntry) -> Unit,
+    selectionMode: Boolean = false,
+    selectedPaths: Set<String> = emptySet(),
     onRetry: () -> Unit,
     onRequestAllFiles: () -> Unit,
     onRequestShizuku: () -> Unit,
@@ -108,6 +112,8 @@ internal fun FileBrowserListContent(
                 FileBrowserEntryRow(
                     entry = entry,
                     showDivider = index < filtered.lastIndex,
+                    selected = entry.path in selectedPaths,
+                    selectionMode = selectionMode,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
                 )
@@ -121,6 +127,8 @@ internal fun FileBrowserListContent(
 private fun FileBrowserEntryRow(
     entry: FileBrowserEntry,
     showDivider: Boolean,
+    selected: Boolean,
+    selectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -153,6 +161,13 @@ private fun FileBrowserEntryRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(
+                    if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                    } else {
+                        Color.Transparent
+                    },
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
@@ -202,7 +217,18 @@ private fun FileBrowserEntryRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (entry.kind == FileEntryKind.DIRECTORY || entry.kind == FileEntryKind.SYMLINK) {
+            if (selectionMode) {
+                Icon(
+                    imageVector = Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+            } else if (entry.kind == FileEntryKind.DIRECTORY || entry.kind == FileEntryKind.SYMLINK) {
                 Icon(
                     imageVector = Icons.Outlined.ChevronRight,
                     contentDescription = null,

@@ -29,6 +29,17 @@ data class FileBrowserUiState(
     val searchResults: List<FileBrowserEntry>? = null,
     val searchQuery: String? = null,
     val searchLoading: Boolean = false,
+    val selectionMode: Boolean = false,
+    val selectedPaths: Set<String> = emptySet(),
+    val clipboard: FileClipboard? = null,
+    val operationRunning: Boolean = false,
+    val operationProgress: Float = 0f,
+    val operationMessage: String? = null,
+)
+
+data class FileClipboard(
+    val mode: FileTransferMode,
+    val paths: List<String>,
 )
 
 /**
@@ -45,6 +56,7 @@ internal class FileBrowserController(
     private var loadJob: Job? = null
     private var sizeJob: Job? = null
     private var searchJob: Job? = null
+    private var operationJob: Job? = null
 
     val internalRoot: String get() = dataSource.internalRoot
 
@@ -122,6 +134,8 @@ internal class FileBrowserController(
             searchResults = null,
             searchQuery = null,
             searchLoading = false,
+            selectionMode = false,
+            selectedPaths = emptySet(),
         )
         FileBrowserPreferences.rememberLastPath(normalized)
         reload(resolveAccess = false)
@@ -162,6 +176,113 @@ internal class FileBrowserController(
         state = state.copy(details = null)
     }
 
+    fun enterSelection(entry: FileBrowserEntry) {
+        state = state.copy(
+            selectionMode = true,
+            selectedPaths = setOf(entry.path),
+            details = null,
+        )
+    }
+
+    fun toggleSelection(path: String) {
+        val selected = if (path in state.selectedPaths) {
+            state.selectedPaths - path
+        } else {
+            state.selectedPaths + path
+        }
+        state = state.copy(
+            selectionMode = selected.isNotEmpty() || state.selectionMode,
+            selectedPaths = selected,
+        )
+    }
+
+    fun exitSelection() {
+        state = state.copy(selectionMode = false, selectedPaths = emptySet())
+    }
+
+    fun copySelection(cut: Boolean) {
+        if (state.selectedPaths.isEmpty()) return
+        state = state.copy(
+            clipboard = FileClipboard(
+                mode = if (cut) FileTransferMode.MOVE else FileTransferMode.COPY,
+                paths = state.selectedPaths.toList(),
+            ),
+            selectionMode = false,
+            selectedPaths = emptySet(),
+        )
+    }
+
+    fun clearClipboard() {
+        state = state.copy(clipboard = null)
+    }
+
+    fun paste() {
+        val clipboard = state.clipboard ?: return
+        val access = state.access ?: return
+        if (state.operationRunning) return
+        val target = state.path
+        state = state.copy(
+            operationRunning = true,
+            operationProgress = 0f,
+            operationMessage = null,
+            selectionMode = false,
+            selectedPaths = emptySet(),
+        )
+        operationJob = scope.launch {
+            val report = FileBrowserOperations.transfer(
+                paths = clipboard.paths,
+                targetDir = target,
+                mode = clipboard.mode,
+                access = access,
+            ) { done, total ->
+                state = state.copy(
+                    operationProgress = if (total == 0) 0f else done.toFloat() / total,
+                )
+            }
+            if (!isActive) return@launch
+            state = state.copy(
+                operationRunning = false,
+                operationProgress = 0f,
+                operationMessage = if (report.failures.isEmpty()) null else
+                    "有 ${report.failures.size} 项失败",
+                clipboard = if (report.failures.isEmpty()) null else clipboard,
+            )
+            refresh()
+        }
+    }
+
+    fun deleteSelected() {
+        if (state.selectedPaths.isEmpty()) return
+        val access = state.access ?: return
+        if (state.operationRunning) return
+        val paths = state.selectedPaths.toList()
+        state = state.copy(
+            operationRunning = true,
+            operationProgress = 0f,
+            operationMessage = null,
+        )
+        operationJob = scope.launch {
+            val report = FileBrowserOperations.delete(
+                paths = paths,
+                access = access,
+            ) { done, total ->
+                state = state.copy(
+                    operationProgress = if (total == 0) 0f else done.toFloat() / total,
+                )
+            }
+            if (!isActive) return@launch
+            state = state.copy(
+                operationRunning = false,
+                operationProgress = 0f,
+                operationMessage = if (report.failures.isEmpty()) null else
+                    "有 ${report.failures.size} 项失败",
+                selectionMode = false,
+                selectedPaths = emptySet(),
+            )
+            refresh()
+        }
+    }
+
     fun cancel() {
         loadJob?.cancel()
         loadJob = null
@@ -169,6 +290,8 @@ internal class FileBrowserController(
         sizeJob = null
         searchJob?.cancel()
         searchJob = null
+        operationJob?.cancel()
+        operationJob = null
     }
 
     fun searchRecursive(query: String) {

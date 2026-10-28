@@ -104,4 +104,12 @@
     <string name="file_browser_search_empty">No matches</string>
     <string name="file_browser_search_hint_recursive">Name contains…</string>
     <string name="file_browser_quick_obb">Android/obb</string>
+    <string name="file_browser_selected_count">%1$d selected</string>
+    <string name="file_browser_copy">Copy</string>
+    <string name="file_browser_move">Move</string>
+    <string name="file_browser_paste_here">Paste here</string>
+    <string name="file_browser_clipboard_copy">%1$d item(s) copied</string>
+    <string name="file_browser_clipboard_move">%1$d item(s) cut</string>
+    <string name="file_browser_selection_details">Details</string>
+    <string name="file_browser_delete_selected_message">Delete %1$d selected item(s)? This cannot be undone.</string>
 </resources>
