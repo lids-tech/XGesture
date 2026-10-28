@@ -102,6 +102,30 @@ internal object FileBrowserPreferences {
         return base.any { FileBrowserPaths.normalize(it) == normalized }
     }
 
+    fun removeShortcut(path: String) {
+        val root = FileBrowserStorage.internalStoragePath()
+        val normalized = FileBrowserPaths.normalize(path, root)
+        if (isSystemShortcut(normalized, root)) {
+            hideShortcut(normalized)
+        } else {
+            update {
+                it.copy(
+                    pinnedPaths = userPinned(root)
+                        .filterNot { item -> item == normalized },
+                )
+            }
+        }
+    }
+
+    fun userPinned(internalRoot: String): List<String> {
+        val root = FileBrowserPaths.normalize(internalRoot, internalRoot)
+        return current.pinnedPaths
+            .map { FileBrowserPaths.normalize(it, root) }
+            .filterNot { isSystemShortcut(it, root) }
+            .distinct()
+            .take(MAX_PINS)
+    }
+
     fun rememberTabs(paths: List<String>, activeIndex: Int) {
         val normalized = paths.map { FileBrowserPaths.normalize(it) }.distinct().take(6)
         if (normalized.isEmpty()) return
@@ -141,6 +165,15 @@ internal object FileBrowserPreferences {
         }
     }
 
+    fun unhideShortcut(path: String) {
+        val normalized = FileBrowserPaths.normalize(path)
+        update {
+            it.copy(hiddenShortcuts = it.hiddenShortcuts.filterNot { item ->
+                FileBrowserPaths.normalize(item) == normalized
+            })
+        }
+    }
+
     fun resetHiddenShortcuts() {
         update { it.copy(hiddenShortcuts = emptyList()) }
     }
@@ -151,9 +184,7 @@ internal object FileBrowserPreferences {
         val system = (defaultPins(root) + "$root/Android/obb")
             .map { FileBrowserPaths.normalize(it, root) }
             .filterNot { it in hidden }
-        val user = current.pinnedPaths
-            .map { FileBrowserPaths.normalize(it, root) }
-            .filterNot { it in system }
+        val user = userPinned(root)
         return (system + user).distinct().take(MAX_PINS)
     }
 
