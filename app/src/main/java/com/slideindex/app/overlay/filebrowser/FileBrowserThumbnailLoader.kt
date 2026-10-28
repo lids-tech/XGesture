@@ -25,6 +25,7 @@ internal object FileBrowserThumbnailLoader {
     private const val MAX_EDGE_PX = 128
     private const val MAX_IMAGE_BYTES = 12L * 1024L * 1024L
     private const val MAX_ROOT_IMAGE_BYTES = 4L * 1024L * 1024L
+    private const val MAX_ROOT_COPY_BYTES = 12L * 1024L * 1024L
     private const val ROOT_TIMEOUT_SECONDS = 8L
 
     private val cache = object : LruCache<String, Bitmap>(
@@ -45,14 +46,14 @@ internal object FileBrowserThumbnailLoader {
         cache.get(key)?.let { return@withContext it }
         val file = File(path)
         val readable = file.isFile && file.canRead()
-        if (!readable && !(kind == FileKind.IMAGE && access?.mode == AccessMode.ROOT)) {
+        if (!readable && access?.mode != AccessMode.ROOT) {
             return@withContext null
         }
         val bitmap = when (kind) {
             FileKind.IMAGE -> if (readable) image(file) else rootImage(context, file)
-            FileKind.VIDEO -> if (readable) video(file) else null
-            FileKind.APK -> if (readable) apk(context, file) else null
-            FileKind.PDF -> if (readable) pdf(file) else null
+            FileKind.VIDEO -> if (readable) video(file) else rootCopied(context, file, kind)
+            FileKind.APK -> if (readable) apk(context, file) else rootCopied(context, file, kind)
+            FileKind.PDF -> if (readable) pdf(file) else rootCopied(context, file, kind)
             else -> null
         } ?: return@withContext null
         cache.put(key, bitmap)
@@ -77,6 +78,76 @@ internal object FileBrowserThumbnailLoader {
         return runCatching {
             BitmapFactory.decodeFile(file.absolutePath, options)
         }.getOrNull()
+    }
+
+    private fun rootCopied(context: Context, file: File, kind: FileKind): Bitmap? {
+        val temp = runCatching {
+            File.createTempFile("xg_thumb_copy_", ".bin", context.cacheDir)
+        }.getOrNull() ?: return null
+        return try {
+            if (!rootCopy(file.absolutePath, temp)) return null
+            when (kind) {
+                FileKind.VIDEO -> video(temp)
+                FileKind.APK -> apk(context, temp)
+                FileKind.PDF -> pdf(temp)
+                else -> null
+            }
+        } finally {
+            runCatching { temp.delete() }
+        }
+    }
+
+    private fun rootCopy(path: String, destination: File): Boolean {
+        val size = rootSize(path) ?: return false
+        if (size <= 0L || size > MAX_ROOT_COPY_BYTES) return false
+        val sh = TaskManagerShellExecutor.resolveShPath()
+        val command = "cp -f ${TaskManagerShellExecutor.shellQuote(path)} " +
+            TaskManagerShellExecutor.shellQuote(destination.absolutePath)
+        val launcher = if (RootNamespace.nsenterBinaryExists()) {
+            "${RootNamespace.NSENTER_PATH} -t 1 -m -- $sh -c " +
+                TaskManagerShellExecutor.shellQuote(command)
+        } else {
+            command
+        }
+        val process = runCatching {
+            ProcessBuilder(TaskManagerShellExecutor.resolveSuInvocation(), "-c", launcher)
+                .redirectErrorStream(true)
+                .start()
+        }.getOrNull() ?: return false
+        return try {
+            process.waitFor(ROOT_TIMEOUT_SECONDS, TimeUnit.SECONDS) &&
+                destination.isFile && destination.length() > 0L
+        } finally {
+            runCatching { process.destroy() }
+        }
+    }
+
+    private fun rootSize(path: String): Long? {
+        val sh = TaskManagerShellExecutor.resolveShPath()
+        val command = "stat -c %s ${TaskManagerShellExecutor.shellQuote(path)} 2>/dev/null"
+        val launcher = if (RootNamespace.nsenterBinaryExists()) {
+            "${RootNamespace.NSENTER_PATH} -t 1 -m -- $sh -c " +
+                TaskManagerShellExecutor.shellQuote(command)
+        } else {
+            command
+        }
+        val process = runCatching {
+            ProcessBuilder(TaskManagerShellExecutor.resolveSuInvocation(), "-c", launcher)
+                .redirectErrorStream(true)
+                .start()
+        }.getOrNull() ?: return null
+        return try {
+            if (!process.waitFor(4, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                return null
+            }
+            process.inputStream.bufferedReader().use { it.readText() }
+                .lineSequence()
+                .mapNotNull { it.trim().toLongOrNull() }
+                .lastOrNull()
+        } finally {
+            runCatching { process.destroy() }
+        }
     }
 
     /** Root 图片：一次性 base64 读取，限制 4MB，失败回退类型图标。 */
