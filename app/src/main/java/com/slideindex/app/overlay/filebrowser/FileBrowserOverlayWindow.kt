@@ -174,10 +174,11 @@ internal object FileBrowserOverlayWindow {
             return
         }
         val parent = FileBrowserPaths.parent(state.path, current.controller.internalRoot)
-        if (parent != null) {
-            current.controller.navigateTo(parent)
-        } else {
+        val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
+        if (parent == null && tab?.backStack.isNullOrEmpty()) {
             dismiss()
+        } else {
+            current.controller.goBack()
         }
     }
 

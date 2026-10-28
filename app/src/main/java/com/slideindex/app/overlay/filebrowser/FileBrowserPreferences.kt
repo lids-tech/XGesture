@@ -28,6 +28,8 @@ internal data class FileBrowserPrefs(
     val lastPath: String? = null,
     val sortOrder: String = FileSortOrder.NAME_ASC.name,
     val showHidden: Boolean = false,
+    val tabs: List<String> = emptyList(),
+    val activeTabIndex: Int = 0,
 )
 
 internal object FileBrowserPreferences {
@@ -99,8 +101,29 @@ internal object FileBrowserPreferences {
         return base.any { FileBrowserPaths.normalize(it) == normalized }
     }
 
-    fun rememberLastPath(path: String) {
-        val normalized = FileBrowserPaths.normalize(path)
+    fun rememberTabs(paths: List<String>, activeIndex: Int) {
+        val normalized = paths.map { FileBrowserPaths.normalize(it) }.distinct().take(6)
+        if (normalized.isEmpty()) return
+        update {
+            it.copy(
+                tabs = normalized,
+                activeTabIndex = activeIndex.coerceIn(0, normalized.lastIndex),
+            )
+        }
+    }
+
+    fun movePin(from: Int, to: Int, internalRoot: String) {
+        val base = current.pinnedPaths.ifEmpty { defaultPins(internalRoot) }
+            .map { FileBrowserPaths.normalize(it) }
+            .distinct()
+            .toMutableList()
+        if (from !in base.indices || to !in base.indices || from == to) return
+        val item = base.removeAt(from)
+        base.add(to, item)
+        update { it.copy(pinnedPaths = base.take(MAX_PINS)) }
+    }
+
+    fun rememberLastPath(path: String) {        val normalized = FileBrowserPaths.normalize(path)
         if (current.lastPath == normalized) return
         update { it.copy(lastPath = normalized) }
     }

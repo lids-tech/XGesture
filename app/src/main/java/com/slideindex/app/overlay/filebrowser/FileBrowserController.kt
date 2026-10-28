@@ -50,6 +50,10 @@ data class FileClipboard(
 data class FileBrowserTab(
     val id: Long,
     val path: String,
+    val backStack: List<String> = emptyList(),
+    val query: String = "",
+    val scrollIndex: Int = 0,
+    val scrollOffset: Int = 0,
 )
 
 /**
@@ -69,6 +73,7 @@ internal class FileBrowserController(
     private var searchJob: Job? = null
     private var operationJob: Job? = null
     private var nextTabId: Long = 1L
+    private val scrollPositions = mutableMapOf<Long, Pair<Int, Int>>()
 
     val internalRoot: String get() = dataSource.internalRoot
 
@@ -81,6 +86,22 @@ internal class FileBrowserController(
         FileBrowserPreferences.attach(context) { prefs ->
             scope.launch {
                 if (state.path != dataSource.initialPath()) return@launch
+                if (prefs.tabs.isNotEmpty() && state.tabs.size <= 1) {
+                    val restored = prefs.tabs.mapIndexed { index, path ->
+                        FileBrowserTab(id = index.toLong(), path = FileBrowserPaths.normalize(path, internalRoot))
+                    }
+                    val activeIndex = prefs.activeTabIndex.coerceIn(0, restored.lastIndex)
+                    val active = restored[activeIndex]
+                    state = state.copy(
+                        tabs = restored,
+                        activeTabId = active.id,
+                        path = active.path,
+                        showHidden = prefs.showHidden,
+                        sort = prefs.sortOrderOrDefault(),
+                    )
+                    reload()
+                    return@launch
+                }
                 val last = prefs.lastPath ?: return@launch
                 val target = FileBrowserPaths.normalize(last, internalRoot)
                 if (target == state.path) return@launch
@@ -88,7 +109,9 @@ internal class FileBrowserController(
                     path = target,
                     showHidden = prefs.showHidden,
                     sort = prefs.sortOrderOrDefault(),
-                    tabs = tabsWithActivePath(target),
+                    tabs = state.tabs.map {
+                        if (it.id == state.activeTabId) it.copy(path = target) else it
+                    },
                 )
                 reload()
             }
@@ -107,7 +130,7 @@ internal class FileBrowserController(
         )
     }
 
-    /** 面板重新可见：清掉搜索词/详情，应用排序/隐藏偏好，然后刷新。 */
+    /** 面板重新可见：保留 Tab，清掉当前搜索词/详情，然后刷新。 */
     fun onShow() {
         val prefs = FileBrowserPreferences.current
         val target = if (state.path == dataSource.initialPath() && !prefs.lastPath.isNullOrBlank()) {
@@ -126,16 +149,35 @@ internal class FileBrowserController(
             directorySizeBytes = null,
             directorySizeLoading = false,
             directorySizeComputed = false,
-            tabs = tabsWithActivePath(target),
+            tabs = state.tabs.map {
+                if (it.id == state.activeTabId) it.copy(path = target, query = "") else it
+            },
         )
         reload(resolveAccess = true)
+        rememberTabs()
     }
 
     fun navigateTo(path: String) {
+        navigateTo(path, pushHistory = true)
+    }
+
+    private fun navigateTo(path: String, pushHistory: Boolean) {
         val normalized = FileBrowserPaths.normalize(path, internalRoot)
         if (normalized == state.path && state.error == null) return
         searchJob?.cancel()
         searchJob = null
+        val currentTab = state.tabs.firstOrNull { it.id == state.activeTabId }
+        val history = currentTab?.backStack.orEmpty().let { stack ->
+            if (pushHistory && state.path != normalized) stack + state.path else stack
+        }
+        val tabs = state.tabs.map {
+            if (it.id == state.activeTabId) {
+                it.copy(path = normalized, query = "", backStack = history)
+            } else {
+                it
+            }
+        }
+        scrollPositions.remove(state.activeTabId)
         state = state.copy(
             path = normalized,
             entries = emptyList(),
@@ -153,9 +195,10 @@ internal class FileBrowserController(
             searchLoading = false,
             selectionMode = false,
             selectedPaths = emptySet(),
-            tabs = tabsWithActivePath(normalized),
+            tabs = tabs,
         )
         FileBrowserPreferences.rememberLastPath(normalized)
+        rememberTabs()
         reload(resolveAccess = false)
     }
 
@@ -163,48 +206,116 @@ internal class FileBrowserController(
         FileBrowserPaths.parent(state.path, internalRoot)?.let(::navigateTo)
     }
 
+    fun goBack() {
+        val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
+        val target = tab?.backStack?.lastOrNull()
+        if (target == null) {
+            goParent()
+            return
+        }
+        val tabs = state.tabs.map {
+            if (it.id == state.activeTabId) it.copy(backStack = it.backStack.dropLast(1)) else it
+        }
+        state = state.copy(tabs = tabs)
+        navigateTo(target, pushHistory = false)
+    }
+
     fun selectTab(id: Long) {
         if (id == state.activeTabId) return
-        val tabs = state.tabs.map {
-            if (it.id == state.activeTabId) it.copy(path = state.path) else it
-        }
-        val target = tabs.firstOrNull { it.id == id } ?: return
-        state = state.copy(tabs = tabs, activeTabId = id)
-        navigateTo(target.path)
+        val saved = saveActiveTab()
+        val target = saved.firstOrNull { it.id == id } ?: return
+        state = state.copy(
+            tabs = saved,
+            activeTabId = id,
+            path = target.path,
+            query = target.query,
+            entries = emptyList(),
+            details = null,
+            searchResults = null,
+            searchQuery = null,
+            selectionMode = false,
+            selectedPaths = emptySet(),
+            loading = true,
+            error = null,
+        )
+        FileBrowserPreferences.rememberLastPath(target.path)
+        rememberTabs()
+        reload(resolveAccess = true)
     }
 
     fun newTab() {
-        val tabs = state.tabs.map {
-            if (it.id == state.activeTabId) it.copy(path = state.path) else it
-        }
+        val tabs = saveActiveTab()
         val id = nextTabId++
         state = state.copy(
             tabs = tabs + FileBrowserTab(id = id, path = state.path),
             activeTabId = id,
+            query = "",
             selectionMode = false,
             selectedPaths = emptySet(),
             details = null,
         )
+        rememberTabs()
     }
 
     fun closeTab(id: Long) {
         if (state.tabs.size <= 1) return
-        val index = state.tabs.indexOfFirst { it.id == id }
+        val tabs = saveActiveTab()
+        val index = tabs.indexOfFirst { it.id == id }
         if (index < 0) return
-        val remaining = state.tabs.filterNot { it.id == id }
+        val remaining = tabs.filterNot { it.id == id }
         if (id != state.activeTabId) {
             state = state.copy(tabs = remaining)
+            rememberTabs()
             return
         }
         val next = remaining[(index - 1).coerceAtLeast(0)]
-        state = state.copy(tabs = remaining, activeTabId = next.id)
-        navigateTo(next.path)
+        state = state.copy(
+            tabs = remaining,
+            activeTabId = next.id,
+            path = next.path,
+            query = next.query,
+            entries = emptyList(),
+            details = null,
+            loading = true,
+            error = null,
+        )
+        rememberTabs()
+        reload(resolveAccess = true)
     }
 
-    private fun tabsWithActivePath(path: String): List<FileBrowserTab> =
-        state.tabs.map {
-            if (it.id == state.activeTabId) it.copy(path = path) else it
+    private fun saveActiveTab(): List<FileBrowserTab> {
+        val scroll = scrollPositions[state.activeTabId]
+        return state.tabs.map {
+            if (it.id == state.activeTabId) {
+                it.copy(
+                    path = state.path,
+                    query = state.query,
+                    scrollIndex = scroll?.first ?: it.scrollIndex,
+                    scrollOffset = scroll?.second ?: it.scrollOffset,
+                )
+            } else {
+                it
+            }
         }
+    }
+
+    private fun rememberTabs() {
+        val index = state.tabs.indexOfFirst { it.id == state.activeTabId }
+        FileBrowserPreferences.rememberTabs(
+            paths = state.tabs.map { it.path },
+            activeIndex = index.coerceAtLeast(0),
+        )
+    }
+
+    fun saveScroll(index: Int, offset: Int) {
+        scrollPositions[state.activeTabId] = index to offset
+    }
+
+    fun scrollForActiveTab(): Pair<Int, Int> {
+        val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
+        return scrollPositions[state.activeTabId]
+            ?: (tab?.scrollIndex ?: 0) to (tab?.scrollOffset ?: 0)
+    }
 
     fun refresh() {
         reload(resolveAccess = true)
@@ -216,7 +327,12 @@ internal class FileBrowserController(
     }
 
     fun setQuery(query: String) {
-        state = state.copy(query = query)
+        state = state.copy(
+            query = query,
+            tabs = state.tabs.map {
+                if (it.id == state.activeTabId) it.copy(query = query) else it
+            },
+        )
     }
 
     fun setShowHidden(show: Boolean) {

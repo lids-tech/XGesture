@@ -12,6 +12,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -69,6 +71,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,13 +79,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.PopupProperties
+import kotlin.math.roundToInt
 import com.slideindex.app.R
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.ui.miuix.MiuixSearchField
@@ -119,6 +126,21 @@ internal fun FileBrowserPanel(
         )
     }
     val listState = rememberLazyListState()
+    var restoredTabId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(state.activeTabId, state.loading) {
+        if (!state.loading && restoredTabId != state.activeTabId) {
+            restoredTabId = state.activeTabId
+            val (index, offset) = controller.scrollForActiveTab()
+            runCatching { listState.scrollToItem(index, offset) }
+        }
+    }
+    LaunchedEffect(listState, state.activeTabId) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            controller.saveScroll(index, offset)
+        }
+    }
     val levelBytes = remember(state.entries) {
         state.entries.asSequence()
             .filter { it.kind != FileEntryKind.DIRECTORY }
@@ -1091,6 +1113,10 @@ private fun FileBrowserFavoritesOverlay(
     var favorites by remember {
         mutableStateOf(FileBrowserPreferences.pinnedOrDefault(internalRoot))
     }
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    val rowHeightPx = with(density) { 56.dp.toPx() }
     fun refresh() {
         favorites = FileBrowserPreferences.pinnedOrDefault(internalRoot)
     }
@@ -1137,10 +1163,49 @@ private fun FileBrowserFavoritesOverlay(
                         modifier = Modifier.padding(vertical = 10.dp),
                     )
                 } else {
-                    favorites.forEach { path ->
+                    favorites.forEachIndexed { index, path ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .offset {
+                                    IntOffset(
+                                        0,
+                                        if (draggingIndex == index) dragOffset.roundToInt() else 0,
+                                    )
+                                }
+                                .pointerInput(favorites) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggingIndex = index
+                                            dragOffset = 0f
+                                        },
+                                        onDrag = { _, amount ->
+                                            dragOffset += amount.y
+                                        },
+                                        onDragEnd = {
+                                            val from = draggingIndex
+                                            if (from != null) {
+                                                val delta = (dragOffset / rowHeightPx).roundToInt()
+                                                val to = (from + delta)
+                                                    .coerceIn(0, favorites.lastIndex)
+                                                if (to != from) {
+                                                    FileBrowserPreferences.movePin(
+                                                        from,
+                                                        to,
+                                                        internalRoot,
+                                                    )
+                                                    refresh()
+                                                }
+                                            }
+                                            draggingIndex = null
+                                            dragOffset = 0f
+                                        },
+                                        onDragCancel = {
+                                            draggingIndex = null
+                                            dragOffset = 0f
+                                        },
+                                    )
+                                }
                                 .clickable { onNavigate(path) }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
