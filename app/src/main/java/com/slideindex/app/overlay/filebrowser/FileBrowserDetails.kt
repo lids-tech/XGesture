@@ -137,64 +137,74 @@ internal fun FileBrowserDetailsOverlay(
                         label = stringResource(R.string.file_browser_detail_permissions),
                         value = entry.permissions ?: "—",
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = onCopy,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                if (copied) {
-                                    R.string.file_browser_copied
-                                } else {
-                                    R.string.file_browser_copy_path
-                                },
-                            ),
-                        )
-                    }
-                    if (onOpenImage != null) {
-                        OutlinedButton(
-                            onClick = onOpenImage,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(R.string.file_browser_image_open))
-                        }
-                    }
-                    if (onOpenWith != null) {
-                        OutlinedButton(
-                            onClick = onOpenWith,
-                            enabled = openWithEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = openWithLabel
-                                    ?: stringResource(R.string.file_browser_open_with),
-                            )
-                        }
-                    }
-                    if (onRename != null || onDelete != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    if (onOpenImage != null || onOpenWith != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            if (onRename != null) {
-                                OutlinedButton(
-                                    onClick = onRename,
+                            if (onOpenImage != null) {
+                                Button(
+                                    onClick = onOpenImage,
                                     modifier = Modifier.weight(1f),
                                 ) {
-                                    Text(stringResource(R.string.file_browser_rename))
+                                    Text(stringResource(R.string.file_browser_image_open))
                                 }
                             }
-                            if (onDelete != null) {
-                                TextButton(
-                                    onClick = onDelete,
+                            if (onOpenWith != null) {
+                                OutlinedButton(
+                                    onClick = onOpenWith,
+                                    enabled = openWithEnabled,
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.file_browser_delete),
-                                        color = MaterialTheme.colorScheme.error,
+                                        text = openWithLabel
+                                            ?: stringResource(R.string.file_browser_open_with),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = onCopy,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    if (copied) {
+                                        R.string.file_browser_copied
+                                    } else {
+                                        R.string.file_browser_copy_path
+                                    },
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (onRename != null) {
+                            OutlinedButton(
+                                onClick = onRename,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(stringResource(R.string.file_browser_rename))
+                            }
+                        }
+                        if (onDelete != null) {
+                            TextButton(
+                                onClick = onDelete,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.file_browser_delete),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                             }
                         }
                     }
