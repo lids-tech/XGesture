@@ -338,6 +338,30 @@ internal fun FileBrowserPanel(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             )
                         }
+                        if (state.lastTrash.isNotEmpty() && !state.operationRunning) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f))
+                                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.file_browser_trash_count,
+                                        state.lastTrash.size,
+                                    ),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = controller::undoDelete) {
+                                    Text(stringResource(R.string.file_browser_undo))
+                                }
+                                TextButton(onClick = controller::clearTrashUndo) {
+                                    Text(stringResource(R.string.file_browser_cancel))
+                                }
+                            }
+                        }
                         if (state.error == null && (filtered.isNotEmpty() || state.truncated)) {
                             FileBrowserFooter(
                                 count = filtered.size,
@@ -508,7 +532,6 @@ internal fun FileBrowserPanel(
                         )
                     }
                     deleteTarget?.let { target ->
-                        val access = state.access
                         FileBrowserDialog(
                             title = stringResource(R.string.file_browser_delete),
                             onDismiss = { deleteTarget = null },
@@ -516,20 +539,7 @@ internal fun FileBrowserPanel(
                             confirmColor = MaterialTheme.colorScheme.error,
                             onConfirm = {
                                 deleteTarget = null
-                                if (access != null) {
-                                    actionScope.launch {
-                                        val ok = FileBrowserWrite.delete(
-                                            path = target.path,
-                                            access = access,
-                                        )
-                                        if (ok) {
-                                            controller.hideDetails()
-                                            controller.refresh()
-                                        } else {
-                                            operationError = true
-                                        }
-                                    }
-                                }
+                                controller.deleteEntry(target)
                             },
                         ) {
                             Text(

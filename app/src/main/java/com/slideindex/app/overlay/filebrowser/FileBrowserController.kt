@@ -37,6 +37,7 @@ data class FileBrowserUiState(
     val operationMessage: String? = null,
     val pendingPaste: FileClipboard? = null,
     val pendingConflicts: Int = 0,
+    val lastTrash: List<TrashedItem> = emptyList(),
 )
 
 data class FileClipboard(
@@ -55,6 +56,7 @@ internal class FileBrowserController(
     private val scope: CoroutineScope,
 ) {
     private val dataSource = FileBrowserDataSource(context)
+    private val appContext = context.applicationContext
     private var loadJob: Job? = null
     private var sizeJob: Job? = null
     private var searchJob: Job? = null
@@ -292,6 +294,50 @@ internal class FileBrowserController(
         )
     }
 
+    fun deleteEntry(entry: FileBrowserEntry) {
+        val access = state.access ?: return
+        if (state.operationRunning) return
+        state = state.copy(
+            operationRunning = true,
+            operationProgress = 0f,
+            operationMessage = null,
+        )
+        operationJob = scope.launch {
+            val report = FileBrowserTrash.trash(appContext, listOf(entry.path), access)
+            if (!isActive) return@launch
+            state = state.copy(
+                operationRunning = false,
+                operationProgress = 0f,
+                operationMessage = if (report.failures.isEmpty()) null else "删除失败",
+                lastTrash = report.trashed,
+                details = null,
+            )
+            refresh()
+        }
+    }
+
+    fun undoDelete() {
+        val items = state.lastTrash
+        val access = state.access ?: return
+        if (items.isEmpty() || state.operationRunning) return
+        state = state.copy(operationRunning = true, operationProgress = 0f)
+        operationJob = scope.launch {
+            val failures = FileBrowserTrash.restore(items, access)
+            if (!isActive) return@launch
+            state = state.copy(
+                operationRunning = false,
+                operationProgress = 0f,
+                operationMessage = if (failures.isEmpty()) null else "有 ${failures.size} 项恢复失败",
+                lastTrash = if (failures.isEmpty()) emptyList() else items,
+            )
+            refresh()
+        }
+    }
+
+    fun clearTrashUndo() {
+        state = state.copy(lastTrash = emptyList())
+    }
+
     fun deleteSelected() {
         if (state.selectedPaths.isEmpty()) return
         val access = state.access ?: return
@@ -303,14 +349,7 @@ internal class FileBrowserController(
             operationMessage = null,
         )
         operationJob = scope.launch {
-            val report = FileBrowserOperations.delete(
-                paths = paths,
-                access = access,
-            ) { done, total ->
-                state = state.copy(
-                    operationProgress = if (total == 0) 0f else done.toFloat() / total,
-                )
-            }
+            val report = FileBrowserTrash.trash(appContext, paths, access)
             if (!isActive) return@launch
             state = state.copy(
                 operationRunning = false,
@@ -319,6 +358,7 @@ internal class FileBrowserController(
                     "有 ${report.failures.size} 项失败",
                 selectionMode = false,
                 selectedPaths = emptySet(),
+                lastTrash = report.trashed,
             )
             refresh()
         }

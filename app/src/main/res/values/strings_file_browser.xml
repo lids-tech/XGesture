@@ -117,4 +117,6 @@
     <string name="file_browser_conflict_rename">Keep both</string>
     <string name="file_browser_conflict_overwrite">Replace</string>
     <string name="file_browser_conflict_skip">Skip</string>
+    <string name="file_browser_trash_count">%1$d item(s) moved to trash</string>
+    <string name="file_browser_undo">Undo</string>
 </resources>

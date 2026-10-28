@@ -117,4 +117,6 @@
     <string name="file_browser_conflict_rename">保留两者</string>
     <string name="file_browser_conflict_overwrite">覆盖</string>
     <string name="file_browser_conflict_skip">跳过</string>
+    <string name="file_browser_trash_count">%1$d 项已移到回收站</string>
+    <string name="file_browser_undo">撤销</string>
 </resources>
