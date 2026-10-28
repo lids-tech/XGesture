@@ -280,6 +280,7 @@ internal fun FileBrowserPanel(
                                 focusManager.clearFocus()
                                 controller.navigateTo(target)
                             },
+                            onLongClick = { copyToClipboard(context, state.path) },
                         )
                         AnimatedVisibility(
                             visible = searchExpanded || state.query.isNotEmpty(),
@@ -728,9 +729,27 @@ internal fun FileBrowserPanel(
                         )
                     }
                     imagePreview?.let { entry ->
+                        val images = filtered.filter {
+                            FileKind.from(it.name, it.kind) == FileKind.IMAGE
+                        }
+                        val imageIndex = images.indexOfFirst { it.path == entry.path }
                         FileBrowserImageViewer(
                             entry = entry,
                             access = state.access,
+                            onPrevious = if (imageIndex > 0) {
+                                { imagePreview = images[imageIndex - 1] }
+                            } else {
+                                null
+                            },
+                            onNext = if (imageIndex >= 0 && imageIndex < images.lastIndex) {
+                                { imagePreview = images[imageIndex + 1] }
+                            } else {
+                                null
+                            },
+                            onDetails = {
+                                imagePreview = null
+                                controller.showDetails(entry)
+                            },
                             onEdit = { bitmap ->
                                 val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
                                     .put(context, bitmap)
@@ -1077,6 +1096,7 @@ private fun FileBrowserBreadcrumb(
     path: String,
     internalRoot: String,
     onNavigate: (String) -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val rootLabel = stringResource(R.string.file_browser_crumb_root)
     val internalLabel = stringResource(R.string.file_browser_crumb_internal)
@@ -1102,7 +1122,12 @@ private fun FileBrowserBreadcrumb(
                 onNavigate(items[index].path)
             }
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onLongClick,
+            ),
         highlightIndex = items.lastIndex,
         colors = BreadcrumbBarDefaults.breadcrumbBarColors(
             color = MiuixTheme.colorScheme.onBackground.copy(alpha = 0.62f),
