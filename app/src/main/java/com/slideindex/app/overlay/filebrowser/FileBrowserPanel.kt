@@ -9,9 +9,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Download
@@ -126,6 +129,27 @@ internal fun FileBrowserPanel(
         )
     }
     val listState = rememberLazyListState()
+    var quickBarVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(state.activeTabId) {
+        quickBarVisible = true
+    }
+    LaunchedEffect(listState, state.activeTabId) {
+        var last = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { current ->
+            when {
+                current.first == 0 && current.second < 12 -> quickBarVisible = true
+                current.first > last.first ||
+                    (current.first == last.first && current.second > last.second + 18) ->
+                    quickBarVisible = false
+                current.first < last.first ||
+                    (current.first == last.first && current.second < last.second - 18) ->
+                    quickBarVisible = true
+            }
+            last = current
+        }
+    }
     var restoredTabId by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(state.activeTabId, state.loading) {
         if (!state.loading && restoredTabId != state.activeTabId) {
@@ -153,6 +177,8 @@ internal fun FileBrowserPanel(
     var showSearchDialog by remember { mutableStateOf(false) }
     var showFavorites by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var searchExpanded by remember { mutableStateOf(false) }
+    var imagePreview by remember { mutableStateOf<FileBrowserEntry?>(null) }
     var exportBusy by remember { mutableStateOf(false) }
     var exportFailed by remember { mutableStateOf(false) }
     var nameTarget by remember { mutableStateOf<FileBrowserNameTarget?>(null) }
@@ -225,6 +251,7 @@ internal fun FileBrowserPanel(
                         FileBrowserHeader(
                             access = state.access,
                             onRefresh = controller::refresh,
+                            onSearchClick = { searchExpanded = !searchExpanded },
                             onMenuClick = { showMenu = true },
                             onDismiss = onDismiss,
                         )
@@ -243,22 +270,48 @@ internal fun FileBrowserPanel(
                                 controller.navigateTo(target)
                             },
                         )
-                        MiuixSearchField(
-                            query = state.query,
-                            onQueryChange = controller::setQuery,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 2.dp),
-                            hintResId = R.string.file_browser_search_hint,
-                        )
-                        FileBrowserQuickChips(
-                            internalRoot = internalRoot,
-                            showAppData = state.access?.rootMode == true,
-                            onNavigate = { target ->
-                                focusManager.clearFocus()
-                                controller.navigateTo(target)
-                            },
-                        )
+                        if (searchExpanded || state.query.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                MiuixSearchField(
+                                    query = state.query,
+                                    onQueryChange = controller::setQuery,
+                                    modifier = Modifier.weight(1f),
+                                    hintResId = R.string.file_browser_search_hint,
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            searchExpanded = false
+                                            controller.setQuery("")
+                                            focusManager.clearFocus()
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        AnimatedVisibility(visible = quickBarVisible) {
+                            FileBrowserQuickChips(
+                                internalRoot = internalRoot,
+                                onNavigate = { target ->
+                                    focusManager.clearFocus()
+                                    controller.navigateTo(target)
+                                },
+                            )
+                        }
                         if (state.loading && state.entries.isNotEmpty()) {
                             LinearProgressIndicator(
                                 modifier = Modifier
@@ -469,6 +522,13 @@ internal fun FileBrowserPanel(
                                 }
                                 else -> null
                             },
+                            onOpenImage = if (
+                                FileKind.from(details.name, details.kind) == FileKind.IMAGE
+                            ) {
+                                { imagePreview = details }
+                            } else {
+                                null
+                            },
                             openWithLabel = openWithLabel,
                             openWithEnabled = !exportBusy,
                             onRename = { nameTarget = FileBrowserNameTarget.Rename(details) },
@@ -653,6 +713,13 @@ internal fun FileBrowserPanel(
                             onCancel = controller::cancelPaste,
                         )
                     }
+                    imagePreview?.let { entry ->
+                        FileBrowserImageViewer(
+                            entry = entry,
+                            access = state.access,
+                            onClose = { imagePreview = null },
+                        )
+                    }
                     if (operationError) {
                         Text(
                             text = stringResource(R.string.file_browser_operation_failed),
@@ -730,26 +797,28 @@ private fun FileBrowserMenuOverlay(
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
                 listOf(
-                    FileSortOrder.NAME_ASC to R.string.file_browser_sort_name,
-                    FileSortOrder.NAME_DESC to R.string.file_browser_sort_name,
-                    FileSortOrder.TIME_DESC to R.string.file_browser_sort_time,
-                    FileSortOrder.TIME_ASC to R.string.file_browser_sort_time,
-                    FileSortOrder.SIZE_DESC to R.string.file_browser_sort_size,
-                    FileSortOrder.SIZE_ASC to R.string.file_browser_sort_size,
-                ).forEach { (order, labelRes) ->
-                    val arrow = if (order in setOf(
-                            FileSortOrder.NAME_ASC,
-                            FileSortOrder.TIME_ASC,
-                            FileSortOrder.SIZE_ASC,
-                        )
-                    ) " ↑" else " ↓"
+                    Triple(R.string.file_browser_sort_name, FileSortOrder.NAME_ASC, FileSortOrder.NAME_DESC),
+                    Triple(R.string.file_browser_sort_time, FileSortOrder.TIME_ASC, FileSortOrder.TIME_DESC),
+                    Triple(R.string.file_browser_sort_size, FileSortOrder.SIZE_ASC, FileSortOrder.SIZE_DESC),
+                ).forEach { (labelRes, asc, desc) ->
+                    val active = sort == asc || sort == desc
+                    val next = when {
+                        !active -> if (labelRes == R.string.file_browser_sort_name) asc else desc
+                        sort == asc -> desc
+                        else -> asc
+                    }
                     TextButton(
-                        onClick = { onSort(order) },
+                        onClick = { onSort(next) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            text = stringResource(labelRes) + arrow,
-                            color = if (sort == order) {
+                            text = stringResource(labelRes) +
+                                if (active) {
+                                    if (sort == asc) " ↑" else " ↓"
+                                } else {
+                                    ""
+                                },
+                            color = if (active) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurface
@@ -807,53 +876,61 @@ private fun FileBrowserTabBar(
     onNew: () -> Unit,
 ) {
     LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         items(tabs, key = { it.id }) { tab ->
             val active = tab.id == activeTabId
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(9.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                         else Color.Transparent,
                     )
                     .clickable { onSelect(tab.id) }
-                    .padding(start = 10.dp, end = if (tabs.size > 1) 2.dp else 10.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 9.dp, end = if (tabs.size > 1) 2.dp else 9.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = tabTitle(tab.path),
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 130.dp),
                 )
                 if (tabs.size > 1) {
-                    IconButton(
-                        onClick = { onClose(tab.id) },
-                        modifier = Modifier.size(24.dp),
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onClose(tab.id) },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(13.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
         }
         item {
-            IconButton(onClick = onNew, modifier = Modifier.size(28.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .clickable(onClick = onNew),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
                     contentDescription = null,
-                    modifier = Modifier.size(17.dp),
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
@@ -870,6 +947,7 @@ private fun tabTitle(path: String): String = when (path) {
 private fun FileBrowserHeader(
     access: FileBrowserAccessInfo?,
     onRefresh: () -> Unit,
+    onSearchClick: () -> Unit,
     onMenuClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -893,6 +971,12 @@ private fun FileBrowserHeader(
             )
             Spacer(modifier = Modifier.width(8.dp))
             FileBrowserAccessBadge(access)
+        }
+        IconButton(onClick = onSearchClick) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = stringResource(R.string.file_browser_search_hint),
+            )
         }
         IconButton(onClick = onRefresh) {
             Icon(
@@ -1016,84 +1100,63 @@ private data class QuickTarget(
     val icon: ImageVector,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileBrowserQuickChips(
     internalRoot: String,
-    showAppData: Boolean,
     onNavigate: (String) -> Unit,
 ) {
-    val targets = remember(internalRoot, showAppData) {
-        buildList {
-            add(
-                QuickTarget(
-                    labelRes = R.string.file_browser_quick_root,
-                    path = "/",
-                    icon = Icons.Outlined.Storage,
-                ),
-            )
-            add(
-                QuickTarget(
-                    labelRes = R.string.file_browser_quick_internal,
-                    path = internalRoot,
-                    icon = Icons.Outlined.PhoneAndroid,
-                ),
-            )
-            add(
-                QuickTarget(
-                    labelRes = R.string.file_browser_quick_android_data,
-                    path = "$internalRoot/Android/data",
-                    icon = Icons.Outlined.Android,
-                ),
-            )
-            add(
-                QuickTarget(
-                    labelRes = R.string.file_browser_quick_download,
-                    path = "$internalRoot/Download",
-                    icon = Icons.Outlined.Download,
-                ),
-            )
-            if (showAppData) {
-                add(
-                    QuickTarget(
-                        labelRes = R.string.file_browser_quick_app_data,
-                        path = "/data/data",
-                        icon = Icons.Outlined.Apps,
-                    ),
-                )
-                add(
-                    QuickTarget(
-                        labelRes = R.string.file_browser_quick_obb,
-                        path = "$internalRoot/Android/obb",
-                        icon = Icons.Outlined.Folder,
-                    ),
-                )
-            }
-        }
-    }
-
+    val paths = FileBrowserPreferences.quickShortcuts(internalRoot)
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(targets) { target ->
+        items(paths, key = { it }) { path ->
+            val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
+            val label = when (path) {
+                "/" -> stringResource(R.string.file_browser_quick_root)
+                normalizedRoot -> stringResource(R.string.file_browser_quick_internal)
+                "$normalizedRoot/Android/data" -> stringResource(R.string.file_browser_quick_android_data)
+                "$normalizedRoot/Download" -> stringResource(R.string.file_browser_quick_download)
+                "$normalizedRoot/Android/obb" -> stringResource(R.string.file_browser_quick_obb)
+                "/data/data" -> stringResource(R.string.file_browser_quick_app_data)
+                else -> tabTitle(path)
+            }
+            val icon = when (path) {
+                "/" -> Icons.Outlined.Storage
+                normalizedRoot -> Icons.Outlined.PhoneAndroid
+                "$normalizedRoot/Android/data" -> Icons.Outlined.Android
+                "$normalizedRoot/Download" -> Icons.Outlined.Download
+                "/data/data" -> Icons.Outlined.Apps
+                else -> Icons.Outlined.Folder
+            }
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                    .clickable { onNavigate(target.path) }
-                    .padding(horizontal = 11.dp, vertical = 7.dp),
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                    .combinedClickable(
+                        onClick = { onNavigate(path) },
+                        onLongClick = {
+                            if (FileBrowserPreferences.isSystemShortcut(path, internalRoot)) {
+                                FileBrowserPreferences.hideShortcut(path)
+                            } else {
+                                FileBrowserPreferences.togglePin(path)
+                            }
+                        },
+                    )
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = target.icon,
+                    imageVector = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(15.dp),
                 )
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
-                    text = stringResource(target.labelRes),
+                    text = label,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1111,14 +1174,14 @@ private fun FileBrowserFavoritesOverlay(
 ) {
     val internalRoot = FileBrowserStorage.internalStoragePath()
     var favorites by remember {
-        mutableStateOf(FileBrowserPreferences.pinnedOrDefault(internalRoot))
+        mutableStateOf(FileBrowserPreferences.quickShortcuts(internalRoot))
     }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
     fun refresh() {
-        favorites = FileBrowserPreferences.pinnedOrDefault(internalRoot)
+        favorites = FileBrowserPreferences.quickShortcuts(internalRoot)
     }
     Box(
         modifier = Modifier
@@ -1232,17 +1295,25 @@ private fun FileBrowserFavoritesOverlay(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            IconButton(
-                                onClick = {
-                                    FileBrowserPreferences.togglePin(path)
-                                    refresh()
-                                },
-                                modifier = Modifier.size(30.dp),
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .clickable {
+                                        if (FileBrowserPreferences.isSystemShortcut(path, internalRoot)) {
+                                            FileBrowserPreferences.hideShortcut(path)
+                                        } else {
+                                            FileBrowserPreferences.togglePin(path)
+                                        }
+                                        refresh()
+                                    },
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Close,
                                     contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -1265,6 +1336,17 @@ private fun FileBrowserFavoritesOverlay(
                             },
                         ),
                     )
+                }
+                if (FileBrowserPreferences.hiddenSystemShortcuts().isNotEmpty()) {
+                    TextButton(
+                        onClick = {
+                            FileBrowserPreferences.resetHiddenShortcuts()
+                            refresh()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.file_browser_restore_shortcuts))
+                    }
                 }
             }
         }
@@ -1431,7 +1513,7 @@ private fun FileBrowserFooter(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val footerText = when {
@@ -1458,18 +1540,22 @@ private fun FileBrowserFooter(
         }
         Text(
             text = footerText,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         if (!directorySizeLoading && !directorySizeComputed) {
-            TextButton(
-                onClick = onComputeSize,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(7.dp))
+                    .clickable(onClick = onComputeSize)
+                    .padding(horizontal = 8.dp, vertical = 1.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = stringResource(R.string.file_browser_compute_size),
                     style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -1667,8 +1753,8 @@ private fun FileBrowserPathDialog(
         onDismiss = onDismiss,
         confirmLabel = stringResource(R.string.file_browser_go),
         onConfirm = {
-            val target = value.trim()
-            if (target.isNotEmpty()) onNavigate(target)
+            val target = value.trimEnd('/').ifEmpty { "/" }
+            if (value.isNotEmpty()) onNavigate(target)
         },
     ) {
         OutlinedTextField(

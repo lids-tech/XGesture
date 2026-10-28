@@ -77,8 +77,8 @@ internal fun FileBrowserQuickCard(
             FileBrowserStorage.volumes(context)
         }
     }
-    val pins = remember(prefs.pinnedPaths, internalRoot) {
-        FileBrowserPreferences.pinnedOrDefault(internalRoot)
+    val pins = remember(prefs.pinnedPaths, prefs.hiddenShortcuts, internalRoot) {
+        FileBrowserPreferences.quickShortcuts(internalRoot)
     }
     val shape = RoundedCornerShape(20.dp)
 

@@ -123,4 +123,6 @@
     <string name="file_browser_favorite_add">收藏当前文件夹</string>
     <string name="file_browser_favorite_remove">取消收藏</string>
     <string name="file_browser_favorites_empty">还没有收藏</string>
+    <string name="file_browser_restore_shortcuts">恢复内置快捷项</string>
+    <string name="file_browser_image_open">打开</string>
 </resources>

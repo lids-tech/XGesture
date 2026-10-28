@@ -123,4 +123,6 @@
     <string name="file_browser_favorite_add">Favorite this folder</string>
     <string name="file_browser_favorite_remove">Remove from favorites</string>
     <string name="file_browser_favorites_empty">No favorites yet</string>
+    <string name="file_browser_restore_shortcuts">Restore built-in shortcuts</string>
+    <string name="file_browser_image_open">Open</string>
 </resources>

@@ -49,6 +49,7 @@ internal fun FileBrowserDetailsOverlay(
     onOpenWith: (() -> Unit)?,
     openWithLabel: String?,
     openWithEnabled: Boolean,
+    onOpenImage: (() -> Unit)?,
     onRename: (() -> Unit)?,
     onDelete: (() -> Unit)?,
     onClose: () -> Unit,
@@ -150,6 +151,14 @@ internal fun FileBrowserDetailsOverlay(
                                 },
                             ),
                         )
+                    }
+                    if (onOpenImage != null) {
+                        OutlinedButton(
+                            onClick = onOpenImage,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.file_browser_image_open))
+                        }
                     }
                     TextButton(
                         onClick = onClose,
