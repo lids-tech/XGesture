@@ -109,13 +109,23 @@ internal object FileBrowserOperations {
             runCatching { destination.deleteRecursively() }
         }
         if (access.mode != AccessMode.ROOT) return false
-        val command = when (mode) {
-            FileTransferMode.COPY ->
-                "cp -a ${quote(source.absolutePath)} ${quote(destination.absolutePath)}"
-            FileTransferMode.MOVE ->
-                "mv -f ${quote(source.absolutePath)} ${quote(destination.absolutePath)}"
+        val sourcePath = quote(source.absolutePath)
+        val destinationPath = quote(destination.absolutePath)
+        return when (mode) {
+            FileTransferMode.COPY -> {
+                runRoot("cp -a $sourcePath $destinationPath") && destination.exists()
+            }
+            FileTransferMode.MOVE -> {
+                if (runRoot("mv -f $sourcePath $destinationPath") && destination.exists()) {
+                    true
+                } else {
+                    // 跨文件系统 mv 可能失败：复制成功后再删源，失败保留源。
+                    runRoot("cp -a $sourcePath $destinationPath") &&
+                        destination.exists() &&
+                        deleteRoot(source.absolutePath)
+                }
+            }
         }
-        return runRoot(command) && destination.exists()
     }
 
     private fun copyDirect(source: File, destination: File): Boolean = runCatching {
