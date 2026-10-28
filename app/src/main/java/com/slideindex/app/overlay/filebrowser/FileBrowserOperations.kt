@@ -6,7 +6,9 @@ import java.io.File
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 enum class FileTransferMode { COPY, MOVE }
 
@@ -51,6 +53,7 @@ internal object FileBrowserOperations {
         var skipped = 0
         val failures = mutableListOf<FileOperationFailure>()
         for (path in paths) {
+            coroutineContext.ensureActive()
             onProgress(done, paths.size)
             val source = File(path)
             val failure = when {
@@ -113,6 +116,7 @@ internal object FileBrowserOperations {
         var succeeded = 0
         val failures = mutableListOf<FileOperationFailure>()
         paths.forEachIndexed { index, path ->
+            coroutineContext.ensureActive()
             onProgress(index, paths.size)
             val file = File(path)
             val ok = when {

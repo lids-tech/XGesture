@@ -313,12 +313,22 @@ internal fun FileBrowserPanel(
                             )
                         }
                         if (state.operationRunning) {
-                            LinearProgressIndicator(
-                                progress = { state.operationProgress },
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(3.dp),
-                            )
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                LinearProgressIndicator(
+                                    progress = { state.operationProgress },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(3.dp),
+                                )
+                                TextButton(onClick = controller::cancelOperation) {
+                                    Text(stringResource(R.string.file_browser_cancel))
+                                }
+                            }
                         }
                         if (state.operationMessage != null) {
                             Text(

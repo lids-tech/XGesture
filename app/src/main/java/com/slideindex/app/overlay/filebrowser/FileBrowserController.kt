@@ -282,6 +282,16 @@ internal class FileBrowserController(
         }
     }
 
+    fun cancelOperation() {
+        operationJob?.cancel()
+        operationJob = null
+        state = state.copy(
+            operationRunning = false,
+            operationProgress = 0f,
+            operationMessage = "已取消",
+        )
+    }
+
     fun deleteSelected() {
         if (state.selectedPaths.isEmpty()) return
         val access = state.access ?: return
