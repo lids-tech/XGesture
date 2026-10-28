@@ -79,6 +79,7 @@ internal fun FileBrowserListContent(
     onEntryLongClick: (FileBrowserEntry) -> Unit,
     selectionMode: Boolean = false,
     selectedPaths: Set<String> = emptySet(),
+    access: FileBrowserAccessInfo? = null,
     onRetry: () -> Unit,
     onRequestAllFiles: () -> Unit,
     onRequestShizuku: () -> Unit,
@@ -114,6 +115,7 @@ internal fun FileBrowserListContent(
                     showDivider = index < filtered.lastIndex,
                     selected = entry.path in selectedPaths,
                     selectionMode = selectionMode,
+                    access = access,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
                 )
@@ -129,6 +131,7 @@ private fun FileBrowserEntryRow(
     showDivider: Boolean,
     selected: Boolean,
     selectionMode: Boolean,
+    access: FileBrowserAccessInfo?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -154,6 +157,7 @@ private fun FileBrowserEntryRow(
                 path = entry.path,
                 modifiedEpochSeconds = entry.modifiedEpochSeconds,
                 kind = fileKind,
+                access = access,
             )
         }
     }

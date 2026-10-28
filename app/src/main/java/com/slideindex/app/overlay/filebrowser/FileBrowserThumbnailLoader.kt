@@ -6,21 +6,26 @@ import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.media.MediaMetadataRetriever
 import android.os.ParcelFileDescriptor
+import android.util.Base64
 import android.util.LruCache
 import androidx.core.graphics.drawable.toBitmap
+import com.slideindex.app.privilege.root.RootNamespace
+import com.slideindex.app.shizuku.TaskManagerShellExecutor
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * 可直读文件的缩略图加载器：图片、视频首帧、APK 图标、PDF 首页。
  *
- * Root/Shizuku 才能读的路径**没有**在这里做 base64 中转：那会把滚动变成大量 su 调用。
- * 这类路径继续用类型图标，等做“按需缩略图”时再接 SuFile/base64。
+ * Root 路径只对图片做“按需 base64”缩略图；视频/APK/PDF 仍用类型图标，避免滚动时大量 su。
  */
 internal object FileBrowserThumbnailLoader {
     private const val MAX_EDGE_PX = 128
     private const val MAX_IMAGE_BYTES = 12L * 1024L * 1024L
+    private const val MAX_ROOT_IMAGE_BYTES = 4L * 1024L * 1024L
+    private const val ROOT_TIMEOUT_SECONDS = 8L
 
     private val cache = object : LruCache<String, Bitmap>(
         (Runtime.getRuntime().maxMemory() / 1024L / 8L).toInt().coerceAtLeast(4 * 1024),
@@ -33,17 +38,21 @@ internal object FileBrowserThumbnailLoader {
         path: String,
         modifiedEpochSeconds: Long,
         kind: FileKind,
+        access: FileBrowserAccessInfo? = null,
     ): Bitmap? = withContext(Dispatchers.IO) {
         if (path.isEmpty()) return@withContext null
         val key = "$kind|$path:$modifiedEpochSeconds"
         cache.get(key)?.let { return@withContext it }
         val file = File(path)
-        if (!file.isFile || !file.canRead()) return@withContext null
+        val readable = file.isFile && file.canRead()
+        if (!readable && !(kind == FileKind.IMAGE && access?.mode == AccessMode.ROOT)) {
+            return@withContext null
+        }
         val bitmap = when (kind) {
-            FileKind.IMAGE -> image(file)
-            FileKind.VIDEO -> video(file)
-            FileKind.APK -> apk(context, file)
-            FileKind.PDF -> pdf(file)
+            FileKind.IMAGE -> if (readable) image(file) else rootImage(context, file)
+            FileKind.VIDEO -> if (readable) video(file) else null
+            FileKind.APK -> if (readable) apk(context, file) else null
+            FileKind.PDF -> if (readable) pdf(file) else null
             else -> null
         } ?: return@withContext null
         cache.put(key, bitmap)
@@ -68,6 +77,65 @@ internal object FileBrowserThumbnailLoader {
         return runCatching {
             BitmapFactory.decodeFile(file.absolutePath, options)
         }.getOrNull()
+    }
+
+    /** Root 图片：一次性 base64 读取，限制 4MB，失败回退类型图标。 */
+    private fun rootImage(context: Context, file: File): Bitmap? {
+        val bytes = readRootBase64(context, file.absolutePath, MAX_ROOT_IMAGE_BYTES) ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / sample > MAX_EDGE_PX * 2 ||
+            bounds.outHeight / sample > MAX_EDGE_PX * 2
+        ) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        return runCatching {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        }.getOrNull()
+    }
+
+    private fun readRootBase64(context: Context, path: String, maxBytes: Long): ByteArray? {
+        val sh = TaskManagerShellExecutor.resolveShPath()
+        val temp = runCatching {
+            File.createTempFile("xg_thumb_", ".b64", context.cacheDir)
+        }.getOrNull() ?: return null
+        try {
+            val command = "base64 -w 0 ${TaskManagerShellExecutor.shellQuote(path)} " +
+                "> ${TaskManagerShellExecutor.shellQuote(temp.absolutePath)} 2>/dev/null"
+            val launcher = if (RootNamespace.nsenterBinaryExists()) {
+                "${RootNamespace.NSENTER_PATH} -t 1 -m -- $sh -c " +
+                    TaskManagerShellExecutor.shellQuote(command)
+            } else {
+                command
+            }
+            val process = runCatching {
+                ProcessBuilder(TaskManagerShellExecutor.resolveSuInvocation(), "-c", launcher)
+                    .redirectErrorStream(true)
+                    .start()
+            }.getOrNull() ?: return null
+            try {
+                if (!process.waitFor(ROOT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    return null
+                }
+                if (temp.length() <= 0L || temp.length() > maxBytes * 4 / 3) return null
+                val encoded = temp.readText().trim()
+                if (encoded.length > maxBytes * 4 / 3) return null
+                return Base64.decode(encoded, Base64.DEFAULT)
+            } finally {
+                runCatching { process.destroy() }
+            }
+        } catch (_: Throwable) {
+            return null
+        } finally {
+            runCatching { temp.delete() }
+        }
     }
 
     private fun video(file: File): Bitmap? {

@@ -281,6 +281,7 @@ internal fun FileBrowserPanel(
                                 },
                                 selectionMode = state.selectionMode,
                                 selectedPaths = state.selectedPaths,
+                                access = state.access,
                                 onRetry = controller::refresh,
                                 onRequestAllFiles = onRequestAllFiles,
                                 onRequestShizuku = onRequestShizuku,
