@@ -904,7 +904,6 @@ private fun FileBrowserTabBar(
                         if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                         else Color.Transparent,
                     )
-                    .clickable { onSelect(tab.id) }
                     .padding(start = 9.dp, end = if (tabs.size > 1) 2.dp else 9.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -914,7 +913,9 @@ private fun FileBrowserTabBar(
                     fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 130.dp),
+                    modifier = Modifier
+                        .widthIn(max = 130.dp)
+                        .clickable { onSelect(tab.id) },
                 )
                 if (tabs.size > 1) {
                     Box(
@@ -1256,7 +1257,6 @@ private fun FileBrowserFavoritesOverlay(
                                         if (draggingIndex == index) dragOffset.roundToInt() else 0,
                                     )
                                 }
-                                .clickable { onNavigate(path) }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -1317,7 +1317,11 @@ private fun FileBrowserFavoritesOverlay(
                                 modifier = Modifier.size(20.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onNavigate(path) },
+                            ) {
                                 Text(
                                     text = tabTitle(path),
                                     style = MaterialTheme.typography.bodyMedium,
