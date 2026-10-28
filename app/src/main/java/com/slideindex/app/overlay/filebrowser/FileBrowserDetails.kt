@@ -45,7 +45,6 @@ import com.slideindex.app.R
 @Composable
 internal fun FileBrowserDetailsOverlay(
     entry: FileBrowserEntry,
-    copied: Boolean,
     onCopy: () -> Unit,
     onOpenWith: (() -> Unit)?,
     openWithLabel: String?,
@@ -174,22 +173,6 @@ internal fun FileBrowserDetailsOverlay(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        OutlinedButton(
-                            onClick = onCopy,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(
-                                text = stringResource(
-                                    if (copied) {
-                                        R.string.file_browser_copied
-                                    } else {
-                                        R.string.file_browser_copy_path
-                                    },
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
                         if (onRename != null) {
                             OutlinedButton(
                                 onClick = onRename,
