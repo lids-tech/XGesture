@@ -5,10 +5,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,6 +88,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -270,7 +274,11 @@ internal fun FileBrowserPanel(
                                 controller.navigateTo(target)
                             },
                         )
-                        if (searchExpanded || state.query.isNotEmpty()) {
+                        AnimatedVisibility(
+                            visible = searchExpanded || state.query.isNotEmpty(),
+                            enter = expandVertically(tween(160)) + fadeIn(tween(120)),
+                            exit = shrinkVertically(tween(140)) + fadeOut(tween(100)),
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -717,6 +725,12 @@ internal fun FileBrowserPanel(
                         FileBrowserImageViewer(
                             entry = entry,
                             access = state.access,
+                            onEdit = { bitmap ->
+                                val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
+                                    .put(context, bitmap)
+                                com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
+                                    .launch(context, editorPath)
+                            },
                             onClose = { imagePreview = null },
                         )
                     }
@@ -904,15 +918,15 @@ private fun FileBrowserTabBar(
                 if (tabs.size > 1) {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(17.dp)
+                            .clip(RoundedCornerShape(5.dp))
                             .clickable { onClose(tab.id) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = null,
-                            modifier = Modifier.size(13.dp),
+                            modifier = Modifier.size(12.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1180,6 +1194,10 @@ private fun FileBrowserFavoritesOverlay(
     var dragOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
+    val haptic = LocalHapticFeedback.current
+    val userPaths = favorites.filterNot {
+        FileBrowserPreferences.isSystemShortcut(it, internalRoot)
+    }
     fun refresh() {
         favorites = FileBrowserPreferences.quickShortcuts(internalRoot)
     }
@@ -1227,6 +1245,7 @@ private fun FileBrowserFavoritesOverlay(
                     )
                 } else {
                     favorites.forEachIndexed { index, path ->
+                        val isSystem = FileBrowserPreferences.isSystemShortcut(path, internalRoot)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1239,22 +1258,28 @@ private fun FileBrowserFavoritesOverlay(
                                 .pointerInput(favorites) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
-                                            draggingIndex = index
-                                            dragOffset = 0f
+                                            if (!isSystem) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                draggingIndex = index
+                                                dragOffset = 0f
+                                            }
                                         },
-                                        onDrag = { _, amount ->
-                                            dragOffset += amount.y
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            if (draggingIndex != null) dragOffset += amount.y
                                         },
                                         onDragEnd = {
-                                            val from = draggingIndex
-                                            if (from != null) {
+                                            val fromFavorite = draggingIndex
+                                            if (fromFavorite != null && !isSystem) {
+                                                val draggedPath = favorites.getOrNull(fromFavorite)
+                                                val fromUser = userPaths.indexOf(draggedPath)
                                                 val delta = (dragOffset / rowHeightPx).roundToInt()
-                                                val to = (from + delta)
-                                                    .coerceIn(0, favorites.lastIndex)
-                                                if (to != from) {
+                                                val toUser = (fromUser + delta)
+                                                    .coerceIn(0, userPaths.lastIndex)
+                                                if (fromUser >= 0 && toUser != fromUser) {
                                                     FileBrowserPreferences.movePin(
-                                                        from,
-                                                        to,
+                                                        fromUser,
+                                                        toUser,
                                                         internalRoot,
                                                     )
                                                     refresh()

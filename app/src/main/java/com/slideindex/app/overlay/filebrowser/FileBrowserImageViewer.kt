@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +46,7 @@ import kotlinx.coroutines.withContext
 internal fun FileBrowserImageViewer(
     entry: FileBrowserEntry,
     access: FileBrowserAccessInfo?,
+    onEdit: (Bitmap) -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -95,6 +98,26 @@ internal fun FileBrowserImageViewer(
                 ),
         ) {
             Icon(Icons.Filled.Close, contentDescription = null)
+        }
+        bitmap?.let { loaded ->
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(12.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                        RoundedCornerShape(14.dp),
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { onEdit(loaded) }) {
+                    Text("编辑")
+                }
+                TextButton(onClick = onClose) {
+                    Text("关闭")
+                }
+            }
         }
     }
 }
