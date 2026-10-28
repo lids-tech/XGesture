@@ -1123,12 +1123,18 @@ private fun FileBrowserQuickChips(
 ) {
     val paths = FileBrowserPreferences.quickShortcuts(internalRoot)
     if (paths.isEmpty()) return
+    val listState = rememberLazyListState()
+    val haptic = LocalHapticFeedback.current
+    var draggingPath by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
     LazyRow(
+        state = listState,
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(paths, key = { it }) { path ->
+        items(paths.size, key = { paths[it] }) { index ->
+            val path = paths[index]
             val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
             val label = when (path) {
                 "/" -> stringResource(R.string.file_browser_quick_root)
@@ -1149,18 +1155,52 @@ private fun FileBrowserQuickChips(
             }
             Row(
                 modifier = Modifier
+                    .offset {
+                        if (draggingPath == path) IntOffset(dragOffset.roundToInt(), 0) else IntOffset.Zero
+                    }
+                    .pointerInput(paths, path, index) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                draggingPath = path
+                                dragOffset = 0f
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragOffset += amount.x
+                            },
+                            onDragEnd = {
+                                val info = listState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.index == index }
+                                if (info != null) {
+                                    val targetX = info.offset + info.size / 2f + dragOffset
+                                    val target = listState.layoutInfo.visibleItemsInfo
+                                        .minByOrNull {
+                                            kotlin.math.abs(
+                                                (it.offset + it.size / 2f) - targetX,
+                                            )
+                                        }
+                                        ?.index
+                                    if (target != null && target != index) {
+                                        FileBrowserPreferences.moveShortcut(
+                                            index,
+                                            target,
+                                            internalRoot,
+                                        )
+                                    }
+                                }
+                                draggingPath = null
+                                dragOffset = 0f
+                            },
+                            onDragCancel = {
+                                draggingPath = null
+                                dragOffset = 0f
+                            },
+                        )
+                    }
                     .clip(RoundedCornerShape(13.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-                    .combinedClickable(
-                        onClick = { onNavigate(path) },
-                        onLongClick = {
-                            if (FileBrowserPreferences.isSystemShortcut(path, internalRoot)) {
-                                FileBrowserPreferences.hideShortcut(path)
-                            } else {
-                                FileBrowserPreferences.togglePin(path)
-                            }
-                        },
-                    )
+                    .clickable { onNavigate(path) }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1199,9 +1239,6 @@ private fun FileBrowserFavoritesOverlay(
     val haptic = LocalHapticFeedback.current
     fun refresh() {
         favorites = FileBrowserPreferences.quickShortcuts(internalRoot)
-    }
-    val userPaths = favorites.filterNot {
-        FileBrowserPreferences.isSystemShortcut(it, internalRoot)
     }
     Box(
         modifier = Modifier
@@ -1247,7 +1284,6 @@ private fun FileBrowserFavoritesOverlay(
                     )
                 } else {
                     favorites.forEachIndexed { index, path ->
-                        val isSystem = FileBrowserPreferences.isSystemShortcut(path, internalRoot)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1260,59 +1296,41 @@ private fun FileBrowserFavoritesOverlay(
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (!isSystem) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .pointerInput(favorites, index) {
-                                            detectDragGesturesAfterLongPress(
-                                                onDragStart = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    draggingIndex = index
-                                                    dragOffset = 0f
-                                                },
-                                                onDrag = { change, amount ->
-                                                    change.consume()
-                                                    dragOffset += amount.y
-                                                },
-                                                onDragEnd = {
-                                                    val draggedPath = favorites.getOrNull(index)
-                                                    val fromUser = userPaths.indexOf(draggedPath)
-                                                    val delta = (dragOffset / rowHeightPx).roundToInt()
-                                                    val toUser = (fromUser + delta)
-                                                        .coerceIn(0, userPaths.lastIndex)
-                                                    if (fromUser >= 0 && toUser != fromUser) {
-                                                        FileBrowserPreferences.movePin(
-                                                            fromUser,
-                                                            toUser,
-                                                            internalRoot,
-                                                        )
-                                                        refresh()
-                                                    }
-                                                    draggingIndex = null
-                                                    dragOffset = 0f
-                                                },
-                                                onDragCancel = {
-                                                    draggingIndex = null
-                                                    dragOffset = 0f
-                                                },
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.DragHandle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.width(24.dp))
-                            }
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
+                                    .pointerInput(favorites, index) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                draggingIndex = index
+                                                dragOffset = 0f
+                                            },
+                                            onDrag = { change, amount ->
+                                                change.consume()
+                                                dragOffset += amount.y
+                                            },
+                                            onDragEnd = {
+                                                val delta = (dragOffset / rowHeightPx).roundToInt()
+                                                val to = (index + delta)
+                                                    .coerceIn(0, favorites.lastIndex)
+                                                if (to != index) {
+                                                    FileBrowserPreferences.moveShortcut(
+                                                        index,
+                                                        to,
+                                                        internalRoot,
+                                                    )
+                                                    refresh()
+                                                }
+                                                draggingIndex = null
+                                                dragOffset = 0f
+                                            },
+                                            onDragCancel = {
+                                                draggingIndex = null
+                                                dragOffset = 0f
+                                            },
+                                        )
+                                    }
                                     .clickable { onNavigate(path) },
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
