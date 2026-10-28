@@ -81,6 +81,13 @@ object ExternalInvocationCatalog {
             supportsQuery = true
         ),
         ActionEntry(
+            titleRes = R.string.file_browser_title,
+            descriptionRes = R.string.file_browser_entry_desc,
+            action = "com.slideindex.app.action.OPEN_FILE_BROWSER",
+            componentClass = "com.slideindex.app.service.FileBrowserTrampolineActivity",
+            supportsQuery = false
+        ),
+        ActionEntry(
             titleRes = R.string.external_invocation_entry_toggle_gesture,
             descriptionRes = R.string.external_invocation_action_toggle_gesture_desc,
             action = "com.slideindex.app.action.TOGGLE_GESTURE",

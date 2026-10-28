@@ -529,6 +529,33 @@
         </activity>
 
         <activity
+            android:name=".service.FileBrowserTrampolineActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/file_browser_title"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SlideIndex.Transparent">
+            <intent-filter>
+                <action android:name="com.slideindex.app.action.OPEN_FILE_BROWSER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".service.FileBrowserShortcutAlias"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/file_browser_title"
+            android:targetActivity=".service.FileBrowserTrampolineActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity
             android:name=".service.SearchPanelTrampolineActivity"
             android:excludeFromRecents="true"
             android:exported="true"

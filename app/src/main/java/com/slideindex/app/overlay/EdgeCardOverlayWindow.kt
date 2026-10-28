@@ -1,5 +1,8 @@
 package com.slideindex.app.overlay
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
@@ -19,6 +22,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -35,8 +39,18 @@ import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.message.NotificationContentGate
 import com.slideindex.app.message.NotificationData
 import com.slideindex.app.message.SideBubbleHorizontalEdge
+import kotlin.coroutines.resume
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * 贴边通知卡：贴在屏幕侧缘的一组卡片，每个会话一张。
@@ -52,6 +66,9 @@ object EdgeCardOverlayWindow {
     private const val PREVIEW_KEY = "__edge_card_preview__"
 
     private const val CARD_HEIGHT_DP = 42f
+    /** 每多一行正文，卡片高度增加的高度（与悬浮菜单侧边样式一致）。 */
+    private const val LINE_HEIGHT_DP = 16f
+    private const val MAX_LINES = 3
     private const val EXPANDED_WIDTH_DP = 126f
     private const val WIDE_WIDTH_DP = 184f
     private const val VISIBLE_COLLAPSED_DP = 42f
@@ -128,8 +145,10 @@ object EdgeCardOverlayWindow {
         if (appContext == null || windowManager == null) {
             appContext = hostContext
             windowManager = hostContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-            registerDisplayListener(hostContext)
         }
+        // 每次 show 都确保监听已挂上（幂等）：窗口在更早的 show 里创建过时，上面的 if 不进，
+        // 之前就没有任何回调在旋转后重算 x，表现为卡片停在旧坐标或被推出屏幕。
+        registerDisplayListener(hostContext)
         entries.filter { it.preview }.forEach { removeEntry(it, notifyDismiss = false) }
 
         val existing = entries.firstOrNull { it.matches(plan.data) && !it.preview }
@@ -177,17 +196,20 @@ object EdgeCardOverlayWindow {
 
     /** 设置页预览：示例数据常驻，不自动收起。 */
     fun installPreview(context: Context, settings: MessageSettings) {
+        Log.d(TAG, "installPreview enter main=${Looper.myLooper() == Looper.getMainLooper()}")
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post { installPreview(context, settings) }
             return
         }
-        val hostContext = MessageOverlayHost.resolveHostContext(context) ?: return
-        if (appContext == null || windowManager == null) {
-            appContext = hostContext
-            windowManager = hostContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-            registerDisplayListener(hostContext)
-        }
+        // 必须先清场：dismissAllInternal 会把 windowManager 置空并注销 display 监听，
+        // 之后再取 host / 重新注册，否则 ensureWindow 里 wm == null 会静默 return，预览永远不出现。
         dismissAllInternal(notifyDismiss = false)
+        val hostContext = MessageOverlayHost.resolveHostContext(context)
+        Log.d(TAG, "installPreview host=${hostContext != null} wm=${windowManager != null}")
+        if (hostContext == null) return
+        appContext = hostContext
+        windowManager = hostContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        registerDisplayListener(hostContext)
 
         val appCtx = context.applicationContext
         val appLabel = runCatching {
@@ -225,6 +247,11 @@ object EdgeCardOverlayWindow {
         entry.dismissCallback = {}
         entries.add(entry)
         ensureWindow(entry, hostContext)
+        Log.d(
+            TAG,
+            "installPreview done entries=${entries.size} view=${entry.view != null} " +
+                "params=${entry.params != null}",
+        )
         relayout()
         applyEntry(entry, animated = false)
     }
@@ -275,6 +302,14 @@ object EdgeCardOverlayWindow {
 
     fun dismissImmediate() = dismiss()
 
+    /** 正文行数（1..3）。 */
+    internal fun lineCount(settings: MessageSettings): Int =
+        settings.edgeCardMaxLines.coerceIn(1, MAX_LINES)
+
+    /** 卡片高度随行数增长：42dp 起步，每多一行 +16dp。 */
+    internal fun cardHeightDp(settings: MessageSettings): Float =
+        CARD_HEIGHT_DP + (lineCount(settings) - 1) * LINE_HEIGHT_DP
+
     fun snapshotDisplayedKeys(): Set<String> =
         entries.map { "${it.plan.data.key}|${it.plan.data.postTime}" }.toSet()
 
@@ -306,7 +341,17 @@ object EdgeCardOverlayWindow {
     private fun expandedWidthDp(state: EdgeCardUiState): Float =
         if (state.unreadCount > 1) WIDE_WIDTH_DP else EXPANDED_WIDTH_DP
 
-    private fun screenWidth(): Int = appContext?.resources?.displayMetrics?.widthPixels ?: 0
+    /** 当前屏幕宽度：优先用 display 的实时 metrics，旋转后 resources 里的值可能滞后一帧。 */
+    private fun screenWidth(): Int {
+        val ctx = appContext ?: return 0
+        val display = (ctx.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)
+            ?.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+        val metrics = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display?.getRealMetrics(metrics)
+        val width = metrics.widthPixels
+        return if (width > 0) width else ctx.resources.displayMetrics.widthPixels
+    }
 
     /**
      * 窗口统一用 TOP|START，`params.x` 就是窗口左边缘的屏幕坐标（允许负值、可超出右侧）。
@@ -361,6 +406,7 @@ object EdgeCardOverlayWindow {
 
             private fun onDisplayChanged() {
                 if (entries.isEmpty()) return
+                Log.d(TAG, "display changed: screenW=${screenWidth()} entries=${entries.size}")
                 relayout()
                 entries.toList().forEach { entry -> applyEntry(entry, animated = false) }
             }
@@ -445,25 +491,32 @@ object EdgeCardOverlayWindow {
 
     private fun ensureWindow(entry: EdgeCardEntry, hostContext: Context) {
         val settings = entry.plan.settings
-        val heightPx = dp(CARD_HEIGHT_DP)
         val view = EdgeCardView(hostContext).apply {
             exclusionEdge = settings.edgeCardHorizontalEdge
             setOnTouchListener(EdgeCardTouchListener(entry))
         }
-        // 先绑内容再测量：宽度由文字长度决定（和悬浮菜单一样是内容自适应）。
+        // 先绑内容再测量：宽高都由内容决定（正文行数多则卡片更高）。
         view.bind(entry.plan, entry.state)
         view.measure(
             View.MeasureSpec.makeMeasureSpec(
                 dp(120f) + dp(52f),
                 View.MeasureSpec.AT_MOST,
             ),
-            View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
         val widthPx = view.measuredWidth.coerceAtLeast(dp(1f))
-        view.layout(0, 0, widthPx, heightPx)
+        val measuredHeight = view.measuredHeight.coerceAtLeast(dp(CARD_HEIGHT_DP))
+        view.layout(0, 0, widthPx, measuredHeight)
 
         entry.view = view
         entry.windowWidthPx = widthPx
+        entry.heightPx = measuredHeight
+        entry.onHeightChanged = { newHeight ->
+            if (entry.heightPx != newHeight) {
+                entry.heightPx = newHeight
+                relayout()
+            }
+        }
         entry.onWidthChanged = { newWidth ->
             entry.windowWidthPx = newWidth
             val params = entry.params
@@ -485,7 +538,7 @@ object EdgeCardOverlayWindow {
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
-            heightPx,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             OverlayWindowTypes.overlayWindowType(hostContext),WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -512,6 +565,12 @@ object EdgeCardOverlayWindow {
             entry.params = null
             return
         }
+        Log.d(
+            TAG,
+            "window added key=${entry.key} preview=${entry.preview} " +
+                "x=${params.x} y=${params.y} w=${entry.windowWidthPx} h=${measuredHeight} " +
+                "screenW=${screenWidth()}",
+        )
         view.post { relayout() }
     }
 
@@ -519,13 +578,21 @@ object EdgeCardOverlayWindow {
         val ctx = appContext ?: return emptyList()
         if (count <= 0) return emptyList()
         val metrics = ctx.resources.displayMetrics
-        val cardPx = dp(CARD_HEIGHT_DP)
         val gapPx = dp(CARD_GAP_DP)
-        val total = count * cardPx + (count - 1).coerceAtLeast(0) * gapPx
+        // 每张卡行数可能不同，高度各自算。
+        val heights = entries.map {
+            it.heightPx.takeIf { h -> h > 0 } ?: dp(CARD_HEIGHT_DP)
+        }
+        val total = heights.sum() + gapPx * (count - 1).coerceAtLeast(0)
         val anchor = (MessagePlacementFractions.coerceY(settings.edgeCardYFraction) *
             metrics.heightPixels).roundToInt()
         val top = (anchor - total / 2).coerceIn(0, (metrics.heightPixels - total).coerceAtLeast(0))
-        return List(count) { top + it * (cardPx + gapPx) }
+        var cursor = top
+        return heights.map { height ->
+            val y = cursor
+            cursor += height + gapPx
+            y
+        }
     }
 
     private fun relayout() {
@@ -546,6 +613,8 @@ object EdgeCardOverlayWindow {
 
     private fun moveToTop(entry: EdgeCardEntry) {
         if (entries.remove(entry)) entries.add(0, entry)
+        // 顺序变了，堆叠的 y 要重排，否则新卡会压在旧卡的坐标上。
+        relayout()
     }
 
     private fun trimToCount(settings: MessageSettings) {
@@ -783,6 +852,9 @@ private class EdgeCardEntry(
     var interacting: Boolean = false
     var y: Int = 0
     var windowWidthPx: Int = 0
+    /** 卡片实际高度（随正文行数变化），用于多卡堆叠定位。 */
+    var heightPx: Int = 0
+    var onHeightChanged: ((Int) -> Unit)? = null
     var onWidthChanged: ((Int) -> Unit)? = null
     val createdAt: Long = android.os.SystemClock.uptimeMillis()
 
@@ -818,6 +890,13 @@ private fun placeholderPlan(): MessageDisplayPlan = MessageDisplayPlan(
  * 单张卡片的 View：固定展开宽度，头像 + 两行文字 + 角标。
  * 收起时整窗移出屏幕，内容本身不做任何尺寸或透明度动画。
  */
+private const val SCROLL_HOLD_MIN_MS = 1_200L
+private const val SCROLL_HOLD_PER_LINE_MS = 28L
+private const val SCROLL_HOLD_MAX_MS = 4_500L
+private const val SCROLL_ANIM_MS = 350L
+private const val SCROLL_STEP_PAUSE_MS = 800L
+private const val SCROLL_END_PAUSE_MS = 1_550L
+
 private class EdgeCardView(context: Context) : ViewGroup(context) {
     var exclusionEdge: SideBubbleHorizontalEdge = SideBubbleHorizontalEdge.Right
         set(value) {
@@ -825,13 +904,81 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
             updateGestureExclusion()
         }
 
-    /** 跑马灯仅在展开态启用，收起立即停止，避免常驻滚动耗电。 */
+    /** 动效开关：展开时启用（单行走跑马灯 / 多行走竖向慢滚），收起立即停止并复位。 */
     var marqueeActive: Boolean
         get() = contentView.isSelected
         set(value) {
             if (contentView.isSelected == value) return
             contentView.isSelected = value
+            if (value) startVerticalScroll() else stopVerticalScroll()
         }
+
+    private val scrollScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private var scrollJob: Job? = null
+    private var scrollAnimator: ValueAnimator? = null
+
+    /**
+     * 多行溢出时的竖向慢滚（对齐悬浮菜单侧边样式）：
+     * 停 4.5s → 350ms 上移一行 → 停 800ms → … 到底停 1.55s 后回顶循环。
+     * 没有溢出、或单行模式时直接返回，不产生任何定时任务。
+     */
+    private fun startVerticalScroll() {
+        stopVerticalScroll()
+        val layout = contentView.layout ?: return
+        if (maxLines <= 1) return
+        val lineHeight = maxOf(contentView.lineHeight, dp(16))
+        val overflowLines = layout.lineCount - maxLines
+        if (overflowLines <= 0 || lineHeight <= 0) return
+        scrollJob = scrollScope.launch {
+            try {
+                while (isActive) {
+                    // 停留时长随行号递增（28ms/行），下界 800ms、上限 4500ms——照抄悬浮菜单。
+                    for (index in 0 until overflowLines) {
+                        if (!isActive) break
+                        val hold = (index.toLong() * SCROLL_HOLD_PER_LINE_MS)
+                            .coerceIn(SCROLL_HOLD_MIN_MS, SCROLL_HOLD_MAX_MS)
+                        delay(hold)
+                        animateScroll(index * lineHeight, (index + 1) * lineHeight)
+                        delay(SCROLL_STEP_PAUSE_MS)
+                    }
+                    delay(SCROLL_END_PAUSE_MS)
+                    contentView.scrollTo(0, 0)
+                }
+            } finally {
+                contentView.scrollTo(0, 0)
+            }
+        }
+    }
+
+    private fun stopVerticalScroll() {
+        scrollJob?.cancel()
+        scrollJob = null
+        scrollAnimator?.cancel()
+        scrollAnimator = null
+        contentView.scrollTo(0, 0)
+    }
+
+    private suspend fun animateScroll(from: Int, to: Int) = suspendCancellableCoroutine { cont ->
+        val animator = ValueAnimator.ofInt(from, to).apply {
+            duration = SCROLL_ANIM_MS
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { contentView.scrollTo(0, it.animatedValue as Int) }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (cont.isActive) cont.resume(Unit)
+                }
+            })
+        }
+        scrollAnimator = animator
+        cont.invokeOnCancellation { animator.cancel() }
+        animator.start()
+    }
+
+    override fun onDetachedFromWindow() {
+        stopVerticalScroll()
+        scrollScope.cancel()
+        super.onDetachedFromWindow()
+    }
 
     private var entranceSpring: SpringAnimation? = null
 
@@ -977,9 +1124,9 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
      * 卡片皮肤：复用侧边气泡主题的左右背景 drawable（形状与贴边方向一致），
      * 文字色也取自主题；主题没有侧边资源时退回白底 + 1px 描边。
      */
-    /** 固定外观：半圆 + 矩形，白底 + 1 物理像素描边。 */
-    private fun applyCardBackground(right: Boolean) {
-        val corner = dp(21).toFloat()
+    /** 固定外观：半圆 + 矩形，白底 + 1 物理像素描边。圆角按实际高度算，多行时仍是半圆。 */
+    private fun applyCardBackground(right: Boolean, heightPx: Int) {
+        val corner = (heightPx.coerceAtLeast(dp(40)) / 2).toFloat()
         cardLayer.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(Color.WHITE)
@@ -1019,7 +1166,20 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         }
 
         val right = settings.edgeCardHorizontalEdge == SideBubbleHorizontalEdge.Right
-        applyCardBackground(right)
+        alignedRight = right
+        applyCardBackground(right, if (height > 0) height else dp(42))
+
+        // 行数上限：完全照悬浮菜单侧边样式——
+        // 单行：singleLine + 省略号；多行：不限行、不省略，靠 onMeasure 里钉死的高度裁切。
+        maxLines = EdgeCardOverlayWindow.lineCount(settings)
+        contentView.isSingleLine = maxLines == 1
+        if (maxLines == 1) {
+            contentView.maxLines = 1
+            contentView.ellipsize = TextUtils.TruncateAt.MARQUEE
+        } else {
+            contentView.maxLines = Int.MAX_VALUE
+            contentView.ellipsize = null
+        }
 
         val avatarParams = avatarContainer.layoutParams as FrameLayout.LayoutParams
         avatarParams.gravity = (if (right) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
@@ -1040,10 +1200,14 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         // 卡片背景铺满整个窗口，贴边侧才能顶到屏幕边缘。
         setPadding(0, 0, 0, 0)
         requestLayout()
+        // 内容换了之后溢出情况可能变化，展开态下重启竖向滚动。
+        scrollJob?.cancel()
+        scrollJob = null
+        contentView.scrollTo(0, 0)
+        if (contentView.isSelected) startVerticalScroll()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val heightPx = MeasureSpec.getSize(heightMeasureSpec).coerceAtLeast(dp(42))
         // 宽度按内容算：图标区固定，文字区取标题/正文里较宽的那个，限制在 40..120dp。
         val maxText = dp(120)
         val minText = dp(40)
@@ -1051,7 +1215,7 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
             measureTextWidth(titleView, maxText),
             measureTextWidth(contentView, maxText),
         ).coerceIn(minText, maxText)
-        val totalW = dp(2) + dp(38) + dp(4) + textW + dp(8)
+        val totalW = dp(48) + textW + dp(8)
         // 始终用内容算出的宽度：窗口传 EXACTLY（上一帧宽度）时也不能锁死，
         // 否则文字变短后卡片缩不回去，右侧会留一片空白。
         val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.AT_MOST) {
@@ -1059,10 +1223,33 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         } else {
             totalW
         }
-        setMeasuredDimension(w, heightPx)
+        // 照悬浮菜单的做法：先把正文按最终宽度排一遍拿到行数（maxLines 已生效），
+        // 再把正文高度钉死成 lineHeight × 行数（行高不低于 16dp）。
+        // 高度钉死之后，多出来的行会被裁在固定高度里，不会露第三行，也不会裁到字。
+        val exactText = MeasureSpec.makeMeasureSpec(textW, MeasureSpec.EXACTLY)
+        val unbounded = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        titleView.measure(exactText, unbounded)
+        contentView.measure(exactText, unbounded)
+        val lines = (contentView.layout?.lineCount ?: 1).coerceIn(1, maxLines)
+        val lineHeight = maxOf(contentView.lineHeight, dp(16))
+        val contentHeight = lines * lineHeight
+        (contentView.layoutParams as? LinearLayout.LayoutParams)?.let {
+            if (it.height != contentHeight) {
+                it.height = contentHeight
+                contentView.layoutParams = it
+            }
+        }
+        val textHeight = titleView.measuredHeight + dp(2) + contentHeight
+        val cardHeight = maxOf(textHeight + dp(8), dp(42))
+        val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.AT_MOST) {
+            minOf(cardHeight, MeasureSpec.getSize(heightMeasureSpec).takeIf { it > 0 } ?: cardHeight)
+        } else {
+            cardHeight
+        }
+        setMeasuredDimension(w, h)
         cardLayer.measure(
             MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(heightPx, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY),
         )
     }
 
@@ -1082,10 +1269,21 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         super.onSizeChanged(w, h, oldw, oldh)
         updateGestureExclusion()
         if (w != oldw) onWidthChanged?.invoke(w)
+        if (h != oldh && h > 0) {
+            // 高度随正文行数变化：圆角要重算，外层也要重排堆叠位置。
+            applyCardBackground(alignedRight, h)
+            onHeightChanged?.invoke(h)
+        }
     }
 
     /** 卡片内容宽度变化（文字长短变了）时通知外层重算贴边位置。 */
     var onWidthChanged: ((Int) -> Unit)? = null
+
+    /** 卡片高度变化（正文行数变了）时通知外层重排。 */
+    var onHeightChanged: ((Int) -> Unit)? = null
+
+    private var alignedRight = true
+    private var maxLines = 1
 
     private fun updateGestureExclusion() {
         if (width <= 0 || height <= 0) return

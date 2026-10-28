@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.barcode.BarcodeScanResult
+import com.slideindex.app.overlay.filebrowser.FileBrowserQuickCard
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 
@@ -70,7 +71,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
  * `StopwatchLogic` / `QrCodeGenerator` / `QrPayloadParser`。
  */
 @Composable
-fun QuickMenuPanel(
+internal fun QuickMenuPanel(
     visible: Boolean,
     page: QuickMenuTool?,
     query: String,
@@ -81,11 +82,14 @@ fun QuickMenuPanel(
     scanResults: List<BarcodeScanResult>,
     /** 被扫描的那张图；为 null 时只显示候选列表（例如相机路径在定格之前）。 */
     scanImage: Bitmap?,
+    /** 「屏幕取色」的状态。同样是 Session 级的：全屏取色层画在本面板根部，要和工具页共用。 */
+    colorPicker: QuickMenuColorPickerState,
     onQueryChange: (String) -> Unit,
     onScanContentChange: (String) -> Unit,
     onScanResultsChange: (List<BarcodeScanResult>) -> Unit,
     onScanImageChange: (Bitmap?) -> Unit,
     onOpenTool: (QuickMenuTool) -> Unit,
+    onOpenFileBrowser: (String?) -> Unit,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -127,6 +131,7 @@ fun QuickMenuPanel(
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (page == null) {
                         ListHeader(onDismiss = onDismiss)
+                        FileBrowserQuickCard(onOpen = onOpenFileBrowser)
                         OutlinedTextField(
                             value = query,
                             onValueChange = onQueryChange,
@@ -185,12 +190,23 @@ fun QuickMenuPanel(
                             scanContent = scanContent,
                             scanResults = scanResults,
                             scanImage = scanImage,
+                            colorPicker = colorPicker,
                             onScanContentChange = onScanContentChange,
                             onScanResultsChange = onScanResultsChange,
                             onScanImageChange = onScanImageChange,
                         )
                     }
                 }
+            }
+
+            // 全屏取色：盖在面板卡片与罩层**之上**（同一个窗口，不用再开第二个窗）。它只在
+            // `picking` 非空时存在，退出就是把它置空——下面的工具页一直在组合里，历史和格式不丢。
+            colorPicker.picking?.let { bitmap ->
+                QuickMenuColorPickFullscreen(
+                    bitmap = bitmap,
+                    state = colorPicker,
+                    onExit = { colorPicker.picking = null },
+                )
             }
         }
     }
@@ -418,6 +434,7 @@ private fun QuickMenuToolScreen(
     scanContent: String,
     scanResults: List<BarcodeScanResult>,
     scanImage: Bitmap?,
+    colorPicker: QuickMenuColorPickerState,
     onScanContentChange: (String) -> Unit,
     onScanResultsChange: (List<BarcodeScanResult>) -> Unit,
     onScanImageChange: (Bitmap?) -> Unit,
@@ -443,7 +460,7 @@ private fun QuickMenuToolScreen(
         QuickMenuTool.TIMER_HISTORY -> QuickMenuHistoryScreen()
         QuickMenuTool.CALCULATOR -> QuickMenuCalculatorScreen()
         QuickMenuTool.POMODORO -> QuickMenuPomodoroScreen()
-        QuickMenuTool.COLOR_PICKER -> QuickMenuColorPickerScreen()
+        QuickMenuTool.COLOR_PICKER -> QuickMenuColorPickerScreen(state = colorPicker)
         QuickMenuTool.MACRO_RUN -> QuickMenuMacroScreen(onRan = onDismiss)
         // 预置入口**不切页**（点击处已直接执行并收起菜单），这里只是让 when 穷尽
         QuickMenuTool.ENTRY_FOREGROUND_ACTIVITY,
@@ -455,6 +472,7 @@ private fun QuickMenuToolScreen(
         QuickMenuTool.ENTRY_STASH_PANEL,
         QuickMenuTool.PAGE_SCROLL,
         QuickMenuTool.WIDGET_PANEL,
+        QuickMenuTool.FILE_BROWSER,
         -> Unit
     }
 }
