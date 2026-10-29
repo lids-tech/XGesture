@@ -335,7 +335,10 @@ private fun FileBrowserEntryRow(
                                 dragPayload,
                                 View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
                             )
-                            Log.d("FileBrowserDrag", "start ${entry.path} started=$started")
+                            Log.d(
+                                "FileBrowserDrag",
+                                "start ${entry.path} started=$started count=${dragPaths.size} paths=$dragPaths",
+                            )
                         }
                     }
                 }

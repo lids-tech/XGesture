@@ -377,7 +377,7 @@ internal class FileBrowserController(
             state.selectedPaths + path
         }
         state = state.copy(
-            selectionMode = selected.isNotEmpty() || state.selectionMode,
+            selectionMode = selected.isNotEmpty(),
             selectedPaths = selected,
         )
     }
