@@ -1,11 +1,15 @@
 package com.slideindex.app.overlay.filebrowser
 
+import android.content.ClipData
 import android.graphics.Bitmap
+import android.view.View
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material.icons.outlined.FolderZip
@@ -57,6 +62,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -67,7 +76,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.slideindex.app.R
+import java.io.File
 
 @Composable
 internal fun FileBrowserListContent(
@@ -77,6 +88,7 @@ internal fun FileBrowserListContent(
     listState: LazyListState,
     onEntryClick: (FileBrowserEntry) -> Unit,
     onEntryLongClick: (FileBrowserEntry) -> Unit,
+    onDropEntry: (sourcePath: String, targetDir: String) -> Unit = { _, _ -> },
     selectionMode: Boolean = false,
     selectedPaths: Set<String> = emptySet(),
     access: FileBrowserAccessInfo? = null,
@@ -118,6 +130,7 @@ internal fun FileBrowserListContent(
                     access = access,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
+                    onDropEntry = onDropEntry,
                 )
             }
         }
@@ -134,10 +147,63 @@ private fun FileBrowserEntryRow(
     access: FileBrowserAccessInfo?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onDropEntry: (String, String) -> Unit,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
     val isFolder = entry.kind == FileEntryKind.DIRECTORY
     val context = LocalContext.current
+    var dragHover by remember { mutableStateOf(false) }
+    val dragTarget = remember(entry.path, isFolder, onDropEntry) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val source = event.toAndroidDragEvent().localState as? FileBrowserEntry ?: return false
+                if (!isFolder || source.path == entry.path) return false
+                dragHover = false
+                onDropEntry(source.path, entry.path)
+                return true
+            }
+
+            override fun onEntered(event: DragAndDropEvent) {
+                val source = event.toAndroidDragEvent().localState as? FileBrowserEntry
+                if (isFolder && source != null && source.path != entry.path) {
+                    dragHover = true
+                }
+            }
+
+            override fun onExited(event: DragAndDropEvent) {
+                dragHover = false
+            }
+
+            override fun onEnded(event: DragAndDropEvent) {
+                dragHover = false
+            }
+        }
+    }
+    val sourceData = remember(entry.path) {
+        val clip = runCatching {
+            val file = File(entry.path)
+            if (file.isFile && file.canRead()) {
+                ClipData.newUri(
+                    context.contentResolver,
+                    entry.name,
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    ),
+                )
+            } else {
+                ClipData.newPlainText(entry.name, entry.path)
+            }
+        }.getOrElse {
+            ClipData.newPlainText(entry.name, entry.path)
+        }
+        DragAndDropTransferData(
+            clipData = clip,
+            localState = entry,
+            flags = View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
+        )
+    }
     val tint = if (isFolder) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -166,11 +232,18 @@ private fun FileBrowserEntryRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    if (selected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    } else {
-                        Color.Transparent
+                    when {
+                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                        dragHover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        else -> Color.Transparent
                     },
+                )
+                .dragAndDropTarget(
+                    shouldStartDragAndDrop = { event ->
+                        isFolder &&
+                            event.toAndroidDragEvent().localState is FileBrowserEntry
+                    },
+                    target = dragTarget,
                 )
                 .combinedClickable(
                     onClick = onClick,
@@ -239,6 +312,21 @@ private fun FileBrowserEntryRow(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.size(20.dp),
                 )
+            }
+            if (!selectionMode) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .dragAndDropSource { _ -> sourceData },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.DragHandle,
+                        contentDescription = "拖动",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.size(17.dp),
+                    )
+                }
             }
         }
         if (showDivider) {
