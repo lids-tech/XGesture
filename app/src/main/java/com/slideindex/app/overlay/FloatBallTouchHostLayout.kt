@@ -32,6 +32,12 @@ internal class FloatBallTouchHostLayout(
     /** 手势卡死（UP/CANCEL 丢失）时回调，由 [FloatBallOverlay] 收回全屏触摸窗。 */
     var onCaptureStalled: (() -> Unit)? = null
 
+    /** 手指按下并命中球区：闲置隐身据此立即显形。 */
+    var onBallPressed: (() -> Unit)? = null
+
+    /** 手指离开/取消/手势收尾：闲置隐身据此重新计时。 */
+    var onBallReleased: (() -> Unit)? = null
+
     private var gestureCaptureActive = false
 
     private val captureWatchdog = StuckGestureWatchdog(
@@ -159,6 +165,7 @@ internal class FloatBallTouchHostLayout(
     fun forceEndGestureCapture() {
         if (gestureCaptureActive) {
             ballDetector.cancel()
+            onBallReleased?.invoke()
         }
         endGestureCapture()
     }
@@ -274,9 +281,11 @@ internal class FloatBallTouchHostLayout(
             MotionEvent.ACTION_DOWN -> {
                 if (!hitTestBall(event.rawX, event.rawY)) return false
                 gestureCaptureActive = true
+                onBallPressed?.invoke()
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (!gestureCaptureActive && !ballDetector.isLauncherCaptureMode()) return false
+                onBallReleased?.invoke()
                 val handled = ballDetector.onTouchEvent(event)
                 if (!ballDetector.isLauncherCaptureMode()) {
                     gestureCaptureActive = false
@@ -304,9 +313,11 @@ internal class FloatBallTouchHostLayout(
             MotionEvent.ACTION_DOWN -> {
                 if (!hitTestBall(event.rawX, event.rawY)) return false
                 gestureCaptureActive = true
+                onBallPressed?.invoke()
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (!gestureCaptureActive && !ballDetector.isLauncherCaptureMode()) return false
+                onBallReleased?.invoke()
                 val handled = ballDetector.onTouchEvent(event)
                 if (!ballDetector.isLauncherCaptureMode()) {
                     gestureCaptureActive = false

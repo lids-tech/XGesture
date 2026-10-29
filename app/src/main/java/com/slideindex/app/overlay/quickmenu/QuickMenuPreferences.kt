@@ -49,6 +49,8 @@ internal data class QuickMenuPrefs(
     val currencyTo: String? = DEFAULT_CURRENCY_TO,
     /** 文本工具：记住上次的模式（枚举名）。 */
     val textToolMode: String? = null,
+    /** 首页模块顺序（[QuickMenuHomeModule] 枚举名）；空 = 默认 最近使用 → 文件 → 工具。 */
+    val homeModuleOrder: List<String> = emptyList(),
 )
 
 /**
@@ -68,6 +70,8 @@ internal object QuickMenuPrefsCodec {
             ?: DEFAULT_CURRENCY_FROM,
         currencyTo = prefs.currencyTo?.takeIf { it in CurrencyRateEngine.currencies }
             ?: DEFAULT_CURRENCY_TO,
+        homeModuleOrder = QuickMenuHomeModule.sanitize(prefs.homeModuleOrder)
+            .map { it.id },
         // 单位与类别的合法性依赖当前引擎的分类，由界面按类别兜底，这里不做判断。
     )
 }
@@ -129,7 +133,6 @@ internal object QuickMenuPreferences {
     fun preview(transform: (QuickMenuPrefs) -> QuickMenuPrefs) {
         current = QuickMenuPrefsCodec.sanitize(transform(current))
     }
-
     fun update(transform: (QuickMenuPrefs) -> QuickMenuPrefs) {
         preview(transform)
         persist()
@@ -140,5 +143,17 @@ internal object QuickMenuPreferences {
         val context = appContext ?: return
         val snapshot = current
         QuickMenuWork.launch { QuickMenuPreferencesStore.write(context, snapshot) }
+    }
+
+    fun homeModules(): List<QuickMenuHomeModule> =
+        QuickMenuHomeModule.sanitize(current.homeModuleOrder)
+
+    /** 按首页可见模块的索引移动；越界/相同位置直接忽略。 */
+    fun moveHomeModule(from: Int, to: Int) {
+        val order = homeModules().toMutableList()
+        if (from !in order.indices || to !in order.indices || from == to) return
+        val item = order.removeAt(from)
+        order.add(to, item)
+        update { it.copy(homeModuleOrder = order.map { module -> module.id }) }
     }
 }

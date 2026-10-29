@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文件浏览器媒体模式（独立资源文件，避免改动现有 strings.xml）。 -->
+<resources>
+    <string name="file_browser_media_today">Today</string>
+    <string name="file_browser_media_yesterday">Yesterday</string>
+    <string name="file_browser_media_empty">No media files.</string>
+    <string name="file_browser_media_permission_title">Media access required</string>
+    <string name="file_browser_media_permission_hint">Grant photo/video/audio access, or enable all files access, to browse the media library.</string>
+    <string name="file_browser_media_grant">Grant media access</string>
+    <string name="file_browser_media_open_failed">Cannot open this media file.</string>
+    <string name="file_browser_media_summary">%1$s · %2$d items · %3$s</string>
+    <string name="file_browser_media_count_size">%1$d items · %2$s</string>
+    <string name="file_browser_media_more">Load more</string>
+    <string name="file_browser_media_previous">Previous</string>
+    <string name="file_browser_media_next">Next</string>
+    <string name="file_browser_media_rotate">Rotate</string>
+    <string name="file_browser_media_image_failed">Cannot open this image.</string>
+    <string name="file_browser_media_selected">%1$d selected</string>
+</resources>

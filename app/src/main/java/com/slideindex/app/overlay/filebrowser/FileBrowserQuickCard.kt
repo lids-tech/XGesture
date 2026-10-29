@@ -85,10 +85,10 @@ internal fun FileBrowserQuickCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 5.dp)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
-            .clickable { onOpen(null) }
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable { onOpen(internalRoot) }
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -206,27 +206,26 @@ private data class FileBrowserCategory(
     val icon: ImageVector,
 )
 
-private fun categories(internalRoot: String): List<FileBrowserCategory> {
-    val root = FileBrowserPaths.normalize(internalRoot, internalRoot)
+private fun categories(@Suppress("UNUSED_PARAMETER") internalRoot: String): List<FileBrowserCategory> {
     return listOf(
         FileBrowserCategory(
             R.string.file_browser_category_pictures,
-            "$root/Pictures",
+            FileBrowserMediaCategory.PICTURES.path,
             Icons.Outlined.Image,
         ),
         FileBrowserCategory(
             R.string.file_browser_category_music,
-            "$root/Music",
+            FileBrowserMediaCategory.AUDIO.path,
             Icons.Outlined.MusicNote,
         ),
         FileBrowserCategory(
             R.string.file_browser_category_videos,
-            "$root/Movies",
+            FileBrowserMediaCategory.VIDEOS.path,
             Icons.Outlined.Movie,
         ),
         FileBrowserCategory(
             R.string.file_browser_category_documents,
-            "$root/Documents",
+            FileBrowserMediaCategory.DOCUMENTS.path,
             Icons.Outlined.Description,
         ),
     )

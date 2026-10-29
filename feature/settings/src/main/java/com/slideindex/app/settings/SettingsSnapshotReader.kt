@@ -435,6 +435,12 @@ internal object SettingsSnapshotReader {
             floatBallSizeDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_SIZE_DP] ?: 48f,
             floatBallPickCrossArmDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_CROSS_ARM_DP] ?: 7.5f,
             floatBallOpacity = prefs[SettingsPreferenceKeys.FLOAT_BALL_OPACITY] ?: 0.88f,
+            floatBallHideWhenIdle = prefs[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] ?: false,
+            floatBallIdleFreezeGif = prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] ?: false,
+            floatBallIdleOpacity =
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] ?: 0f).coerceIn(0f, 1f),
+            floatBallIdleDelayMs =
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_DELAY_MS] ?: 3000).coerceIn(0, 10_000),
             floatBallVisibleFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_VISIBLE_FRACTION] ?: 1f,
             floatBallCustomCenterXFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_POSITION_X_FRACTION] ?: 0.92f,
             floatBallPositionYFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_POSITION_Y_FRACTION] ?: 0.55f,
@@ -1164,6 +1170,11 @@ internal object SettingsSnapshotReader {
             ),
             cNoticeYFraction = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_Y_FRACTION]
                 ?: base.cNoticeYFraction,
+            edgeCardKeepAcrossLock = prefs[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_KEEP_ACROSS_LOCK]
+                ?: base.edgeCardKeepAcrossLock,
+            edgeCardCollapseWhenScrollDone =
+                prefs[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_COLLAPSE_WHEN_SCROLL_DONE]
+                    ?: base.edgeCardCollapseWhenScrollDone,
             cNoticeEdgeMarginDp = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_EDGE_MARGIN_DP]
                 ?: base.cNoticeEdgeMarginDp,
             cNoticeDimDelayMs = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_DIM_DELAY_MS]

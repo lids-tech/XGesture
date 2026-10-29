@@ -189,9 +189,10 @@ object EdgeCardOverlayWindow {
         trimToCount(plan.settings)
         ensureWindow(entry, hostContext)
         relayout()
+        // 先挂计时器再展开：展开会启动滚动，滚动启动时会把计时器取消掉（内容溢出场景）。
+        scheduleAutoCollapse(entry)
         applyEntry(entry, animated = false)
         entry.view?.playEntrance(1f)
-        scheduleAutoCollapse(entry)
     }
 
     /** 设置页预览：示例数据常驻，不自动收起。 */
@@ -265,6 +266,84 @@ object EdgeCardOverlayWindow {
 
     fun dismissPreview() {
         entries.filter { it.preview }.forEach { removeEntry(it, notifyDismiss = false) }
+    }
+
+    /** 灭屏/锁屏：按「锁屏后保留」设置决定清掉还是挂起，解锁后补显。 */
+    fun handleLockScreenBoundary() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { handleLockScreenBoundary() }
+            return
+        }
+        if (entries.isEmpty()) {
+            Log.d(TAG, "lock boundary: no entries")
+            return
+        }
+        val keep = entries.filter { !it.preview }.all { it.plan.settings.edgeCardKeepAcrossLock }
+        Log.d(TAG, "lock boundary: entries=${entries.size} keep=$keep")
+        if (!keep) {
+            Log.d(TAG, "lock boundary: dismiss (keep disabled)")
+            dismiss()
+            return
+        }
+        Log.d(TAG, "lock boundary: suspend ${entries.size} cards")
+        suspendForLockScreen()
+    }
+
+    /** 只摘窗口，保留条目数据（消息、未读数、时间戳）。 */
+    private fun suspendForLockScreen() {
+        Log.d(TAG, "suspendForLockScreen: ${entries.size} cards")
+        entries.forEach { entry ->
+            cancelAutoCollapse(entry)
+            entry.spring?.cancel()
+            entry.spring = null
+            entry.view?.let { view ->
+                runCatching { windowManager?.removeView(view) }
+                    .onFailure { Log.w(TAG, "removeView failed on lock", it) }
+            }
+            entry.view = null
+            entry.params = null
+        }
+    }
+
+    /** 解锁后按挂起的条目重建窗口；过期的直接丢弃。 */
+    fun replayAfterUnlock(context: Context) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { replayAfterUnlock(context) }
+            return
+        }
+        if (entries.none { it.view == null }) {
+            Log.d(TAG, "replay skipped: nothing suspended")
+            return
+        }
+        val hostContext = MessageOverlayHost.resolveHostContext(context)
+        if (hostContext == null) {
+            Log.d(TAG, "replay skipped: host null")
+            return
+        }
+        Log.d(TAG, "replayAfterUnlock: entries=${entries.size}")
+        appContext = hostContext
+        windowManager = hostContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        registerDisplayListener(hostContext)
+        // createdAt 用的是 uptimeMillis，这里必须同一基准；混用 currentTimeMillis
+        // 会把所有条目算成“几十年前创建”，解锁时被当成过期全部删掉。
+        val now = android.os.SystemClock.uptimeMillis()
+        val expired = entries.filter { !it.preview && now - it.createdAt > LOCK_SUSPEND_TTL_MS }
+        expired.forEach { cancelAutoCollapse(it) }
+        Log.d(TAG, "replay expired=${expired.size} entries=${entries.size}")
+        if (expired.isNotEmpty()) entries.removeAll(expired.toSet())
+        if (entries.isEmpty()) {
+            Log.d(TAG, "replay skipped: all expired")
+            return
+        }
+        trimToCount(entries.first().plan.settings)
+        entries.toList().forEach { entry ->
+            if (entry.view == null) {
+                ensureWindow(entry, hostContext)
+                applyEntry(entry, animated = false)
+            }
+        }
+        relayout()
+        Log.d(TAG, "replayAfterUnlock: ${entries.size} cards")
     }
 
     fun updateWindowPlacement(context: Context, settings: MessageSettings) {
@@ -494,6 +573,18 @@ object EdgeCardOverlayWindow {
         val view = EdgeCardView(hostContext).apply {
             exclusionEdge = settings.edgeCardHorizontalEdge
             setOnTouchListener(EdgeCardTouchListener(entry))
+            // 滚动期间暂停自动收起；滚到最后一行后收起（内容看完才走）。
+            onScrollStarted = {
+                if (entry.plan.settings.edgeCardCollapseWhenScrollDone) cancelAutoCollapse(entry)
+            }
+            onScrollFinished = {
+                Log.d(
+                    TAG,
+                    "scroll finished: collapseWhenDone=" +
+                        entry.plan.settings.edgeCardCollapseWhenScrollDone,
+                )
+                if (entry.plan.settings.edgeCardCollapseWhenScrollDone) collapseEntry(entry)
+            }
         }
         // 先绑内容再测量：宽高都由内容决定（正文行数多则卡片更高）。
         view.bind(entry.plan, entry.state)
@@ -556,7 +647,11 @@ object EdgeCardOverlayWindow {
         entry.params = params
         view.alpha = settings.edgeCardOpacity.coerceIn(0f, 1f)
 
-        val wm = windowManager ?: return
+        val wm = windowManager
+        if (wm == null) {
+            Log.d(TAG, "ensureWindow skipped: windowManager null")
+            return
+        }
         val added = runCatching { wm.addView(view, params) }
             .onFailure { Log.e(TAG, "addView failed", it) }
             .isSuccess
@@ -757,6 +852,15 @@ object EdgeCardOverlayWindow {
         cancelAutoCollapse(entry)
         val delayMs = entry.plan.settings.edgeCardAutoCollapseMs.coerceIn(0, 30_000)
         if (delayMs <= 0 || !entry.state.isExpanded) return
+        // 内容溢出时收起完全交给滚动结束回调，避免计时器在滚动中途把卡片收走
+        // （新消息卡片是非动画展开，滚动启动早于这里 arm，没人再取消）。
+        if (entry.plan.settings.edgeCardCollapseWhenScrollDone &&
+            entry.view?.isContentOverflowing == true
+        ) {
+            Log.d(TAG, "autoCollapse skipped: waiting scroll end")
+            return
+        }
+        Log.d(TAG, "autoCollapse armed: ${delayMs}ms")
         val runnable = object : Runnable {
             override fun run() {
                 entry.autoCollapse = null
@@ -775,6 +879,14 @@ object EdgeCardOverlayWindow {
     private fun cancelAutoCollapse(entry: EdgeCardEntry) {
         entry.autoCollapse?.let { mainHandler.removeCallbacks(it) }
         entry.autoCollapse = null
+    }
+
+    /** 收起卡片：内容滚完、或定时到点时都走这里。 */
+    private fun collapseEntry(entry: EdgeCardEntry) {
+        cancelAutoCollapse(entry)
+        if (!entry.state.isExpanded) return
+        entry.state = entry.state.collapse()
+        applyEntry(entry, animated = true)
     }
 
     // ---- 触摸 ----
@@ -895,7 +1007,11 @@ private const val SCROLL_HOLD_PER_LINE_MS = 28L
 private const val SCROLL_HOLD_MAX_MS = 4_500L
 private const val SCROLL_ANIM_MS = 350L
 private const val SCROLL_STEP_PAUSE_MS = 800L
-private const val SCROLL_END_PAUSE_MS = 1_550L
+/** 滚到最后一行后停留多久再收起。 */
+private const val SCROLL_FINISH_HOLD_MS = 1_000L
+
+/** 挂起超过这个时长就不再补显，避免解锁瞬间弹出一堆过期卡片。 */
+private const val LOCK_SUSPEND_TTL_MS = 10 * 60 * 1000L
 
 private class EdgeCardView(context: Context) : ViewGroup(context) {
     var exclusionEdge: SideBubbleHorizontalEdge = SideBubbleHorizontalEdge.Right
@@ -917,35 +1033,51 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
     private var scrollJob: Job? = null
     private var scrollAnimator: ValueAnimator? = null
 
+    /** 开始竖向滚动（外层据此暂停自动收起计时）。 */
+    var onScrollStarted: (() -> Unit)? = null
+
+    /** 滚到最后一行并停留够了（外层据此收起卡片）。 */
+    var onScrollFinished: (() -> Unit)? = null
+
+    /** 正文是否有溢出（需要滚动）。外层据此决定要不要挂自动收起计时器。 */
+    var isContentOverflowing: Boolean = false
+        private set
+
     /**
      * 多行溢出时的竖向慢滚（对齐悬浮菜单侧边样式）：
-     * 停 4.5s → 350ms 上移一行 → 停 800ms → … 到底停 1.55s 后回顶循环。
-     * 没有溢出、或单行模式时直接返回，不产生任何定时任务。
+     * 停 1.2s 起 → 350ms 上移一行 → 停 800ms → … 滚到最后一行后停 1s 结束，不再回顶。
+     * 偏移按 [Layout] 的真实行坐标算，避免 lineHeight 乘法误差把最后一行切掉。
      */
     private fun startVerticalScroll() {
         stopVerticalScroll()
-        val layout = contentView.layout ?: return
-        if (maxLines <= 1) return
-        val lineHeight = maxOf(contentView.lineHeight, dp(16))
-        val overflowLines = layout.lineCount - maxLines
-        if (overflowLines <= 0 || lineHeight <= 0) return
+        val layout = contentView.layout
+        val overflowLines = if (layout == null || maxLines <= 1) 0 else layout.lineCount - maxLines
+        isContentOverflowing = overflowLines > 0
+        if (layout == null || overflowLines <= 0) return
+        // 每页的目标偏移：行首坐标；最后一页对齐到“滚到底”，保证末行完整可见。
+        val maxOffset = (layout.height - contentView.height).coerceAtLeast(0)
+        val offsets = ArrayList<Int>(overflowLines + 1)
+        for (index in 0 until overflowLines) {
+            offsets.add(layout.getLineTop(index).coerceAtMost(maxOffset))
+        }
+        offsets.add(maxOffset)
+        if (offsets.size < 2) return
+        onScrollStarted?.invoke()
         scrollJob = scrollScope.launch {
             try {
-                while (isActive) {
-                    // 停留时长随行号递增（28ms/行），下界 800ms、上限 4500ms——照抄悬浮菜单。
-                    for (index in 0 until overflowLines) {
-                        if (!isActive) break
-                        val hold = (index.toLong() * SCROLL_HOLD_PER_LINE_MS)
-                            .coerceIn(SCROLL_HOLD_MIN_MS, SCROLL_HOLD_MAX_MS)
-                        delay(hold)
-                        animateScroll(index * lineHeight, (index + 1) * lineHeight)
-                        delay(SCROLL_STEP_PAUSE_MS)
-                    }
-                    delay(SCROLL_END_PAUSE_MS)
-                    contentView.scrollTo(0, 0)
+                for (index in 0 until overflowLines) {
+                    if (!isActive) break
+                    val hold = (index.toLong() * SCROLL_HOLD_PER_LINE_MS)
+                        .coerceIn(SCROLL_HOLD_MIN_MS, SCROLL_HOLD_MAX_MS)
+                    delay(hold)
+                    animateScroll(offsets[index], offsets[index + 1])
+                    delay(SCROLL_STEP_PAUSE_MS)
                 }
+                if (!isActive) return@launch
+                delay(SCROLL_FINISH_HOLD_MS)
+                if (isActive) onScrollFinished?.invoke()
             } finally {
-                contentView.scrollTo(0, 0)
+                if (!isActive) contentView.scrollTo(0, 0)
             }
         }
     }

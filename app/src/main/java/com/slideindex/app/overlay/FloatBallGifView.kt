@@ -36,6 +36,11 @@ internal class FloatBallGifView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : SurfaceView(context, attrs), SurfaceHolder.Callback {
 
+    companion object {
+        /** 低于这个不透明度就当作“看不见”，停止出帧。 */
+        private const val HIDDEN_ALPHA = 0.01f
+    }
+
     private val circlePath = Path()
     private val circleRect = RectF()
     private val bitmapDst = Rect()
@@ -129,12 +134,18 @@ internal class FloatBallGifView @JvmOverloads constructor(
     /** 软件 surface 不走 HWUI 图层，这里保持幂等，仅为兼容旧调用点。 */
     fun setAnimating(@Suppress("UNUSED_PARAMETER") animating: Boolean) = Unit
 
-    /** 球不可见（窗口隐藏 / 从窗口树摘掉）或熄屏时，逐帧重绘没有意义。 */
+    /** 球不可见（窗口隐藏 / 从窗口树摘掉）、熄屏、或**完全透明**时，逐帧重绘没有意义。 */
     fun canAnimateFrame(): Boolean {
+        // 闲置隐身把不透明度压到 0：画面完全看不见，继续出帧只会让 SurfaceFlinger
+        // 按 GIF 帧率整屏重合成，纯白烧 CPU。触摸显形后由播放器 wake() 立刻恢复。
+        if (frameAlpha <= HIDDEN_ALPHA) return false
         if (!isShown || windowVisibility != VISIBLE) return false
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         return powerManager?.isInteractive != false
     }
+
+    /** 当前不透明度是否已经低到“看不见、不必出帧”。 */
+    fun isFrameInvisible(): Boolean = frameAlpha <= HIDDEN_ALPHA
 
     private fun scheduleRender() {
         if (renderScheduled) return

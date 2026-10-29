@@ -1,6 +1,8 @@
 package com.slideindex.app.overlay
 
 import android.view.View
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -238,6 +240,15 @@ internal fun FloatBallIdleBallChrome(
             FloatBallSide.RIGHT -> Alignment.CenterEnd
         }
     }
+    // 闲置隐身：窗内这份球自己跑 alpha 动画（Display 层那份由 FloatBallOverlay 的 ValueAnimator 驱动）。
+    val idleHidden by sceneState.ballIdleHidden
+    val idleOpacity by sceneState.ballIdleOpacity
+    val ballOpacity = settings.floatBallOpacity.coerceIn(0f, 1f)
+    val targetBallAlpha = if (idleHidden) idleOpacity.coerceIn(0f, 1f) else ballOpacity
+    val animatedBallAlpha by animateFloatAsState(
+        targetValue = targetBallAlpha,
+        animationSpec = tween(durationMillis = if (targetBallAlpha < ballOpacity) 200 else 120)
+    )
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = dockAlignment) {
         AndroidView(
             modifier = Modifier
@@ -253,6 +264,8 @@ internal fun FloatBallIdleBallChrome(
                     styleGeneration = styleVisualGeneration
                 )
                 view.setDragging(false)
+                view.setAlphaOverride(animatedBallAlpha)
+                view.setGifFrozen(idleHidden && settings.floatBallIdleFreezeGif)
             }
         )
     }

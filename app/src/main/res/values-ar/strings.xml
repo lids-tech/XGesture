@@ -249,6 +249,10 @@
     <string name="message_style_side_bubble">فقاعة جانبية</string>
     <string name="message_style_edge_card">بطاقة الحافة</string>
     <string name="message_style_edge_card_max_lines">عدد أسطر المحتوى</string>
+    <string name="message_style_edge_card_keep_across_lock">الاحتفاظ عند القفل</string>
+    <string name="message_style_edge_card_keep_across_lock_desc">إعادة إظهار البطاقات بعد فتح القفل</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done">الطي بعد التمرير</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">تُطوى الرسائل الطويلة بعد التمرير إلى النهاية، بغض النظر عن مدة الطي التلقائي</string>
     <string name="message_style_edge_card_desc">بطاقة واحدة ملتصقة بحافة الشاشة: شبه شفافة تُظهر الصورة الرمزية فقط، وتتوسع عند وصول رسالة جديدة؛ اسحب لليمين للطي، ولليسار للتوسيع، وللأعلى أو الأسفل للإخفاء</string>
     <string name="message_style_edge_card_opacity">شفافية الحالة المطوية</string>
     <string name="message_style_edge_card_auto_collapse">الطي التلقائي</string>
@@ -1783,6 +1787,13 @@
     <string name="float_ball_pick_cross_arm">حجم صليب الالتقاط</string>
     <string name="float_ball_pick_cross_arm_value">%1$.1f dp</string>
     <string name="float_ball_opacity">الشفافية</string>
+    <string name="float_ball_hide_when_idle">الإخفاء عند عدم النشاط</string>
+    <string name="float_ball_hide_when_idle_desc">بعد انتهاء مدة عدم النشاط دون لمس الكرة، تُرسم بشفافية عدم النشاط. لمس منطقة الكرة يعيد إظهارها، وتبقى الإيماءات تعمل أثناء الإخفاء.</string>
+    <string name="float_ball_idle_freeze_gif">إيقاف الحركة عند عدم النشاط</string>
+    <string name="float_ball_idle_freeze_gif_desc">إيقاف الكرة المتحركة عند الإطار الحالي بعد انتهاء مدة عدم النشاط، ويُستأنف التشغيل باللمس.</string>
+    <string name="float_ball_idle_opacity">شفافية عدم النشاط</string>
+    <string name="float_ball_idle_delay">مدة عدم النشاط</string>
+    <string name="float_ball_idle_delay_value">%1$s ث</string>
     <string name="float_ball_pointer_speed">السرعة الأفقية لعلامة الجمع</string>
     <string name="float_ball_pointer_speed_vertical">السرعة العمودية لعلامة الجمع</string>
     <string name="float_ball_pick_offset">تباعد علامة الجمع</string>

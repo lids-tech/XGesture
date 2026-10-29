@@ -43,6 +43,8 @@ internal class SlideIndexAccessibilityWatchdog(
                     com.slideindex.app.overlay.OverlayStatePort.publish(service, "userPresent")
                     // 开启「解锁后继续显示悬浮球提醒」时，补显锁屏期间保留下来的悬浮球提醒。
                     com.slideindex.app.overlay.FloatIconOverlayWindow.replayAfterUnlock()
+                    // 贴边卡同理：锁屏时按设置挂起，解锁补显。
+                    com.slideindex.app.overlay.EdgeCardOverlayWindow.replayAfterUnlock(service)
                     overlayHost()?.refreshOverlaySuppression()
                 }
             }

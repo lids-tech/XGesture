@@ -11,6 +11,7 @@ import com.slideindex.app.message.MessagePlacementFractions
 import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.message.SideBubbleHorizontalEdge
 import com.slideindex.app.ui.SettingRadioRow
+import com.slideindex.app.ui.SettingSwitchRow
 import com.slideindex.app.ui.SettingsSliderRow
 import com.slideindex.app.ui.miuix.CardItem
 import com.slideindex.app.ui.miuix.groupedCardItems
@@ -27,6 +28,8 @@ fun edgeCardSettingsCardItems(
     onAutoCollapseSecondsChange: (Int) -> Unit,
     onMaxCountChange: (Int) -> Unit = {},
     onMaxLinesChange: (Int) -> Unit = {},
+    onKeepAcrossLockChange: (Boolean) -> Unit = {},
+    onCollapseWhenScrollDoneChange: (Boolean) -> Unit = {},
     onPreviewChange: (MessageSettings) -> Unit = {},
     onPreviewCommit: () -> Unit = {},
 ): List<CardItem> = buildList {
@@ -55,6 +58,30 @@ fun edgeCardSettingsCardItems(
                 label = settings.edgeCardMaxLines.coerceIn(1, 3).toString(),
                 formatLabel = { it.toInt().toString() },
                 onValueChange = { value -> onMaxLinesChange(value.toInt()) },
+            )
+        },
+    )
+    add(
+        settingsCardScopeItem("edge-card-collapse-when-scroll-done") {
+            SettingSwitchRow(
+                title = stringResource(R.string.message_style_edge_card_collapse_when_scroll_done),
+                subtitle = stringResource(
+                    R.string.message_style_edge_card_collapse_when_scroll_done_desc,
+                ),
+                checked = settings.edgeCardCollapseWhenScrollDone,
+                enabled = enabled,
+                onCheckedChange = onCollapseWhenScrollDoneChange,
+            )
+        },
+    )
+    add(
+        settingsCardScopeItem("edge-card-keep-across-lock") {
+            SettingSwitchRow(
+                title = stringResource(R.string.message_style_edge_card_keep_across_lock),
+                subtitle = stringResource(R.string.message_style_edge_card_keep_across_lock_desc),
+                checked = settings.edgeCardKeepAcrossLock,
+                enabled = enabled,
+                onCheckedChange = onKeepAcrossLockChange,
             )
         },
     )

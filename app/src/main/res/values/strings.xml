@@ -257,6 +257,10 @@
     <string name="message_style_edge_card_auto_collapse">Auto-collapse</string>
     <string name="message_style_edge_card_max_count">Cards shown at once</string>
     <string name="message_style_edge_card_max_lines">Content lines</string>
+    <string name="message_style_edge_card_keep_across_lock">Keep across lock</string>
+    <string name="message_style_edge_card_keep_across_lock_desc">Show cards again after unlocking</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done">Collapse after scrolling</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">Long messages collapse once they scroll to the end, ignoring the auto-collapse delay</string>
     <string name="message_style_edge_card_auto_collapse_off">Never</string>
     <string name="message_style_edge_card_position">Card position</string>
     <string name="message_style_edge_card_position_hint">Choose left or right edge, then adjust vertical position</string>
@@ -1000,6 +1004,13 @@
     <string name="float_ball_pick_cross_arm">Pick cross size</string>
     <string name="float_ball_pick_cross_arm_value">%1$.1f dp</string>
     <string name="float_ball_opacity">Opacity</string>
+    <string name="float_ball_hide_when_idle">Hide when idle</string>
+    <string name="float_ball_hide_when_idle_desc">After the idle timeout without touching the ball, draw it at the idle opacity. Touching the ball area shows it again; gestures keep working while hidden.</string>
+    <string name="float_ball_idle_freeze_gif">Freeze animation when idle</string>
+    <string name="float_ball_idle_freeze_gif_desc">Stop the animated ball at the current frame after the idle timeout. Touching it resumes playback. Saves the per-frame redraw while it is still visible.</string>
+    <string name="float_ball_idle_opacity">Idle opacity</string>
+    <string name="float_ball_idle_delay">Idle timeout</string>
+    <string name="float_ball_idle_delay_value">%1$s s</string>
     <string name="float_ball_pointer_speed">Plus horizontal speed</string>
     <string name="float_ball_pointer_speed_vertical">Plus vertical speed</string>
     <string name="float_ball_pick_offset">Plus spacing</string>
