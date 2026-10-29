@@ -321,7 +321,11 @@ internal class FileBrowserController(
     }
 
     fun saveScroll(index: Int, offset: Int) {
-        scrollPositions[state.activeTabId to state.path] = index to offset
+        saveScrollAt(state.path, index, offset)
+    }
+
+    fun saveScrollAt(path: String, index: Int, offset: Int) {
+        scrollPositions[state.activeTabId to path] = index to offset
     }
 
     fun scrollForActiveTab(): Pair<Int, Int> {

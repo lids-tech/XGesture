@@ -19,7 +19,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
@@ -85,10 +84,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
@@ -96,15 +97,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
@@ -124,11 +121,9 @@ import com.slideindex.app.R
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.ui.miuix.MiuixSearchField
 import com.slideindex.app.ui.theme.LocalAppDarkTheme
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbBarDefaults
@@ -165,59 +160,6 @@ internal fun FileBrowserPanel(
             listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
         }
     }
-    var listBounds by remember { mutableStateOf(Rect.Zero) }
-    var autoScrollDelta by remember { mutableStateOf(0f) }
-    var autoScrollJob by remember { mutableStateOf<Job?>(null) }
-    val autoScrollScope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val edgePx = with(density) { 56.dp.toPx() }
-    fun stopAutoScroll() {
-        autoScrollJob?.cancel()
-        autoScrollJob = null
-        autoScrollDelta = 0f
-    }
-    fun updateAutoScroll(delta: Float) {
-        autoScrollDelta = delta
-        if (delta == 0f) {
-            stopAutoScroll()
-            return
-        }
-        if (autoScrollJob?.isActive == true) return
-        autoScrollJob = autoScrollScope.launch {
-            while (isActive && autoScrollDelta != 0f) {
-                listState.scrollBy(autoScrollDelta)
-                delay(16L)
-            }
-        }
-    }
-    val autoScrollTarget = remember {
-        object : DragAndDropTarget {
-            override fun onDrop(event: DragAndDropEvent): Boolean {
-                stopAutoScroll()
-                return false
-            }
-
-            override fun onMoved(event: DragAndDropEvent) {
-                if (listBounds.height <= 0f) return
-                val y = event.toAndroidDragEvent().y - listBounds.top
-                val delta = when {
-                    y < edgePx -> -(((edgePx - y) / edgePx) * 14f + 3f)
-                    y > listBounds.height - edgePx ->
-                        (((y - (listBounds.height - edgePx)) / edgePx) * 14f + 3f)
-                    else -> 0f
-                }
-                updateAutoScroll(delta)
-            }
-
-            override fun onExited(event: DragAndDropEvent) {
-                stopAutoScroll()
-            }
-
-            override fun onEnded(event: DragAndDropEvent) {
-                stopAutoScroll()
-            }
-        }
-    }
     var quickBarVisible by remember { mutableStateOf(true) }
     LaunchedEffect(state.activeTabId) {
         quickBarVisible = true
@@ -237,6 +179,16 @@ internal fun FileBrowserPanel(
                     quickBarVisible = true
             }
             last = current
+        }
+    }
+    DisposableEffect(state.activeTabId, state.path) {
+        val path = state.path
+        onDispose {
+            controller.saveScrollAt(
+                path,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+            )
         }
     }
     LaunchedEffect(state.activeTabId, state.path) {
@@ -266,6 +218,7 @@ internal fun FileBrowserPanel(
             .sumOf { it.sizeBytes }
     }
     val context = LocalContext.current
+    val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
     var copied by remember { mutableStateOf(false) }
     var showPathDialog by remember { mutableStateOf(false) }
@@ -308,9 +261,6 @@ internal fun FileBrowserPanel(
         exportFailed = false
     }
 
-    LaunchedEffect(state.path) {
-        runCatching { listState.scrollToItem(0) }
-    }
     LaunchedEffect(copied) {
         if (copied) {
             delay(1_600L)
@@ -357,14 +307,7 @@ internal fun FileBrowserPanel(
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .dragAndDropTarget(
-                                shouldStartDragAndDrop = { event ->
-                                    event.toAndroidDragEvent().localState is FileBrowserDragPayload
-                                },
-                                target = autoScrollTarget,
-                            ),
+                        modifier = Modifier.fillMaxSize(),
                     ) {
                         FileBrowserHeader(
                             access = state.access,
@@ -452,8 +395,7 @@ internal fun FileBrowserPanel(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxWidth()
-                                .onGloballyPositioned { listBounds = it.boundsInWindow() },
+                                .fillMaxWidth(),
                         ) {
                             FileBrowserListContent(
                                 state = state,
@@ -479,9 +421,6 @@ internal fun FileBrowserPanel(
                                 onEntryLongClick = { entry ->
                                     focusManager.clearFocus()
                                     controller.enterSelection(entry)
-                                },
-                                onDropEntries = { sourcePaths, targetDir ->
-                                    controller.dropEntriesInto(sourcePaths, targetDir, cut = true)
                                 },
                                 selectionMode = state.selectionMode,
                                 selectedPaths = state.selectedPaths,

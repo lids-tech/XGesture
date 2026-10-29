@@ -3,12 +3,11 @@ package com.slideindex.app.overlay.filebrowser
 import android.content.ClipData
 import android.graphics.Bitmap
 import android.util.Log
-import android.view.View
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -77,9 +76,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -89,10 +85,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.view.drawToBitmap
 import com.slideindex.app.R
+import com.slideindex.app.clipboard.ClipboardDragShareFallback
+import com.slideindex.app.overlay.history.HistoryDragPreview
+import com.slideindex.app.overlay.history.HistoryEntryDragHelper
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
-
-internal data class FileBrowserDragPayload(val paths: List<String>)
 
 @Composable
 internal fun FileBrowserListContent(
@@ -102,7 +99,6 @@ internal fun FileBrowserListContent(
     listState: LazyListState,
     onEntryClick: (FileBrowserEntry) -> Unit,
     onEntryLongClick: (FileBrowserEntry) -> Unit,
-    onDropEntries: (sourcePaths: List<String>, targetDir: String) -> Unit = { _, _ -> },
     selectionMode: Boolean = false,
     selectedPaths: Set<String> = emptySet(),
     access: FileBrowserAccessInfo? = null,
@@ -145,7 +141,6 @@ internal fun FileBrowserListContent(
                     access = access,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
-                    onDropEntries = onDropEntries,
                     dragPaths = if (selectionMode && entry.path in selectedPaths) {
                         selectedPaths.toList()
                     } else {
@@ -167,7 +162,6 @@ private fun FileBrowserEntryRow(
     access: FileBrowserAccessInfo?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onDropEntries: (List<String>, String) -> Unit,
     dragPaths: List<String>,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
@@ -176,36 +170,6 @@ private fun FileBrowserEntryRow(
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
     var rowBounds by remember { mutableStateOf(Rect.Zero) }
-    var dragHover by remember { mutableStateOf(false) }
-    val dragTarget = remember(entry.path, isFolder, onDropEntries) {
-        object : DragAndDropTarget {
-            override fun onDrop(event: DragAndDropEvent): Boolean {
-                val payload = event.toAndroidDragEvent().localState as? FileBrowserDragPayload
-                Log.d("FileBrowserDrag", "drop target=${entry.path} source=${payload?.paths}")
-                if (!isFolder || payload == null) return false
-                val paths = payload.paths.filterNot { it == entry.path }
-                if (paths.isEmpty()) return false
-                dragHover = false
-                onDropEntries(paths, entry.path)
-                return true
-            }
-
-            override fun onEntered(event: DragAndDropEvent) {
-                val payload = event.toAndroidDragEvent().localState as? FileBrowserDragPayload
-                if (isFolder && payload != null && payload.paths.none { it == entry.path }) {
-                    dragHover = true
-                }
-            }
-
-            override fun onExited(event: DragAndDropEvent) {
-                dragHover = false
-            }
-
-            override fun onEnded(event: DragAndDropEvent) {
-                dragHover = false
-            }
-        }
-    }
     val dragClip = remember(dragPaths) {
         val uris = dragPaths.mapNotNull { path ->
             runCatching {
@@ -229,14 +193,10 @@ private fun FileBrowserEntryRow(
             }
         }
     }
-    val dragPayload = remember(dragPaths) {
-        FileBrowserDragPayload(dragPaths.distinct())
-    }
     val latestOnClick by rememberUpdatedState(onClick)
     val latestOnLongClick by rememberUpdatedState(onLongClick)
     val latestDragPaths by rememberUpdatedState(dragPaths)
     val latestDragClip by rememberUpdatedState(dragClip)
-    val latestDragPayload by rememberUpdatedState(dragPayload)
     val tint = if (isFolder) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -266,17 +226,11 @@ private fun FileBrowserEntryRow(
                 .fillMaxWidth()
                 .onGloballyPositioned { rowBounds = it.boundsInRoot() }
                 .background(
-                    when {
-                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                        dragHover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                        else -> Color.Transparent
+                    if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                    } else {
+                        Color.Transparent
                     },
-                )
-                .dragAndDropTarget(
-                    shouldStartDragAndDrop = { event ->
-                        isFolder && event.toAndroidDragEvent().localState is FileBrowserDragPayload
-                    },
-                    target = dragTarget,
                 )
                 .pointerInput(entry.path) {
                     awaitEachGesture {
@@ -316,7 +270,6 @@ private fun FileBrowserEntryRow(
                         }.getOrNull()
                         val lockedPaths = latestDragPaths
                         val lockedClip = latestDragClip
-                        val lockedPayload = latestDragPayload
                         latestOnLongClick()
                         // 菜单出现后不松手，继续按住到第二个阈值才进入拖拽。
                         val released = withTimeoutOrNull(420L) {
@@ -333,17 +286,39 @@ private fun FileBrowserEntryRow(
                         if (released != null) return@awaitEachGesture
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (rowSnapshot != null) {
-                            val started = view.startDragAndDrop(
-                                lockedClip,
-                                FileBrowserDragShadow(
+                            val started = HistoryEntryDragHelper.startDrag(
+                                view = view,
+                                clipData = lockedClip,
+                                preview = HistoryDragPreview(),
+                                dragShadow = FileBrowserDragShadow(
                                     source = rowSnapshot,
                                     touchX = down.position.x,
                                     touchY = down.position.y,
                                     count = lockedPaths.size,
                                 ),
-                                lockedPayload,
-                                View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
+                                onDragStart = { FileBrowserOverlayWindow.suspendForFileDrag() },
+                                onDragEnd = { FileBrowserOverlayWindow.resumeFromFileDrag() },
+                                onDropRejected = {
+                                    if (ClipboardDragShareFallback.hasShareableContent(lockedClip) &&
+                                        !ClipboardDragShareFallback.shareToForegroundHost(context, lockedClip)
+                                    ) {
+                                        Toast.makeText(
+                                            context,
+                                            R.string.history_drag_unsupported,
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                },
                             )
+                            if (!started &&
+                                !ClipboardDragShareFallback.shareToForegroundHost(context, lockedClip)
+                            ) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.history_drag_unsupported,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
                             Log.d(
                                 "FileBrowserDrag",
                                 "start ${entry.path} started=$started count=${lockedPaths.size} paths=$lockedPaths",
