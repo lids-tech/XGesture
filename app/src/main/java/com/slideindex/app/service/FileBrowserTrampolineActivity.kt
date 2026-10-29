@@ -64,7 +64,14 @@ class FileBrowserTrampolineActivity : ComponentActivity() {
             val shown = runCatching {
                 FileBrowserOverlayWindow.show(this@FileBrowserTrampolineActivity, settings, path)
             }.getOrDefault(false)
-            if (!shown) toast(R.string.shortcut_panel_open_failed)
+            if (!shown) {
+                if (!FileBrowserOverlayWindow.isServiceReady()) {
+                    toast(R.string.gesture_action_stash_panel_permission)
+                    startActivity(PermissionHelper.accessibilitySettingsIntent())
+                } else {
+                    toast(R.string.shortcut_panel_open_failed)
+                }
+            }
             finishTransparent()
         }
     }
