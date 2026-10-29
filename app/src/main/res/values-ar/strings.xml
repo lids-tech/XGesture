@@ -249,6 +249,10 @@
     <string name="message_style_side_bubble">فقاعة جانبية</string>
     <string name="message_style_edge_card">بطاقة الحافة</string>
     <string name="message_style_edge_card_max_lines">عدد أسطر المحتوى</string>
+    <string name="message_style_edge_card_keep_across_lock">الاحتفاظ عند القفل</string>
+    <string name="message_style_edge_card_keep_across_lock_desc">إعادة إظهار البطاقات بعد فتح القفل</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done">الطي بعد التمرير</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">تُطوى الرسائل الطويلة بعد التمرير إلى النهاية، بغض النظر عن مدة الطي التلقائي</string>
     <string name="message_style_edge_card_desc">بطاقة واحدة ملتصقة بحافة الشاشة: شبه شفافة تُظهر الصورة الرمزية فقط، وتتوسع عند وصول رسالة جديدة؛ اسحب لليمين للطي، ولليسار للتوسيع، وللأعلى أو الأسفل للإخفاء</string>
     <string name="message_style_edge_card_opacity">شفافية الحالة المطوية</string>
     <string name="message_style_edge_card_auto_collapse">الطي التلقائي</string>

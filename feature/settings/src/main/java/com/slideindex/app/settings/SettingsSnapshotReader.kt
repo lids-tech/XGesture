@@ -1170,6 +1170,11 @@ internal object SettingsSnapshotReader {
             ),
             cNoticeYFraction = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_Y_FRACTION]
                 ?: base.cNoticeYFraction,
+            edgeCardKeepAcrossLock = prefs[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_KEEP_ACROSS_LOCK]
+                ?: base.edgeCardKeepAcrossLock,
+            edgeCardCollapseWhenScrollDone =
+                prefs[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_COLLAPSE_WHEN_SCROLL_DONE]
+                    ?: base.edgeCardCollapseWhenScrollDone,
             cNoticeEdgeMarginDp = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_EDGE_MARGIN_DP]
                 ?: base.cNoticeEdgeMarginDp,
             cNoticeDimDelayMs = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_DIM_DELAY_MS]

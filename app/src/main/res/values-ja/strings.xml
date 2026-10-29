@@ -249,6 +249,10 @@
     <string name="message_style_side_bubble">サイドバブル</string>
     <string name="message_style_edge_card">エッジカード</string>
     <string name="message_style_edge_card_max_lines">表示行数</string>
+    <string name="message_style_edge_card_keep_across_lock">ロック画面でも保持</string>
+    <string name="message_style_edge_card_keep_across_lock_desc">ロック解除後にカードを再表示します</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done">最後まで表示したら折りたたむ</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">長いメッセージは最後までスクロールしてから折りたたみます（上の時間設定は無視）</string>
     <string name="message_style_edge_card_desc">画面端に貼り付く1枚のカード。通常は半透明でアバターのみ表示し、新着で展開。右スワイプで折りたたみ、左スワイプで展開、上下スワイプで消去</string>
     <string name="message_style_edge_card_opacity">折りたたみ時の不透明度</string>
     <string name="message_style_edge_card_auto_collapse">自動で折りたたむ</string>

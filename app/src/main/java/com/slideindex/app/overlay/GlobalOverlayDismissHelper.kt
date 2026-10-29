@@ -64,7 +64,14 @@ object GlobalOverlayDismissHelper {
             }
         }
         runCatching { CNoticeOverlayWindow.closePanel() }
-        runCatching { EdgeCardOverlayWindow.dismiss() }
+        runCatching {
+            if (lockScreenBoundary) {
+                // 贴边卡：按「锁屏后保留」设置决定清掉还是挂起，解锁后补显。
+                EdgeCardOverlayWindow.handleLockScreenBoundary()
+            } else {
+                EdgeCardOverlayWindow.dismiss()
+            }
+        }
         runCatching { MessageReplyOverlayWindow.dismiss() }
         runCatching { ForegroundActivityInspectorOverlayWindow.dismiss() }
         runCatching { VolumePanelOverlayWindow.dismiss() }

@@ -1154,6 +1154,10 @@ class SettingsRepository @Inject constructor(
         message.setMessageEdgeCardAutoCollapseMs(collapseMs)
     suspend fun setMessageEdgeCardHorizontalEdge(edge: String) =
         message.setMessageEdgeCardHorizontalEdge(edge)
+    suspend fun setMessageEdgeCardKeepAcrossLock(keep: Boolean) =
+        message.setMessageEdgeCardKeepAcrossLock(keep)
+    suspend fun setMessageEdgeCardCollapseWhenScrollDone(collapse: Boolean) =
+        message.setMessageEdgeCardCollapseWhenScrollDone(collapse)
     suspend fun setMessageEdgeCardYFraction(fraction: Float) =
         message.setMessageEdgeCardYFraction(fraction)
     suspend fun setMessageEdgeCardMaxCount(count: Int) = message.setMessageEdgeCardMaxCount(count)

@@ -257,6 +257,10 @@
     <string name="message_style_edge_card_auto_collapse">Auto-collapse</string>
     <string name="message_style_edge_card_max_count">Cards shown at once</string>
     <string name="message_style_edge_card_max_lines">Content lines</string>
+    <string name="message_style_edge_card_keep_across_lock">Keep across lock</string>
+    <string name="message_style_edge_card_keep_across_lock_desc">Show cards again after unlocking</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done">Collapse after scrolling</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">Long messages collapse once they scroll to the end, ignoring the auto-collapse delay</string>
     <string name="message_style_edge_card_auto_collapse_off">Never</string>
     <string name="message_style_edge_card_position">Card position</string>
     <string name="message_style_edge_card_position_hint">Choose left or right edge, then adjust vertical position</string>
