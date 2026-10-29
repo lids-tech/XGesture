@@ -177,6 +177,7 @@ private suspend fun loadBitmap(
 
 private fun shareBitmap(context: Context, bitmap: Bitmap) {
     Log.d("FileBrowserShare", "shareBitmap start")
+    Toast.makeText(context, "分享中…", Toast.LENGTH_SHORT).show()
     try {
         val dir = File(context.cacheDir, "filebrowser").apply { mkdirs() }
         val file = File(dir, "share_${System.currentTimeMillis()}.png")

@@ -82,6 +82,8 @@ internal object FileBrowserOverlayWindow {
     val isShowing: Boolean
         get() = host.isAttached && session?.visible?.value == true
 
+    fun isServiceReady(): Boolean = host.isAttached
+
     fun show(
         context: Context,
         settings: AppSettings,
