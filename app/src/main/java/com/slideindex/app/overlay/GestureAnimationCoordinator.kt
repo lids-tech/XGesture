@@ -23,10 +23,7 @@ import com.slideindex.app.settings.actionFor
 
 import kotlin.math.abs
 
-
-
 class GestureAnimationCoordinator(
-
     private val side: PanelSide,
 
     private val gestureSessionProvider: () -> GestureSession,
@@ -49,6 +46,7 @@ class GestureAnimationCoordinator(
     private var pendingDownRawY = 0f
 
     private var animationStarted = false
+
 
 
 
@@ -91,6 +89,8 @@ class GestureAnimationCoordinator(
         }
         androidBack.hide()
         overlay.bringToFront()
+        // 预热：让浮层在按下这一帧就完成首次 composition，第一次 MOVE 才能立刻 onDragStart。
+        overlay.prepareForGesture()
     }
 
     fun onTouchMove(rawX: Float, rawY: Float) {
@@ -174,6 +174,7 @@ class GestureAnimationCoordinator(
         overlay.bringToFront()
 
         state.onDragStart(pendingDownRawX, pendingDownRawY)
+
 
     }
 
