@@ -372,8 +372,8 @@ internal fun FileBrowserPanel(
                                     focusManager.clearFocus()
                                     controller.enterSelection(entry)
                                 },
-                                onDropEntry = { sourcePath, targetDir ->
-                                    controller.dropEntryInto(sourcePath, targetDir, cut = true)
+                                onDropEntries = { sourcePaths, targetDir ->
+                                    controller.dropEntriesInto(sourcePaths, targetDir, cut = true)
                                 },
                                 onDragStart = {
                                     controller.exitSelection()
@@ -391,6 +391,14 @@ internal fun FileBrowserPanel(
                                 count = state.selectedPaths.size,
                                 onCopy = { controller.copySelection(cut = false) },
                                 onMove = { controller.copySelection(cut = true) },
+                                onShare = {
+                                    val paths = state.selectedPaths.toList()
+                                    if (paths.isNotEmpty()) {
+                                        actionScope.launch {
+                                            shareFileBrowserPaths(context, paths, state.access)
+                                        }
+                                    }
+                                },
                                 onDelete = { showBatchDelete = true },
                                 onDetails = if (state.selectedPaths.size == 1) {
                                     {
@@ -1614,6 +1622,7 @@ private fun FileBrowserSelectionBar(
     count: Int,
     onCopy: () -> Unit,
     onMove: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit,
     onDetails: (() -> Unit)?,
     onCancel: () -> Unit,
@@ -1635,6 +1644,9 @@ private fun FileBrowserSelectionBar(
         }
         TextButton(onClick = onMove) {
             Text(stringResource(R.string.file_browser_move))
+        }
+        TextButton(onClick = onShare) {
+            Text(stringResource(R.string.file_browser_share))
         }
         if (onDetails != null) {
             TextButton(onClick = onDetails) {

@@ -63,12 +63,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -87,6 +90,8 @@ import com.slideindex.app.R
 import java.io.File
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal data class FileBrowserDragPayload(val paths: List<String>)
+
 @Composable
 internal fun FileBrowserListContent(
     state: FileBrowserUiState,
@@ -95,7 +100,7 @@ internal fun FileBrowserListContent(
     listState: LazyListState,
     onEntryClick: (FileBrowserEntry) -> Unit,
     onEntryLongClick: (FileBrowserEntry) -> Unit,
-    onDropEntry: (sourcePath: String, targetDir: String) -> Unit = { _, _ -> },
+    onDropEntries: (sourcePaths: List<String>, targetDir: String) -> Unit = { _, _ -> },
     onDragStart: () -> Unit = {},
     selectionMode: Boolean = false,
     selectedPaths: Set<String> = emptySet(),
@@ -138,8 +143,13 @@ internal fun FileBrowserListContent(
                     access = access,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
-                    onDropEntry = onDropEntry,
+                    onDropEntries = onDropEntries,
                     onDragStart = onDragStart,
+                    dragPaths = if (selectionMode && entry.path in selectedPaths) {
+                        selectedPaths.toList()
+                    } else {
+                        listOf(entry.path)
+                    },
                 )
             }
         }
@@ -156,29 +166,35 @@ private fun FileBrowserEntryRow(
     access: FileBrowserAccessInfo?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onDropEntry: (String, String) -> Unit,
+    onDropEntries: (List<String>, String) -> Unit,
     onDragStart: () -> Unit,
+    dragPaths: List<String>,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
     val isFolder = entry.kind == FileEntryKind.DIRECTORY
     val context = LocalContext.current
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
+    var rowBounds by remember { mutableStateOf(Rect.Zero) }
     var dragHover by remember { mutableStateOf(false) }
-    val dragTarget = remember(entry.path, isFolder, onDropEntry) {
+    val dragTarget = remember(entry.path, isFolder, onDropEntries) {
         object : DragAndDropTarget {
             override fun onDrop(event: DragAndDropEvent): Boolean {
-                val source = event.toAndroidDragEvent().localState as? FileBrowserEntry
-                Log.d("FileBrowserDrag", "drop target=${entry.path} source=${source?.path}")
-                if (!isFolder || source == null || source.path == entry.path) return false
+                val payload = event.toAndroidDragEvent().localState as? FileBrowserDragPayload
+                Log.d("FileBrowserDrag", "drop target=${entry.path} source=${payload?.paths}")
+                if (!isFolder || payload == null) return false
+                val paths = payload.paths.filterNot { it == entry.path }
+                if (paths.isEmpty()) return false
                 dragHover = false
-                onDropEntry(source.path, entry.path)
+                onDropEntries(paths, entry.path)
                 return true
             }
 
             override fun onEntered(event: DragAndDropEvent) {
-                val source = event.toAndroidDragEvent().localState as? FileBrowserEntry
-                if (isFolder && source != null && source.path != entry.path) dragHover = true
+                val payload = event.toAndroidDragEvent().localState as? FileBrowserDragPayload
+                if (isFolder && payload != null && payload.paths.none { it == entry.path }) {
+                    dragHover = true
+                }
             }
 
             override fun onExited(event: DragAndDropEvent) {
@@ -190,25 +206,31 @@ private fun FileBrowserEntryRow(
             }
         }
     }
-    val dragClip = remember(entry.path) {
-        runCatching {
-            val file = File(entry.path)
-            if (file.isFile && file.canRead()) {
-                ClipData.newUri(
-                    context.contentResolver,
-                    entry.name,
+    val dragClip = remember(dragPaths) {
+        val uris = dragPaths.mapNotNull { path ->
+            runCatching {
+                val file = File(path)
+                if (file.isFile && file.canRead()) {
                     FileProvider.getUriForFile(
                         context,
                         "${context.packageName}.fileprovider",
                         file,
-                    ),
-                )
-            } else {
-                ClipData.newPlainText(entry.name, entry.path)
-            }
-        }.getOrElse {
-            ClipData.newPlainText(entry.name, entry.path)
+                    )
+                } else {
+                    null
+                }
+            }.getOrNull()
         }
+        if (uris.isEmpty()) {
+            ClipData.newPlainText(entry.name, entry.path)
+        } else {
+            ClipData.newUri(context.contentResolver, entry.name, uris.first()).apply {
+                uris.drop(1).forEach { uri -> addItem(ClipData.Item(uri)) }
+            }
+        }
+    }
+    val dragPayload = remember(dragPaths) {
+        FileBrowserDragPayload(dragPaths.distinct())
     }
     val tint = if (isFolder) {
         MaterialTheme.colorScheme.primary
@@ -237,16 +259,17 @@ private fun FileBrowserEntryRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .onGloballyPositioned { rowBounds = it.boundsInRoot() }
                 .background(
                     when {
                         selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                        dragHover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        dragHover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
                         else -> Color.Transparent
                     },
                 )
                 .dragAndDropTarget(
                     shouldStartDragAndDrop = { event ->
-                        isFolder && event.toAndroidDragEvent().localState is FileBrowserEntry
+                        isFolder && event.toAndroidDragEvent().localState is FileBrowserDragPayload
                     },
                     target = dragTarget,
                 )
@@ -276,33 +299,46 @@ private fun FileBrowserEntryRow(
                             return@awaitEachGesture
                         }
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val rowSnapshot = runCatching {
+                            val full = view.drawToBitmap()
+                            val left = rowBounds.left.toInt().coerceIn(0, full.width - 1)
+                            val top = rowBounds.top.toInt().coerceIn(0, full.height - 1)
+                            val width = rowBounds.width.toInt()
+                                .coerceIn(1, full.width - left)
+                            val height = rowBounds.height.toInt()
+                                .coerceIn(1, full.height - top)
+                            Bitmap.createBitmap(full, left, top, width, height)
+                        }.getOrNull()
                         onLongClick()
-                        var dragged = Offset.Zero
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            dragged += change.position - change.previousPosition
-                            if (dragged.getDistance() > viewConfiguration.touchSlop * 1.5f) {
+                        // 菜单出现后不松手，继续按住到第二个阈值才进入拖拽。
+                        val released = withTimeoutOrNull(420L) {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                    ?: return@withTimeoutOrNull true
+                                if (!change.pressed) return@withTimeoutOrNull true
                                 change.consume()
-                                val snapshot = runCatching { view.drawToBitmap() }.getOrNull()
-                                if (snapshot != null) {
-                                    val started = view.startDragAndDrop(
-                                        dragClip,
-                                        FileBrowserDragShadow(
-                                            source = snapshot,
-                                            touchX = down.position.x,
-                                            touchY = down.position.y,
-                                        ),
-                                        entry,
-                                        View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
-                                    )
-                                    Log.d("FileBrowserDrag", "start ${entry.path} started=$started")
-                                }
-                                onDragStart()
-                                break
                             }
+                            @Suppress("UNREACHABLE_CODE")
+                            true
                         }
+                        if (released != null) return@awaitEachGesture
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (rowSnapshot != null) {
+                            val started = view.startDragAndDrop(
+                                dragClip,
+                                FileBrowserDragShadow(
+                                    source = rowSnapshot,
+                                    touchX = down.position.x,
+                                    touchY = down.position.y,
+                                    count = dragPaths.size,
+                                ),
+                                dragPayload,
+                                View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
+                            )
+                            Log.d("FileBrowserDrag", "start ${entry.path} started=$started")
+                        }
+                        onDragStart()
                     }
                 }
                 .heightIn(min = 60.dp)
