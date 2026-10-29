@@ -104,6 +104,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -124,6 +125,7 @@ import com.slideindex.app.ui.theme.LocalAppDarkTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
@@ -231,17 +233,16 @@ internal fun FileBrowserPanel(
         }
     }
     var restoredKey by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.activeTabId, state.path, state.loading) {
-        if (!state.loading) {
-            val key = "${state.activeTabId}:${state.path}"
-            if (restoredKey != key) {
-                restoredKey = key
-                val (index, offset) = controller.scrollForActiveTab()
-                runCatching { listState.scrollToItem(index, offset) }
-            }
+    LaunchedEffect(state.activeTabId, state.path) {
+        val key = "${state.activeTabId}:${state.path}"
+        if (restoredKey != key) {
+            snapshotFlow {
+                state.loading to listState.layoutInfo.totalItemsCount
+            }.first { (loading, total) -> !loading && total > 0 }
+            val (index, offset) = controller.scrollForActiveTab()
+            runCatching { listState.scrollToItem(index, offset) }
+            restoredKey = key
         }
-    }
-    LaunchedEffect(listState, state.activeTabId, state.path) {
         snapshotFlow {
             if (state.loading) null else {
                 listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
@@ -264,6 +265,20 @@ internal fun FileBrowserPanel(
     var showMenu by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
     var imagePreview by remember { mutableStateOf<FileBrowserEntry?>(null) }
+    var selectionBarHeightPx by remember { mutableStateOf(0) }
+    val selectionInset = if (state.selectionMode) {
+        with(density) { selectionBarHeightPx.toDp() }
+    } else {
+        0.dp
+    }
+    LaunchedEffect(state.selectionMode, selectionBarHeightPx, filtered) {
+        if (state.selectionMode && selectionBarHeightPx > 0) {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            if (lastVisible != null && lastVisible.index >= filtered.lastIndex - 1) {
+                runCatching { listState.scrollBy(selectionBarHeightPx.toFloat()) }
+            }
+        }
+    }
     var exportBusy by remember { mutableStateOf(false) }
     var exportFailed by remember { mutableStateOf(false) }
     var nameTarget by remember { mutableStateOf<FileBrowserNameTarget?>(null) }
@@ -332,7 +347,16 @@ internal fun FileBrowserPanel(
                     .height(cardHeight),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .dragAndDropTarget(
+                                shouldStartDragAndDrop = { event ->
+                                    event.toAndroidDragEvent().localState is FileBrowserDragPayload
+                                },
+                                target = autoScrollTarget,
+                            ),
+                    ) {
                         FileBrowserHeader(
                             access = state.access,
                             onRefresh = controller::refresh,
@@ -420,13 +444,7 @@ internal fun FileBrowserPanel(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
-                                .onGloballyPositioned { listBounds = it.boundsInWindow() }
-                                .dragAndDropTarget(
-                                    shouldStartDragAndDrop = { event ->
-                                        event.toAndroidDragEvent().localState is FileBrowserDragPayload
-                                    },
-                                    target = autoScrollTarget,
-                                ),
+                                .onGloballyPositioned { listBounds = it.boundsInWindow() },
                         ) {
                             FileBrowserListContent(
                                 state = state,
@@ -435,7 +453,7 @@ internal fun FileBrowserPanel(
                                 listState = listState,
                                 onEntryClick = { entry ->
                                     focusManager.clearFocus()
-                                    if (state.selectionMode) {
+                                    if (state.selectionMode || state.selectedPaths.isNotEmpty()) {
                                         controller.toggleSelection(entry.path)
                                     } else {
                                         when (entry.kind) {
@@ -462,6 +480,7 @@ internal fun FileBrowserPanel(
                                 onRetry = controller::refresh,
                                 onRequestAllFiles = onRequestAllFiles,
                                 onRequestShizuku = onRequestShizuku,
+                                bottomInset = selectionInset,
                             )
                         }
                         if (state.selectionMode) {
@@ -488,6 +507,9 @@ internal fun FileBrowserPanel(
                                     null
                                 },
                                 onCancel = controller::exitSelection,
+                                modifier = Modifier.onSizeChanged {
+                                    selectionBarHeightPx = it.height
+                                },
                             )
                         }
                         if (!state.selectionMode && state.clipboard != null) {
@@ -1704,9 +1726,10 @@ private fun FileBrowserSelectionBar(
     onDelete: () -> Unit,
     onDetails: (() -> Unit)?,
     onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
