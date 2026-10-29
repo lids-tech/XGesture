@@ -872,6 +872,18 @@ class OverlaySettingsMutator @Inject constructor(
         it[SettingsPreferenceKeys.FLOAT_BALL_OPACITY] = value.coerceIn(0f, 1f)
     }
 
+    suspend fun setFloatBallHideWhenIdle(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] = enabled
+    }
+
+    suspend fun setFloatBallIdleOpacity(value: Float) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] = value.coerceIn(0f, 1f)
+    }
+
+    suspend fun setFloatBallIdleDelayMs(value: Int) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_DELAY_MS] = value.coerceIn(0, 10_000)
+    }
+
     suspend fun setFloatBallPosition(customCenterXFraction: Float, yFraction: Float) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_POSITION_X_FRACTION] =
             FloatBallPositionFractions.coerceCustomCenterX(customCenterXFraction)

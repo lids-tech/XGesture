@@ -548,6 +548,27 @@ class ExtensionSettingsViewModel @Inject constructor(
         block = { settingsRepository.setFloatBallOpacity(opacity) },
     )
 
+    fun setFloatBallHideWhenIdle(enabled: Boolean) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallHideWhenIdle = enabled))
+        },
+        block = { settingsRepository.setFloatBallHideWhenIdle(enabled) },
+    )
+
+    fun setFloatBallIdleOpacity(opacity: Float) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallIdleOpacity = opacity.coerceIn(0f, 1f)))
+        },
+        block = { settingsRepository.setFloatBallIdleOpacity(opacity) },
+    )
+
+    fun setFloatBallIdleDelayMs(delayMs: Int) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallIdleDelayMs = delayMs.coerceIn(0, 10_000)))
+        },
+        block = { settingsRepository.setFloatBallIdleDelayMs(delayMs) },
+    )
+
     fun setDefaultImageViewerPackage(packageName: String?) = launchSettingsWrite {
         settingsRepository.setDefaultImageViewerPackage(packageName)
     }

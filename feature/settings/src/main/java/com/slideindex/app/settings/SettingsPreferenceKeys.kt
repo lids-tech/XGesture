@@ -564,6 +564,10 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_SIZE_DP = floatPreferencesKey("float_ball_size_dp")
     val FLOAT_BALL_PICK_CROSS_ARM_DP = floatPreferencesKey("float_ball_pick_cross_arm_dp")
     val FLOAT_BALL_OPACITY = floatPreferencesKey("float_ball_opacity")
+    /** 闲置隐身：超过闲置判定时间后球按 idle opacity 绘制。 */
+    val FLOAT_BALL_HIDE_WHEN_IDLE = booleanPreferencesKey("float_ball_hide_when_idle")
+    val FLOAT_BALL_IDLE_OPACITY = floatPreferencesKey("float_ball_idle_opacity")
+    val FLOAT_BALL_IDLE_DELAY_MS = intPreferencesKey("float_ball_idle_delay_ms")
     val FLOAT_BALL_VISIBLE_FRACTION = floatPreferencesKey("float_ball_visible_fraction")
     val FLOAT_BALL_POSITION_X_FRACTION = floatPreferencesKey("float_ball_position_x_fraction")
     val FLOAT_BALL_POSITION_Y_FRACTION = floatPreferencesKey("float_ball_position_y_fraction")

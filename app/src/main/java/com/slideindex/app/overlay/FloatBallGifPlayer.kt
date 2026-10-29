@@ -85,6 +85,17 @@ internal class FloatBallGifPlayer(
         handler.post(tickRunnable)
     }
 
+    /**
+     * 从“完全透明 / 不可见”恢复时立刻补一拍。
+     *
+     * 隐藏期间 tick 会退化成每秒一次的探测；触摸显形后不等那 1 秒，直接唤醒。
+     */
+    fun wake() {
+        if (paused || sequence == null) return
+        handler.removeCallbacks(tickRunnable)
+        handler.post(tickRunnable)
+    }
+
     fun stop() {
         handler.removeCallbacks(tickRunnable)
         gifView?.setAnimating(false)

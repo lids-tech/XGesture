@@ -1783,6 +1783,11 @@
     <string name="float_ball_pick_cross_arm">حجم صليب الالتقاط</string>
     <string name="float_ball_pick_cross_arm_value">%1$.1f dp</string>
     <string name="float_ball_opacity">الشفافية</string>
+    <string name="float_ball_hide_when_idle">الإخفاء عند عدم النشاط</string>
+    <string name="float_ball_hide_when_idle_desc">بعد انتهاء مدة عدم النشاط دون لمس الكرة، تُرسم بشفافية عدم النشاط. لمس منطقة الكرة يعيد إظهارها، وتبقى الإيماءات تعمل أثناء الإخفاء.</string>
+    <string name="float_ball_idle_opacity">شفافية عدم النشاط</string>
+    <string name="float_ball_idle_delay">مدة عدم النشاط</string>
+    <string name="float_ball_idle_delay_value">%1$s ث</string>
     <string name="float_ball_pointer_speed">السرعة الأفقية لعلامة الجمع</string>
     <string name="float_ball_pointer_speed_vertical">السرعة العمودية لعلامة الجمع</string>
     <string name="float_ball_pick_offset">تباعد علامة الجمع</string>

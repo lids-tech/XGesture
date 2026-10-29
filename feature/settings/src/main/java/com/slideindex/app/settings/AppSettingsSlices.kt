@@ -222,6 +222,16 @@ data class FloatBallSettings(
     /** Pick cross arm length from center to tip in dp. */
     val floatBallPickCrossArmDp: Float = 7.5f,
     val floatBallOpacity: Float = 0.88f,
+    /**
+     * 闲置隐身：超过 [floatBallIdleDelayMs] 没有触摸球区后，球改按 [floatBallIdleOpacity] 绘制。
+     *
+     * 只说"看不见"，不影响命中：隐身期间球窗照常接收单击/滑动/长按。
+     */
+    val floatBallHideWhenIdle: Boolean = false,
+    /** 闲置隐身生效时球的不透明度（0–1，0 = 完全看不见）。 */
+    val floatBallIdleOpacity: Float = 0f,
+    /** 距最后一次触摸多久算闲置（ms，0 = 松手后立即隐身）。 */
+    val floatBallIdleDelayMs: Int = 3000,
     /** Fraction of ball width visible on screen when docked to an edge (0.5–1). */
     val floatBallVisibleFraction: Float = 1f,
     /** CUSTOM mode only: ball center X as fraction of screen width. */
