@@ -73,7 +73,7 @@ internal class FileBrowserController(
     private var searchJob: Job? = null
     private var operationJob: Job? = null
     private var nextTabId: Long = 1L
-    private val scrollPositions = mutableMapOf<Long, Pair<Int, Int>>()
+    private val scrollPositions = mutableMapOf<Pair<Long, String>, Pair<Int, Int>>()
 
     val internalRoot: String get() = dataSource.internalRoot
 
@@ -177,7 +177,6 @@ internal class FileBrowserController(
                 it
             }
         }
-        scrollPositions.remove(state.activeTabId)
         state = state.copy(
             path = normalized,
             entries = emptyList(),
@@ -284,7 +283,7 @@ internal class FileBrowserController(
     }
 
     private fun saveActiveTab(): List<FileBrowserTab> {
-        val scroll = scrollPositions[state.activeTabId]
+        val scroll = scrollPositions[state.activeTabId to state.path]
         return state.tabs.map {
             if (it.id == state.activeTabId) {
                 it.copy(
@@ -308,13 +307,17 @@ internal class FileBrowserController(
     }
 
     fun saveScroll(index: Int, offset: Int) {
-        scrollPositions[state.activeTabId] = index to offset
+        scrollPositions[state.activeTabId to state.path] = index to offset
     }
 
     fun scrollForActiveTab(): Pair<Int, Int> {
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
-        return scrollPositions[state.activeTabId]
-            ?: (tab?.scrollIndex ?: 0) to (tab?.scrollOffset ?: 0)
+        return scrollPositions[state.activeTabId to state.path]
+            ?: if (tab?.path == state.path) {
+                (tab.scrollIndex) to (tab.scrollOffset)
+            } else {
+                0 to 0
+            }
     }
 
     fun refresh() {

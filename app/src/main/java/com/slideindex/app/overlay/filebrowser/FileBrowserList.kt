@@ -101,7 +101,6 @@ internal fun FileBrowserListContent(
     onEntryClick: (FileBrowserEntry) -> Unit,
     onEntryLongClick: (FileBrowserEntry) -> Unit,
     onDropEntries: (sourcePaths: List<String>, targetDir: String) -> Unit = { _, _ -> },
-    onDragStart: () -> Unit = {},
     selectionMode: Boolean = false,
     selectedPaths: Set<String> = emptySet(),
     access: FileBrowserAccessInfo? = null,
@@ -144,7 +143,6 @@ internal fun FileBrowserListContent(
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
                     onDropEntries = onDropEntries,
-                    onDragStart = onDragStart,
                     dragPaths = if (selectionMode && entry.path in selectedPaths) {
                         selectedPaths.toList()
                     } else {
@@ -167,7 +165,6 @@ private fun FileBrowserEntryRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDropEntries: (List<String>, String) -> Unit,
-    onDragStart: () -> Unit,
     dragPaths: List<String>,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
@@ -338,7 +335,6 @@ private fun FileBrowserEntryRow(
                             )
                             Log.d("FileBrowserDrag", "start ${entry.path} started=$started")
                         }
-                        onDragStart()
                     }
                 }
                 .heightIn(min = 60.dp)

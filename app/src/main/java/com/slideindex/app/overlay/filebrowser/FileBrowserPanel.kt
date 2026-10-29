@@ -18,7 +18,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -57,10 +59,16 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -86,10 +94,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
@@ -108,7 +121,10 @@ import com.slideindex.app.R
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.ui.miuix.MiuixSearchField
 import com.slideindex.app.ui.theme.LocalAppDarkTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbBarDefaults
@@ -140,6 +156,59 @@ internal fun FileBrowserPanel(
         )
     }
     val listState = rememberLazyListState()
+    var listBounds by remember { mutableStateOf(Rect.Zero) }
+    var autoScrollDelta by remember { mutableStateOf(0f) }
+    var autoScrollJob by remember { mutableStateOf<Job?>(null) }
+    val autoScrollScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val edgePx = with(density) { 56.dp.toPx() }
+    fun stopAutoScroll() {
+        autoScrollJob?.cancel()
+        autoScrollJob = null
+        autoScrollDelta = 0f
+    }
+    fun updateAutoScroll(delta: Float) {
+        autoScrollDelta = delta
+        if (delta == 0f) {
+            stopAutoScroll()
+            return
+        }
+        if (autoScrollJob?.isActive == true) return
+        autoScrollJob = autoScrollScope.launch {
+            while (isActive && autoScrollDelta != 0f) {
+                listState.scrollBy(autoScrollDelta)
+                delay(16L)
+            }
+        }
+    }
+    val autoScrollTarget = remember {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                stopAutoScroll()
+                return false
+            }
+
+            override fun onMoved(event: DragAndDropEvent) {
+                if (listBounds.height <= 0f) return
+                val y = event.toAndroidDragEvent().y - listBounds.top
+                val delta = when {
+                    y < edgePx -> -(((edgePx - y) / edgePx) * 14f + 3f)
+                    y > listBounds.height - edgePx ->
+                        (((y - (listBounds.height - edgePx)) / edgePx) * 14f + 3f)
+                    else -> 0f
+                }
+                updateAutoScroll(delta)
+            }
+
+            override fun onExited(event: DragAndDropEvent) {
+                stopAutoScroll()
+            }
+
+            override fun onEnded(event: DragAndDropEvent) {
+                stopAutoScroll()
+            }
+        }
+    }
     var quickBarVisible by remember { mutableStateOf(true) }
     LaunchedEffect(state.activeTabId) {
         quickBarVisible = true
@@ -161,18 +230,23 @@ internal fun FileBrowserPanel(
             last = current
         }
     }
-    var restoredTabId by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(state.activeTabId, state.loading) {
-        if (!state.loading && restoredTabId != state.activeTabId) {
-            restoredTabId = state.activeTabId
-            val (index, offset) = controller.scrollForActiveTab()
-            runCatching { listState.scrollToItem(index, offset) }
+    var restoredKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.activeTabId, state.path, state.loading) {
+        if (!state.loading) {
+            val key = "${state.activeTabId}:${state.path}"
+            if (restoredKey != key) {
+                restoredKey = key
+                val (index, offset) = controller.scrollForActiveTab()
+                runCatching { listState.scrollToItem(index, offset) }
+            }
         }
     }
-    LaunchedEffect(listState, state.activeTabId) {
+    LaunchedEffect(listState, state.activeTabId, state.path) {
         snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
+            if (state.loading) null else {
+                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            }
+        }.filterNotNull().collect { (index, offset) ->
             controller.saveScroll(index, offset)
         }
     }
@@ -345,7 +419,14 @@ internal fun FileBrowserPanel(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxWidth(),
+                                .fillMaxWidth()
+                                .onGloballyPositioned { listBounds = it.boundsInWindow() }
+                                .dragAndDropTarget(
+                                    shouldStartDragAndDrop = { event ->
+                                        event.toAndroidDragEvent().localState is FileBrowserDragPayload
+                                    },
+                                    target = autoScrollTarget,
+                                ),
                         ) {
                             FileBrowserListContent(
                                 state = state,
@@ -374,9 +455,6 @@ internal fun FileBrowserPanel(
                                 },
                                 onDropEntries = { sourcePaths, targetDir ->
                                     controller.dropEntriesInto(sourcePaths, targetDir, cut = true)
-                                },
-                                onDragStart = {
-                                    controller.exitSelection()
                                 },
                                 selectionMode = state.selectionMode,
                                 selectedPaths = state.selectedPaths,
@@ -1630,37 +1708,62 @@ private fun FileBrowserSelectionBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.file_browser_selected_count, count),
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.weight(1f),
+            text = count.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 8.dp),
         )
-        TextButton(onClick = onCopy) {
-            Text(stringResource(R.string.file_browser_copy))
-        }
-        TextButton(onClick = onMove) {
-            Text(stringResource(R.string.file_browser_move))
-        }
-        TextButton(onClick = onShare) {
-            Text(stringResource(R.string.file_browser_share))
-        }
-        if (onDetails != null) {
-            TextButton(onClick = onDetails) {
-                Text(stringResource(R.string.file_browser_selection_details))
-            }
-        }
-        TextButton(onClick = onDelete) {
-            Text(
-                text = stringResource(R.string.file_browser_delete),
-                color = MaterialTheme.colorScheme.error,
+        IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = stringResource(R.string.file_browser_copy),
+                modifier = Modifier.size(20.dp),
             )
         }
-        TextButton(onClick = onCancel) {
-            Text(stringResource(R.string.file_browser_cancel))
+        IconButton(onClick = onMove, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.DriveFileMove,
+                contentDescription = stringResource(R.string.file_browser_move),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        IconButton(onClick = onShare, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Share,
+                contentDescription = stringResource(R.string.file_browser_share),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        if (onDetails != null) {
+            IconButton(onClick = onDetails, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = stringResource(R.string.file_browser_selection_details),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Delete,
+                contentDescription = stringResource(R.string.file_browser_delete),
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Box(modifier = Modifier.weight(1f))
+        IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Close,
+                contentDescription = stringResource(R.string.file_browser_cancel),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
