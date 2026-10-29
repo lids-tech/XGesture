@@ -94,6 +94,15 @@ private const val DRAG_EXIT_SECONDARY_THRESHOLD_DP = 8f
 /** 拖动重排时，其它容器"依次让位"的位移时长（ms）。 */
 private const val DISPLACE_ANIM_MS = 160
 
+/**
+ * 编辑层顶部提示条 / 底部药丸条的占位高度（dp）。
+ *
+ * 矩形一级从锚点单向下铺：容器一多，末尾的「+」会滑到屏幕底部被药丸条盖住或直接出屏
+ * （真机反馈的"切矩形后加号消失、点空白占位没反应"）。布局用它把整组网格收进可视区。
+ */
+private const val EDITOR_TOP_INSET_DP = 56f
+private const val EDITOR_BOTTOM_INSET_DP = 88f
+
 private enum class WheelLevel { PRIMARY, SECONDARY }
 
 /**
@@ -156,6 +165,9 @@ fun QuickWheelEditorOverlay(
         .only(WindowInsetsSides.Top)
     // 拖动多远算"真的在拖"（超过它就从二级显示里退出）。
     val dragExitSecondaryPx = DRAG_EXIT_SECONDARY_THRESHOLD_DP * density
+    // 顶部提示条 / 底部药丸条占的高度：矩形网格的「+」必须留在它们之间（见常量注释）。
+    val editorTopBandPx = EDITOR_TOP_INSET_DP * density
+    val editorBottomBandPx = EDITOR_BOTTOM_INSET_DP * density
 
     val anchor = remember(
         wheel.primaryStyle,
@@ -188,6 +200,8 @@ fun QuickWheelEditorOverlay(
         screenWidthPx,
         screenHeightPx,
         overlayOrigin,
+        editorTopBandPx,
+        editorBottomBandPx,
     ) {
         buildQuickWheelLayout(
             wheel = wheel,
@@ -200,6 +214,9 @@ fun QuickWheelEditorOverlay(
             // 编辑层坐标是"本地坐标"（锚点已扣掉 overlayOrigin），二级求解必须用同一坐标系。
             screenOriginX = overlayOrigin.x,
             screenOriginY = overlayOrigin.y,
+            // 让出顶部提示条 / 底部药丸条：矩形网格整体收进可视带，末尾「+」不会被盖住 / 出屏。
+            topInsetPx = editorTopBandPx,
+            bottomInsetPx = editorBottomBandPx,
             // ⚠️ 一级的追加位**始终**要有（进入二级设置时也不能去掉），但与真实槽位的数量无关：
             // 渲染器按真实槽位取数据，取不到追加位索引就跳过，它由下面的 QuickWheelAddContainer
             // 单独画成「+」，位置必须始终稳定。
@@ -605,28 +622,44 @@ fun QuickWheelEditorOverlay(
             } else {
                 layout.primarySlots.firstOrNull { it.index == addIndex }
             }
-            if (addPlaced != null) {
-                QuickWheelAddContainer(
-                    sizePx = addPlaced.sizePx,
-                    cornerPx = addPlaced.cornerPx,
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                (addPlaced.centerX - addPlaced.sizePx / 2f).roundToInt(),
-                                (addPlaced.centerY - addPlaced.sizePx / 2f).roundToInt(),
-                            )
-                        }
-                        .clickable {
-                            onOpenSlot(
-                                if (editingSecondary) {
-                                    QuickWheelCodec.secondaryPath(expandedPrimary, addIndex)
-                                } else {
-                                    QuickWheelCodec.primaryPath(addIndex)
-                                },
-                            )
-                        },
-                )
-            }
+            // 兜底：布局算出的位置不在可视区（容器特别多、整组比屏幕还高）时，固定在底部药丸条
+            // 上方。「+」是唯一的新增入口，不能因为越界就彻底看不见 / 点不到。
+            val visibleWidthPx = (screenWidthPx - overlayOrigin.x).coerceAtLeast(1f)
+            val visibleHeightPx = (screenHeightPx - overlayOrigin.y).coerceAtLeast(1f)
+            val addStyle = if (editingSecondary) wheel.secondaryStyle else wheel.primaryStyle
+            val addSizePx = addPlaced?.sizePx ?: (addStyle.containerSizeDp * density)
+            val addCornerPx = addPlaced?.cornerPx ?: (addStyle.containerCornerDp * density)
+            val addCenter = addPlaced?.let { placed ->
+                val fits = placed.centerX - addSizePx / 2f >= 0f &&
+                    placed.centerX + addSizePx / 2f <= visibleWidthPx &&
+                    placed.centerY - addSizePx / 2f >= 0f &&
+                    placed.centerY + addSizePx / 2f <= visibleHeightPx - editorBottomBandPx
+                if (fits) Offset(placed.centerX, placed.centerY) else null
+            } ?: Offset(
+                x = visibleWidthPx / 2f,
+                y = (visibleHeightPx - editorBottomBandPx - addSizePx / 2f)
+                    .coerceAtLeast(addSizePx / 2f),
+            )
+            QuickWheelAddContainer(
+                sizePx = addSizePx,
+                cornerPx = addCornerPx,
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            (addCenter.x - addSizePx / 2f).roundToInt(),
+                            (addCenter.y - addSizePx / 2f).roundToInt(),
+                        )
+                    }
+                    .clickable {
+                        onOpenSlot(
+                            if (editingSecondary) {
+                                QuickWheelCodec.secondaryPath(expandedPrimary, addIndex)
+                            } else {
+                                QuickWheelCodec.primaryPath(addIndex)
+                            },
+                        )
+                    },
+            )
 
         }
 

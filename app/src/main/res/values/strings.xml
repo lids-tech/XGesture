@@ -3103,6 +3103,7 @@
     <string name="search_no_actions">No actions found</string>
     <string name="cancel">Cancel</string>
     <string name="screen_record_notification_saved">Screen recording saved to gallery</string>
+    <string name="screen_record_open_with">Open video</string>
     <string name="screen_capture_channel_name">Screen capture</string>
     <string name="screen_capture_notification_active">Screen capture ready</string>
     <string name="screen_capture_permission_required">Screen capture permission is required for regional screenshots</string>

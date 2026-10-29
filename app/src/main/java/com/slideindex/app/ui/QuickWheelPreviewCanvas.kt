@@ -85,10 +85,29 @@ fun buildQuickWheelLayout(
      * 选出的父容器格位，就会显示一组样本二级容器（圆形 6 个 / 矩形 2 行），参数一动即可见效果。
      */
     previewSecondarySlots: Int? = null,
+    /**
+     * 编辑层 / 预览顶部、底部要给别的 UI 让出的高度（px）。
+     *
+     * 矩形一级是**从锚点单向下铺**的：容器一多，最后一格（编辑层的「+」）就会滑到屏幕外
+     * 或底部药丸条底下。传入让位高度后，整组网格会被收进这条可视带里。
+     */
+    topInsetPx: Float = 0f,
+    bottomInsetPx: Float = 0f,
 ): QuickWheelLayout {
     val visible = wheel.slots
     val secondaryCount = previewSecondarySlots
         ?: (visible.getOrNull(expandedPrimaryIndex)?.subSlots?.size ?: 0)
+    // 矩形：把锚点往上收，保证整组网格（含末尾「+」）落在可视区内；圆形 / 二级不受影响。
+    val fittedAnchorY = fitRectPrimaryAnchorY(
+        wheel = wheel,
+        primaryCount = visible.size,
+        hasAppendAddSlot = appendPrimaryAddSlot,
+        anchorY = anchorY,
+        density = density,
+        visibleHeightPx = (screenHeightPx - screenOriginY).coerceAtLeast(1f),
+        topInsetPx = topInsetPx,
+        bottomInsetPx = bottomInsetPx,
+    )
     return QuickWheelLayoutEngine.buildLayout(
         primaryCount = visible.size,
         secondaryCount = secondaryCount,
@@ -98,7 +117,7 @@ fun buildQuickWheelLayout(
         primaryStyle = wheel.primaryStyle,
         secondaryStyle = wheel.secondaryStyle,
         anchorX = anchorX,
-        anchorY = anchorY,
+        anchorY = fittedAnchorY,
         density = density,
         screenWidthPx = screenWidthPx,
         // 二级按屏幕求解：一级仍按配置扇区渲染（WYSIWYG），二级与真机一致（锚点 = 父容器中心）。
@@ -111,6 +130,45 @@ fun buildQuickWheelLayout(
         appendPrimaryAddSlot = appendPrimaryAddSlot,
         appendSecondaryAddSlot = appendSecondaryAddSlot,
     )
+}
+
+/**
+ * 矩形一级网格的锚点纵向修正。
+ *
+ * 矩形第 0 行中心 = `anchorY + size/2 + gap`（见 [QuickWheelLayoutEngine.layoutRing] 的 CENTER_TOP），
+ * 之后逐行向下；容器一多，最后一格（编辑层末尾的「+」）就铺到屏幕外 / 底部药丸条底下，
+ * 表现成"加号消失、点空白占位没反应"。这里把锚点往上收，把整组网格收进
+ * `[topInsetPx, visibleHeightPx - bottomInsetPx]`；网格本身比可视带还高时退化为贴顶
+ * （编辑层另有固定位置的「+」兜底）。圆形 / 二级不经过这里。
+ */
+private fun fitRectPrimaryAnchorY(
+    wheel: QuickWheel,
+    primaryCount: Int,
+    hasAppendAddSlot: Boolean,
+    anchorY: Float,
+    density: Float,
+    visibleHeightPx: Float,
+    topInsetPx: Float,
+    bottomInsetPx: Float,
+): Float {
+    if (wheel.primaryShape != QuickWheelShape.RECT || density <= 0f) return anchorY
+    val style = QuickWheelLayoutEngine.normalize(wheel.primaryStyle)
+    val columns = style.columnCount.coerceIn(
+        QuickWheelLayoutEngine.MIN_COLUMN_COUNT,
+        QuickWheelLayoutEngine.MAX_COLUMN_COUNT,
+    )
+    // 编辑层末尾的「+」也算一格：末行正好排满时它会顺延到下一行。
+    val cells = primaryCount + if (hasAppendAddSlot) 1 else 0
+    val rows = ((cells + columns - 1) / columns).coerceAtLeast(1)
+    val sizePx = style.containerSizeDp * density
+    val gapPx = style.containerGapDp * density
+    val marginPx = QuickWheelLayoutEngine.ADAPTIVE_MARGIN_DP * density
+    // 网格顶 = anchorY + gap + offsetY；网格高 = rows*size + (rows-1)*gap。
+    val gridTopOffsetPx = gapPx + style.offsetYDp * density
+    val gridHeightPx = rows * sizePx + (rows - 1) * gapPx
+    val minAnchorY = topInsetPx + marginPx - gridTopOffsetPx
+    val maxAnchorY = visibleHeightPx - bottomInsetPx - marginPx - gridHeightPx - gridTopOffsetPx
+    return if (maxAnchorY >= minAnchorY) anchorY.coerceIn(minAnchorY, maxAnchorY) else minAnchorY
 }
 
 /**

@@ -1500,6 +1500,7 @@
     <string name="screen_record_channel_name">تسجيل الشاشة</string>
     <string name="screen_record_notification_recording">جارٍ تسجيل الشاشة…</string>
     <string name="screen_record_notification_saved">تم حفظ التسجيل في الألبوم</string>
+    <string name="screen_record_open_with">فتح الفيديو</string>
     <string name="screen_capture_channel_name">التقاط الشاشة</string>
     <string name="screen_capture_notification_active">التقاط الشاشة جاهز</string>
     <string name="screen_capture_permission_required">يلزم إذن التقاط الشاشة للقطع الجزئي</string>

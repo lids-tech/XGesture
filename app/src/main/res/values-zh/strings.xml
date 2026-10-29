@@ -231,7 +231,7 @@
     <string name="message_style_edge_card_keep_across_lock">锁屏后保留</string>
     <string name="message_style_edge_card_keep_across_lock_desc">解锁后继续显示锁屏期间的贴边卡片</string>
     <string name="message_style_edge_card_collapse_when_scroll_done">看完后收起</string>
-    <string name="message_style_edge_card_collapse_when_scroll_done_desc">长消息滚动到底后自动收起，不受上方时长限制</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">长消息滚动到底后自动收起，不受下方时长限制</string>
     <string name="message_style_edge_card_auto_collapse_off">不收起</string>
     <string name="message_style_edge_card_position">卡片位置</string>
     <string name="message_style_edge_card_position_hint">选择贴左或贴右，并调整垂直位置</string>
@@ -1539,6 +1539,7 @@
     <string name="screen_record_channel_name">屏幕录制</string>
     <string name="screen_record_notification_recording">正在录制屏幕…</string>
     <string name="screen_record_notification_saved">录屏已保存到相册</string>
+    <string name="screen_record_open_with">打开视频</string>
     <string name="screen_capture_channel_name">屏幕捕获</string>
     <string name="screen_capture_notification_active">屏幕捕获已就绪</string>
     <string name="screen_capture_permission_required">需要屏幕捕获权限，请允许后开始使用区域截图</string>

@@ -3,6 +3,7 @@ package com.slideindex.app.service
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.annotation.SuppressLint
 import android.content.ContentValues
@@ -42,6 +43,10 @@ class ScreenRecordService : Service() {
     private var outputUri: Uri? = null
     private var outputPfd: android.os.ParcelFileDescriptor? = null
     private var recordingDock: RecordingDock? = null
+    /** 正在执行停止流程：防 [MediaProjection.Callback.onStop] 回调重入。 */
+    private var stopInProgress = false
+    /** 最近一次保存成功的文件：回调重跑时 `outputUri` 已被清空，用它兜底。 */
+    private var lastSavedUri: Uri? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -111,6 +116,8 @@ class ScreenRecordService : Service() {
         }
         outputUri = uri
         outputPfd = pfd
+        // 新一次录制：上一次的兜底 uri 作废（否则通知可能指向旧文件）。
+        lastSavedUri = null
         recorder.setOutputFile(pfd.fileDescriptor)
         runCatching { recorder.prepare() }.onFailure { error ->
             Log.e(TAG, "MediaRecorder prepare failed", error)
@@ -172,8 +179,9 @@ class ScreenRecordService : Service() {
     }
 
     private fun stopRecording() {
+        // 前台通知的移除交给 stopRecordingInternal：必须先 stopForeground 再发"已保存"通知，
+        // 否则同一个 id（NOTIFICATION_ID）的保存通知会被 stopForeground(REMOVE) 一起撤掉。
         stopRecordingInternal(notify = true)
-        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
@@ -239,7 +247,31 @@ class ScreenRecordService : Service() {
         recordingDock = null
     }
 
+    /**
+     * 停止录制。
+     *
+     * 必须**幂等 + 防重入**：`mediaProjection.stop()` 会触发 [MediaProjection.Callback.onStop]，
+     * 而那个回调是 `mainHandler.post { stopRecordingInternal(notify = true) }` —— 也就是会再排一次
+     * 本方法。第二次进来时资源已经释放、`outputUri` 已被 [finalizeOutput] 清空，再发一次通知会把
+     * 刚发出去、带点击意图的"已保存"通知**覆盖成没有 contentIntent 的空壳**（点通知没反应）。
+     */
     private fun stopRecordingInternal(notify: Boolean) {
+        if (stopInProgress) return
+        val alreadyStopped = !isRecording &&
+            mediaRecorder == null &&
+            virtualDisplay == null &&
+            mediaProjection == null
+        if (alreadyStopped) return
+        stopInProgress = true
+        try {
+            stopRecordingResources(notify)
+        } finally {
+            stopInProgress = false
+        }
+    }
+
+    /** 真正释放录制资源、结束写盘，并在 [notify] 时发"已保存"通知；只由 [stopRecordingInternal] 调用。 */
+    private fun stopRecordingResources(notify: Boolean) {
         isRecording = false
         dismissDock()
         // 暂停态直接 stop() 在部分机型上会抛 IllegalStateException，先 resume 再停。
@@ -254,11 +286,19 @@ class ScreenRecordService : Service() {
         virtualDisplay = null
         mediaProjection?.stop()
         mediaProjection = null
+        // finalizeOutput() 会把 outputUri 清空，通知里要用它，先存一份。
+        val savedUri = outputUri ?: lastSavedUri
+        if (savedUri != null) lastSavedUri = savedUri
         finalizeOutput()
         if (notify) {
+            // 先摘掉前台通知，再发"已保存"——同一个 id，顺序反了会被 REMOVE 一起撤掉。
+            stopForeground(STOP_FOREGROUND_REMOVE)
             runCatching {
                 getSystemService(NotificationManager::class.java)
-                    ?.notify(NOTIFICATION_ID, buildNotification(recording = false))
+                    ?.notify(
+                        NOTIFICATION_ID,
+                        buildNotification(recording = false, savedUri = savedUri),
+                    )
             }
         }
     }
@@ -281,19 +321,41 @@ class ScreenRecordService : Service() {
         outputUri = null
     }
 
-    private fun buildNotification(recording: Boolean): Notification {
+    private fun buildNotification(recording: Boolean, savedUri: Uri? = null): Notification {
         ensureChannel()
         val title = if (recording) {
             getString(R.string.screen_record_notification_recording)
         } else {
             getString(R.string.screen_record_notification_saved)
         }
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentTitle(title)
             .setOngoing(recording)
             .setOnlyAlertOnce(true)
-            .build()
+        if (!recording) {
+            // 点"已保存"通知 → 系统「打开方式」选择器：有默认播放器也弹，让用户自己选。
+            savedUri?.let { builder.setContentIntent(openVideoPendingIntent(it)) }
+            builder.setAutoCancel(true)
+        }
+        return builder.build()
+    }
+
+    /** 打开视频的系统选择器（ACTION_VIEW + chooser），不做默认播放器判断。 */
+    private fun openVideoPendingIntent(uri: Uri): PendingIntent {
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "video/mp4")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(view, getString(R.string.screen_record_open_with)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        return PendingIntent.getActivity(
+            this,
+            NOTIFICATION_ID,
+            chooser,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
     }
 
     private fun ensureChannel(): ForegroundNotificationChannels.Result =

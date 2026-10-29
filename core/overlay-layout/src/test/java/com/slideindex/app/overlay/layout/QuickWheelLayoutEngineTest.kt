@@ -1396,6 +1396,41 @@ class QuickWheelLayoutEngineTest {
     }
 
     @Test
+    fun layoutRing_rectPlacesAllSlotsBeyondEightRows() {
+        // 矩形行数不再共用 MAX_RINGS：列数 2 时 30 个容器 = 15 行，必须全部排出来。
+        val slots = QuickWheelLayoutEngine.layoutRing(
+            slotCount = 30,
+            shape = QuickWheelShape.RECT,
+            style = defaultStyle.copy(columnCount = 2),
+            anchorX = 0f,
+            anchorY = 0f,
+            density = 1f,
+            availableWidthPx = 1080f,
+        )
+        assertEquals(30, slots.size)
+        assertEquals(14, slots.last().ringIndex)
+    }
+
+    @Test
+    fun layoutRing_appendAddSlot_survivesFullEightRows() {
+        // 列数 2 排满 8 行（16 个）后，末尾「+」仍要有位置：旧实现共用 MAX_RINGS 会直接丢掉，
+        // 真机表现就是"切到矩形后加号消失、点空白占位没反应"。
+        val slots = QuickWheelLayoutEngine.layoutRing(
+            slotCount = 16,
+            shape = QuickWheelShape.RECT,
+            style = defaultStyle.copy(columnCount = 2),
+            anchorX = 0f,
+            anchorY = 0f,
+            density = 1f,
+            availableWidthPx = 1080f,
+            appendAddSlot = true,
+        )
+        assertEquals(17, slots.size)
+        assertEquals(16, slots.last().index)
+        assertEquals(8, slots.last().ringIndex)
+    }
+
+    @Test
     fun layoutRing_appendAddSlot_whenRingFullGoesToNextRing() {
         val capacity = QuickWheelLayoutEngine.ringCapacity(
             radiusPx = defaultStyle.initialRadiusDp,
