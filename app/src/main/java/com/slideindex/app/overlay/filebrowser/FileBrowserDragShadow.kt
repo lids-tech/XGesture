@@ -28,6 +28,24 @@ internal class FileBrowserDragShadow(
     override fun onDrawShadow(canvas: Canvas) {
         val radius = 18f
         val rect = RectF(0f, 0f, source.width.toFloat(), source.height.toFloat())
+        if (count > 1) {
+            val backPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x99FFFFFF.toInt()
+                setShadowLayer(10f, 0f, 5f, 0x33000000)
+            }
+            canvas.drawRoundRect(
+                RectF(12f, 12f, source.width + 12f, source.height + 12f),
+                radius,
+                radius,
+                backPaint,
+            )
+            canvas.drawRoundRect(
+                RectF(6f, 6f, source.width + 6f, source.height + 6f),
+                radius,
+                radius,
+                backPaint,
+            )
+        }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xEEFFFFFF.toInt()
             setShadowLayer(14f, 0f, 7f, 0x55000000)
