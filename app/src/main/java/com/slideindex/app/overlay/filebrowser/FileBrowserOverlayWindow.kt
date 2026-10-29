@@ -189,6 +189,14 @@ internal object FileBrowserOverlayWindow {
     private fun handleBack() {
         val current = session ?: return
         val state = current.controller.state
+        if (state.mediaSelectedIds.isNotEmpty()) {
+            current.controller.clearMediaSelection()
+            return
+        }
+        if (state.mediaPreview != null) {
+            current.controller.hideMediaPreview()
+            return
+        }
         if (state.details != null) {
             current.controller.hideDetails()
             return
@@ -199,6 +207,15 @@ internal object FileBrowserOverlayWindow {
         }
         val parent = FileBrowserPaths.parent(state.path, current.controller.internalRoot)
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
+        val internal = FileBrowserPaths.normalize(
+            current.controller.internalRoot,
+            current.controller.internalRoot,
+        )
+        // 内部存储是用户心智里的顶层；没有历史时返回应直接退出，不能再走 parent 回 /。
+        if (tab?.backStack.isNullOrEmpty() && state.path == internal) {
+            dismiss()
+            return
+        }
         if (parent == null && tab?.backStack.isNullOrEmpty()) {
             dismiss()
         } else {
@@ -342,6 +359,7 @@ internal object FileBrowserOverlayWindow {
                     onDismiss = { dismiss() },
                     onRequestAllFiles = { requestAllFilesAccess() },
                     onRequestShizuku = { requestShizukuAccess() },
+                    onRequestMediaPermission = { requestMediaPermissions() },
                 )
             }
         } != null
@@ -374,6 +392,30 @@ internal object FileBrowserOverlayWindow {
             return
         }
         TaskManagerUtil.requestPermission(context)
+    }
+
+    private fun requestMediaPermissions() {
+        val context = appContext ?: return
+        val category = session?.controller?.state?.mediaCategory ?: return
+        val permissions = FileBrowserMediaSource.requiredPermissions(category)
+        if (permissions.isEmpty()) {
+            requestAllFilesAccess()
+            return
+        }
+        if (FileBrowserMediaSource.hasPermission(context, category)) {
+            session?.controller?.refreshAccessAndReload()
+            return
+        }
+        val launched = runCatching {
+            FileBrowserMediaPermissionActivity.launch(context, permissions) {
+                mainHandler.post {
+                    session?.controller?.refreshAccessAndReload()
+                }
+            }
+        }.isSuccess
+        if (!launched) {
+            requestAllFilesAccess()
+        }
     }
 
     private fun registerShizukuListener() {

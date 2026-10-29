@@ -3,25 +3,21 @@ package com.slideindex.app.overlay.filebrowser
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +40,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -85,7 +82,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -97,7 +93,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -114,12 +109,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.PopupProperties
-import kotlin.math.roundToInt
 import com.slideindex.app.R
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.ui.miuix.MiuixSearchField
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.slideindex.app.ui.theme.LocalAppDarkTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
@@ -143,8 +138,10 @@ internal fun FileBrowserPanel(
     onDismiss: () -> Unit,
     onRequestAllFiles: () -> Unit,
     onRequestShizuku: () -> Unit,
+    onRequestMediaPermission: () -> Unit,
 ) {
     val state = controller.state
+    val mediaCategory = state.mediaCategory
     val internalRoot = controller.internalRoot
     val filtered = remember(state.entries, state.query, state.showHidden, state.sort) {
         FileBrowserSort.apply(
@@ -153,6 +150,9 @@ internal fun FileBrowserPanel(
             showHidden = state.showHidden,
             query = state.query,
         )
+    }
+    val mediaImages = remember(state.mediaItems) {
+        state.mediaItems.filter { it.mimeType?.startsWith("image/") == true }
     }
     val listState = rememberLazyListState()
     LaunchedEffect(listState) {
@@ -191,25 +191,27 @@ internal fun FileBrowserPanel(
             )
         }
     }
-    LaunchedEffect(state.activeTabId, state.path) {
-        val path = state.path
-        snapshotFlow {
-            state.loading to listState.layoutInfo.totalItemsCount
-        }.first { (loading, total) -> !loading && total > 0 }
-        withFrameNanos { }
-        val (index, offset) = controller.scrollForActiveTab()
-        Log.d("FileBrowserScroll", "restore path=$path target=$index,$offset total=${listState.layoutInfo.totalItemsCount}")
-        runCatching { listState.scrollToItem(index, offset) }
-        withFrameNanos { }
-        if (listState.firstVisibleItemIndex != index) {
+    if (mediaCategory == null) {
+        LaunchedEffect(state.activeTabId, state.path) {
+            val path = state.path
+            snapshotFlow {
+                state.loading to listState.layoutInfo.totalItemsCount
+            }.first { (loading, total) -> !loading && total > 0 }
+            withFrameNanos { }
+            val (index, offset) = controller.scrollForActiveTab()
+            Log.d("FileBrowserScroll", "restore path=$path target=$index,$offset total=${listState.layoutInfo.totalItemsCount}")
             runCatching { listState.scrollToItem(index, offset) }
-        }
-        snapshotFlow {
-            if (state.loading || state.path != path) null else {
-                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            withFrameNanos { }
+            if (listState.firstVisibleItemIndex != index) {
+                runCatching { listState.scrollToItem(index, offset) }
             }
-        }.filterNotNull().collect { (index, offset) ->
-            controller.saveScroll(index, offset)
+            snapshotFlow {
+                if (state.loading || state.path != path) null else {
+                    listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                }
+            }.filterNotNull().collect { (index, offset) ->
+                controller.saveScroll(index, offset)
+            }
         }
     }
     val levelBytes = remember(state.entries) {
@@ -315,6 +317,7 @@ internal fun FileBrowserPanel(
                             onSearchClick = { searchExpanded = !searchExpanded },
                             onMenuClick = { showMenu = true },
                             onDismiss = onDismiss,
+                            showMenuButton = mediaCategory == null,
                         )
                         FileBrowserTabBar(
                             tabs = state.tabs,
@@ -323,15 +326,17 @@ internal fun FileBrowserPanel(
                             onClose = controller::closeTab,
                             onNew = controller::newTab,
                         )
-                        FileBrowserBreadcrumb(
-                            path = state.path,
-                            internalRoot = internalRoot,
-                            onNavigate = { target ->
-                                focusManager.clearFocus()
-                                controller.navigateTo(target)
-                            },
-                            onLongClick = { copyToClipboard(context, state.path) },
-                        )
+                        if (mediaCategory == null) {
+                            FileBrowserBreadcrumb(
+                                path = state.path,
+                                internalRoot = internalRoot,
+                                onNavigate = { target ->
+                                    focusManager.clearFocus()
+                                    controller.navigateTo(target)
+                                },
+                                onLongClick = { copyToClipboard(context, state.path) },
+                            )
+                        }
                         AnimatedVisibility(
                             visible = searchExpanded || state.query.isNotEmpty(),
                             enter = expandVertically(tween(160)) + fadeIn(tween(120)),
@@ -369,7 +374,7 @@ internal fun FileBrowserPanel(
                                 }
                             }
                         }
-                        AnimatedVisibility(visible = quickBarVisible) {
+                        AnimatedVisibility(visible = quickBarVisible && mediaCategory == null) {
                             FileBrowserQuickChips(
                                 internalRoot = internalRoot,
                                 onNavigate = { target ->
@@ -378,7 +383,7 @@ internal fun FileBrowserPanel(
                                 },
                             )
                         }
-                        if (state.loading && state.entries.isNotEmpty()) {
+                        if (state.loading && state.entries.isNotEmpty() && mediaCategory == null) {
                             LinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -386,51 +391,103 @@ internal fun FileBrowserPanel(
                                     .clip(RoundedCornerShape(2.dp)),
                             )
                         }
-                        FileBrowserLimitedBanner(
-                            state = state,
-                            internalRoot = internalRoot,
-                            onRequestAllFiles = onRequestAllFiles,
-                            onRequestShizuku = onRequestShizuku,
-                        )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                        ) {
-                            FileBrowserListContent(
+                        if (mediaCategory == null) {
+                            FileBrowserLimitedBanner(
                                 state = state,
-                                filtered = filtered,
                                 internalRoot = internalRoot,
-                                listState = listState,
-                                onEntryClick = { entry ->
-                                    focusManager.clearFocus()
-                                    if (state.selectionMode || state.selectedPaths.isNotEmpty()) {
-                                        controller.toggleSelection(entry.path)
-                                    } else {
-                                        when (entry.kind) {
-                                            FileEntryKind.DIRECTORY,
-                                            FileEntryKind.SYMLINK,
-                                            -> controller.navigateTo(entry.path)
-
-                                            FileEntryKind.FILE,
-                                            FileEntryKind.OTHER,
-                                            -> controller.showDetails(entry)
-                                        }
-                                    }
-                                },
-                                onEntryLongClick = { entry ->
-                                    focusManager.clearFocus()
-                                    controller.enterSelection(entry)
-                                },
-                                selectionMode = state.selectionMode,
-                                selectedPaths = state.selectedPaths,
-                                access = state.access,
-                                onRetry = controller::refresh,
                                 onRequestAllFiles = onRequestAllFiles,
                                 onRequestShizuku = onRequestShizuku,
-                                bottomInset = selectionInset,
                             )
                         }
+                        if (mediaCategory != null) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                            ) {
+                                FileBrowserMediaGrid(
+                                    category = mediaCategory,
+                                    items = state.mediaItems,
+                                    query = state.query,
+                                    loading = state.mediaLoading,
+                                    hasMore = state.mediaHasMore,
+                                    totalCount = state.mediaTotalCount,
+                                    totalBytes = state.mediaTotalBytes,
+                                    error = state.error,
+                                    mediaPermissionAvailable =
+                                        mediaCategory != FileBrowserMediaCategory.DOCUMENTS,
+                                    selectedIds = state.mediaSelectedIds,
+                                    onLoadMore = controller::loadMoreMedia,
+                                    onOpen = { item ->
+                                        if (state.mediaSelectedIds.isNotEmpty()) {
+                                            controller.toggleMediaSelection(item)
+                                        } else if (item.mimeType?.startsWith("image/") == true) {
+                                            controller.showMediaPreview(item)
+                                        } else {
+                                            openMediaExternally(context, item)
+                                        }
+                                    },
+                                    onLongClick = { item -> controller.toggleMediaSelection(item) },
+                                    onRequestMediaPermission = onRequestMediaPermission,
+                                    onRequestAllFiles = onRequestAllFiles,
+                                    onRetry = controller::refresh,
+                                )
+                            }
+                            if (state.mediaSelectedIds.isNotEmpty()) {
+                                FileBrowserMediaSelectionBar(
+                                    count = state.mediaSelectedIds.size,
+                                    onShare = {
+                                        val selected = state.mediaItems.filter {
+                                            it.id in state.mediaSelectedIds
+                                        }
+                                        shareMediaItems(context, selected)
+                                        controller.clearMediaSelection()
+                                    },
+                                    onClose = controller::clearMediaSelection,
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                            ) {
+                                FileBrowserListContent(
+                                    state = state,
+                                    filtered = filtered,
+                                    internalRoot = internalRoot,
+                                    listState = listState,
+                                    onEntryClick = { entry ->
+                                        focusManager.clearFocus()
+                                        if (state.selectionMode || state.selectedPaths.isNotEmpty()) {
+                                            controller.toggleSelection(entry.path)
+                                        } else {
+                                            when (entry.kind) {
+                                                FileEntryKind.DIRECTORY,
+                                                FileEntryKind.SYMLINK,
+                                                -> controller.navigateTo(entry.path)
+
+                                                FileEntryKind.FILE,
+                                                FileEntryKind.OTHER,
+                                                -> controller.showDetails(entry)
+                                            }
+                                        }
+                                    },
+                                    onEntryLongClick = { entry ->
+                                        focusManager.clearFocus()
+                                        controller.enterSelection(entry)
+                                    },
+                                    selectionMode = state.selectionMode,
+                                    selectedPaths = state.selectedPaths,
+                                    access = state.access,
+                                    onRetry = controller::refresh,
+                                    onRequestAllFiles = onRequestAllFiles,
+                                    onRequestShizuku = onRequestShizuku,
+                                    bottomInset = selectionInset,
+                                )
+                            }
+                        }
+                        if (mediaCategory == null) {
                         if (state.selectionMode) {
                             FileBrowserSelectionBar(
                                 count = state.selectedPaths.size,
@@ -528,6 +585,7 @@ internal fun FileBrowserPanel(
                                 onComputeSize = controller::computeDirectorySize,
                             )
                         }
+                        }
                     }
 
                     if (copied) {
@@ -613,6 +671,24 @@ internal fun FileBrowserPanel(
                             onClose = controller::hideDetails,
                         )
                     }
+                    state.mediaPreview?.let { preview ->
+                        val previewIndex = mediaImages.indexOfFirst { it.id == preview.id }
+                        FileBrowserMediaImageViewer(
+                            item = preview,
+                            onPrevious = if (previewIndex > 0) {
+                                { controller.showMediaPreview(mediaImages[previewIndex - 1]) }
+                            } else {
+                                null
+                            },
+                            onNext = if (previewIndex >= 0 && previewIndex < mediaImages.lastIndex) {
+                                { controller.showMediaPreview(mediaImages[previewIndex + 1]) }
+                            } else {
+                                null
+                            },
+                            onShare = { shareMediaItems(context, listOf(preview)) },
+                            onClose = controller::hideMediaPreview,
+                        )
+                    }
                     if (showPathDialog) {
                         FileBrowserPathDialog(
                             initialPath = state.path,
@@ -653,7 +729,7 @@ internal fun FileBrowserPanel(
                             onClose = { showFavorites = false },
                         )
                     }
-                    if (showMenu) {
+                    if (showMenu && mediaCategory == null) {
                         FileBrowserMenuOverlay(
                             showHidden = state.showHidden,
                             sort = state.sort,
@@ -980,11 +1056,13 @@ private fun FileBrowserTabBar(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         items(tabs, key = { it.id }) { tab ->
             val active = tab.id == activeTabId
             Row(
                 modifier = Modifier
+                    .heightIn(min = 28.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
@@ -1024,7 +1102,7 @@ private fun FileBrowserTabBar(
         item {
             Box(
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(28.dp)
                     .clip(RoundedCornerShape(7.dp))
                     .clickable(onClick = onNew),
                 contentAlignment = Alignment.Center,
@@ -1039,10 +1117,92 @@ private fun FileBrowserTabBar(
     }
 }
 
-private fun tabTitle(path: String): String = when (path) {
-    "/" -> "/"
-    "/storage/emulated/0" -> "内部存储"
-    else -> path.trimEnd('/').substringAfterLast('/').ifEmpty { path }
+@Composable
+private fun tabTitle(path: String): String {
+    FileBrowserMediaCategory.forPath(path)?.let { category ->
+        return stringResource(category.labelRes)
+    }
+    return when (path) {
+        "/" -> "/"
+        "/storage/emulated/0" -> "内部存储"
+        else -> path.trimEnd('/').substringAfterLast('/').ifEmpty { path }
+    }
+}
+
+private fun openMediaExternally(context: Context, item: FileBrowserMediaItem) {
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(item.uri, item.mimeType ?: "*/*")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val chooser = Intent.createChooser(
+        intent,
+        context.getString(R.string.file_browser_open_with),
+    ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching { context.startActivity(chooser) }
+}
+
+private fun shareMediaItems(context: Context, items: List<FileBrowserMediaItem>) {
+    if (items.isEmpty()) return
+    val single = items.size == 1
+    val intent = if (single) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = items.first().mimeType ?: "*/*"
+            putExtra(Intent.EXTRA_STREAM, items.first().uri)
+        }
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "*/*"
+            putParcelableArrayListExtra(
+                Intent.EXTRA_STREAM,
+                ArrayList(items.map { it.uri }),
+            )
+        }
+    }.apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    val chooser = Intent.createChooser(
+        intent,
+        context.getString(R.string.file_browser_share),
+    ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching { context.startActivity(chooser) }
+}
+
+@Composable
+private fun FileBrowserMediaSelectionBar(
+    count: Int,
+    onShare: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+            .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.file_browser_media_selected, count),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onShare) {
+            Text(stringResource(R.string.file_browser_share))
+        }
+        IconButton(onClick = onClose) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = stringResource(R.string.file_browser_close),
+            )
+        }
+    }
 }
 
 @Composable
@@ -1052,6 +1212,7 @@ private fun FileBrowserHeader(
     onSearchClick: () -> Unit,
     onMenuClick: () -> Unit,
     onDismiss: () -> Unit,
+    showMenuButton: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -1086,11 +1247,13 @@ private fun FileBrowserHeader(
                 contentDescription = stringResource(R.string.file_browser_refresh),
             )
         }
-        IconButton(onClick = onMenuClick) {
-            Icon(
-                imageVector = Icons.Filled.MoreVert,
-                contentDescription = stringResource(R.string.file_browser_menu),
-            )
+        if (showMenuButton) {
+            IconButton(onClick = onMenuClick) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.file_browser_menu),
+                )
+            }
         }
         IconButton(onClick = onDismiss) {
             Icon(
@@ -1208,7 +1371,6 @@ private data class QuickTarget(
     val icon: ImageVector,
 )
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileBrowserQuickChips(
     internalRoot: String,
@@ -1216,36 +1378,34 @@ private fun FileBrowserQuickChips(
 ) {
     val paths = FileBrowserPreferences.quickShortcuts(internalRoot)
     if (paths.isEmpty()) return
-    val scrollState = rememberScrollState()
+    val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
+    val scrollState = rememberLazyListState()
     val haptic = LocalHapticFeedback.current
-    val actionScope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val spacingPx = with(density) { 8.dp.toPx() }
-    val itemBounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
-    var draggingPath by remember { mutableStateOf<String?>(null) }
-    var draggingIndex by remember { mutableStateOf<Int?>(null) }
-    var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableStateOf(0f) }
-    var settlingTarget by remember { mutableStateOf<Float?>(null) }
+    val reorderState = rememberReorderableLazyListState(scrollState) { from, to ->
+        FileBrowserPreferences.moveShortcut(from.index, to.index, internalRoot)
+    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(scrollState),
+    LazyRow(
+        state = scrollState,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            paths.forEachIndexed { index, path ->
-                val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
+        items(paths, key = { it }) { path ->
+            ReorderableItem(
+                state = reorderState,
+                key = path,
+            ) { _ ->
                 val label = when (path) {
                     "/" -> stringResource(R.string.file_browser_quick_root)
                     normalizedRoot -> stringResource(R.string.file_browser_quick_internal)
-                    "$normalizedRoot/Android/data" -> stringResource(R.string.file_browser_quick_android_data)
-                    "$normalizedRoot/Download" -> stringResource(R.string.file_browser_quick_download)
-                    "$normalizedRoot/Android/obb" -> stringResource(R.string.file_browser_quick_obb)
+                    "$normalizedRoot/Android/data" ->
+                        stringResource(R.string.file_browser_quick_android_data)
+                    "$normalizedRoot/Download" ->
+                        stringResource(R.string.file_browser_quick_download)
+                    "$normalizedRoot/Android/obb" ->
+                        stringResource(R.string.file_browser_quick_obb)
                     "/data/data" -> stringResource(R.string.file_browser_quick_app_data)
                     else -> tabTitle(path)
                 }
@@ -1257,100 +1417,13 @@ private fun FileBrowserQuickChips(
                     "/data/data" -> Icons.Outlined.Apps
                     else -> Icons.Outlined.Folder
                 }
-                val draggedWidth = itemBounds[draggingPath]?.width ?: 0f
-                val fromIndex = draggingIndex
-                val toIndex = dragTargetIndex
-                val shiftTarget = when {
-                    fromIndex == null || toIndex == null || index == fromIndex -> 0f
-                    fromIndex < toIndex && index in (fromIndex + 1)..toIndex ->
-                        -(draggedWidth + spacingPx)
-                    fromIndex > toIndex && index in toIndex until fromIndex ->
-                        draggedWidth + spacingPx
-                    else -> 0f
-                }
-                val animatedShift by animateFloatAsState(
-                    targetValue = shiftTarget,
-                    animationSpec = if (draggingIndex == null) snap() else tween(120),
-                    label = "quick-chip-shift",
-                )
-                val draggedVisual by animateFloatAsState(
-                    targetValue = settlingTarget ?: dragOffset,
-                    animationSpec = if (settlingTarget != null) tween(150) else snap(),
-                    label = "quick-chip-drag",
-                )
                 Row(
                     modifier = Modifier
-                        .onGloballyPositioned { coords ->
-                            val position = coords.positionInParent()
-                            val bounds = androidx.compose.ui.geometry.Rect(
-                                left = position.x,
-                                top = position.y,
-                                right = position.x + coords.size.width,
-                                bottom = position.y + coords.size.height,
-                            )
-                            if (itemBounds[path] != bounds) itemBounds[path] = bounds
-                        }
-                        .offset {
-                            if (draggingPath == path) {
-                                IntOffset(draggedVisual.roundToInt(), 0)
-                            } else {
-                                IntOffset(animatedShift.roundToInt(), 0)
-                            }
-                        }
-                        .pointerInput(paths, path, index) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    draggingPath = path
-                                    draggingIndex = index
-                                    dragTargetIndex = index
-                                    dragOffset = 0f
-                                },
-                                onDrag = { change, amount ->
-                                    change.consume()
-                                    dragOffset += amount.x
-                                    val draggedCenter = itemBounds[path]?.center?.x ?: return@detectDragGesturesAfterLongPress
-                                    val pointerX = draggedCenter + dragOffset
-                                    val target = paths.indices.minByOrNull { candidate ->
-                                        kotlin.math.abs(
-                                            (itemBounds[paths[candidate]]?.center?.x ?: 0f) - pointerX,
-                                        )
-                                    }
-                                    if (target != null && target != dragTargetIndex) {
-                                        dragTargetIndex = target
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    }
-                                },
-                                onDragEnd = {
-                                    val target = dragTargetIndex ?: index
-                                    val draggedCenter = itemBounds[path]?.center?.x ?: 0f
-                                    val targetCenter = itemBounds[paths.getOrNull(target)]?.center?.x ?: draggedCenter
-                                    settlingTarget = targetCenter - draggedCenter
-                                    actionScope.launch {
-                                        delay(160)
-                                        if (target != index) {
-                                            FileBrowserPreferences.moveShortcut(
-                                                index,
-                                                target,
-                                                internalRoot,
-                                            )
-                                        }
-                                        draggingPath = null
-                                        draggingIndex = null
-                                        dragTargetIndex = null
-                                        dragOffset = 0f
-                                        settlingTarget = null
-                                    }
-                                },
-                                onDragCancel = {
-                                    draggingPath = null
-                                    draggingIndex = null
-                                    dragTargetIndex = null
-                                    dragOffset = 0f
-                                    settlingTarget = null
-                                },
-                            )
-                        }
+                        .longPressDraggableHandle(
+                            onDragStarted = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                        )
                         .clip(RoundedCornerShape(13.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
                         .clickable { onNavigate(path) }
@@ -1386,17 +1459,22 @@ private fun FileBrowserFavoritesOverlay(
     var favorites by remember {
         mutableStateOf(FileBrowserPreferences.quickShortcuts(internalRoot))
     }
-    var draggingIndex by remember { mutableStateOf<Int?>(null) }
-    var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableStateOf(0f) }
-    var settlingTarget by remember { mutableStateOf<Float?>(null) }
-    val actionScope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val rowHeightPx = with(density) { 56.dp.toPx() }
     val haptic = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        val list = favorites.toMutableList()
+        if (from.index in list.indices && to.index in list.indices) {
+            val item = list.removeAt(from.index)
+            list.add(to.index, item)
+            favorites = list
+            FileBrowserPreferences.moveShortcut(from.index, to.index, internalRoot)
+        }
+    }
+
     fun refresh() {
         favorites = FileBrowserPreferences.quickShortcuts(internalRoot)
     }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1440,133 +1518,38 @@ private fun FileBrowserFavoritesOverlay(
                         modifier = Modifier.padding(vertical = 10.dp),
                     )
                 } else {
-                    favorites.forEachIndexed { index, path ->
-                        val fromIndex = draggingIndex
-                        val toIndex = dragTargetIndex
-                        val shiftTarget = when {
-                            fromIndex == null || toIndex == null || index == fromIndex -> 0f
-                            fromIndex < toIndex && index in (fromIndex + 1)..toIndex -> -rowHeightPx
-                            fromIndex > toIndex && index in toIndex until fromIndex -> rowHeightPx
-                            else -> 0f
-                        }
-                        val animatedShift by animateFloatAsState(
-                            targetValue = shiftTarget,
-                            animationSpec = if (draggingIndex == null) snap() else tween(120),
-                            label = "favorite-row-shift",
-                        )
-                        val draggedVisual by animateFloatAsState(
-                            targetValue = settlingTarget ?: dragOffset,
-                            animationSpec = if (settlingTarget != null) tween(150) else snap(),
-                            label = "favorite-row-drag",
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .offset {
-                                    if (draggingIndex == index) {
-                                        IntOffset(0, draggedVisual.roundToInt())
-                                    } else {
-                                        IntOffset(0, animatedShift.roundToInt())
-                                    }
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .pointerInput(favorites, index) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                draggingIndex = index
-                                                dragTargetIndex = index
-                                                dragOffset = 0f
-                                            },
-                                            onDrag = { change, amount ->
-                                                change.consume()
-                                                dragOffset += amount.y
-                                                val target = (index + (dragOffset / rowHeightPx).roundToInt())
-                                                    .coerceIn(0, favorites.lastIndex)
-                                                if (target != dragTargetIndex) {
-                                                    dragTargetIndex = target
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                }
-                                            },
-                                            onDragEnd = {
-                                                val to = dragTargetIndex ?: index
-                                                settlingTarget = (to - index) * rowHeightPx
-                                                actionScope.launch {
-                                                    delay(160)
-                                                    if (to != index) {
-                                                        FileBrowserPreferences.moveShortcut(
-                                                            index,
-                                                            to,
-                                                            internalRoot,
-                                                        )
-                                                        refresh()
-                                                    }
-                                                    draggingIndex = null
-                                                    dragTargetIndex = null
-                                                    dragOffset = 0f
-                                                    settlingTarget = null
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                draggingIndex = null
-                                                dragTargetIndex = null
-                                                dragOffset = 0f
-                                                settlingTarget = null
-                                            },
-                                        )
-                                    }
-                                    .clickable { onNavigate(path) },
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Folder,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = tabTitle(path),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        text = path,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .clickable {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 460.dp),
+                        contentPadding = PaddingValues(bottom = 4.dp),
+                    ) {
+                        items(favorites, key = { it }) { path ->
+                            ReorderableItem(
+                                state = reorderState,
+                                key = path,
+                            ) { _ ->
+                                FileBrowserFavoriteRow(
+                                    path = path,
+                                    modifier = Modifier.longPressDraggableHandle(
+                                        onDragStarted = {
+                                            haptic.performHapticFeedback(
+                                                HapticFeedbackType.LongPress,
+                                            )
+                                        },
+                                    ),
+                                    onClick = { onNavigate(path) },
+                                    onDelete = {
                                         FileBrowserPreferences.removeShortcut(path)
                                         refresh()
                                     },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 TextButton(
                     onClick = {
                         FileBrowserPreferences.togglePin(currentPath)
@@ -1596,6 +1579,65 @@ private fun FileBrowserFavoritesOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FileBrowserFavoriteRow(
+    path: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = tabTitle(path),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = path,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .clickable(onClick = onDelete),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

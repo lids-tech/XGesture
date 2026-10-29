@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,15 +18,18 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -41,19 +45,27 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.slideindex.app.R
 import com.slideindex.app.barcode.BarcodeScanResult
 import com.slideindex.app.overlay.filebrowser.FileBrowserQuickCard
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 
@@ -98,7 +110,7 @@ internal fun QuickMenuPanel(
     val context = LocalContext.current
     // **必须放在 if (page == null) 之外**：列表在切到子页时会离开组合，状态若留在里面就会被重置，
     // 表现就是"从子页返回后回到了顶部"（真机反馈）。
-    val listState = rememberLazyListState()
+    val homeScrollState = rememberLazyListState()
 
     AnimatedVisibility(
         visible = visible,
@@ -131,7 +143,6 @@ internal fun QuickMenuPanel(
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (page == null) {
                         ListHeader(onDismiss = onDismiss)
-                        FileBrowserQuickCard(onOpen = onOpenFileBrowser)
                         OutlinedTextField(
                             value = query,
                             onValueChange = onQueryChange,
@@ -169,14 +180,15 @@ internal fun QuickMenuPanel(
                                 }
                             },
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         ToolList(
                             query = query,
                             recents = recents,
                             titles = titles,
                             descs = descs,
-                            state = listState,
+                            scrollState = homeScrollState,
                             onOpenTool = onOpenTool,
+                            onOpenFileBrowser = onOpenFileBrowser,
                         )
                     } else {
                         ToolPageHeader(
@@ -221,7 +233,7 @@ private fun ListHeader(onDismiss: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.gesture_action_quick_menu),
+            text = stringResource(R.string.quick_menu_title),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
@@ -267,18 +279,20 @@ private fun ToolList(
     recents: List<QuickMenuTool>,
     titles: Map<QuickMenuTool, String>,
     descs: Map<QuickMenuTool, String>,
-    state: LazyListState,
+    scrollState: LazyListState,
     onOpenTool: (QuickMenuTool) -> Unit,
+    onOpenFileBrowser: (String?) -> Unit,
 ) {
     val matched = remember(query, titles, descs) {
         QuickMenuTool.matching(query, { titles.getValue(it) }, { descs.getValue(it) })
     }
     val grouped = remember(matched) { matched.groupBy { it.group } }
-    // 折叠状态：默认全部展开。搜索时强制展开（正在找东西时不该还要再点开一层）。
+    // 长分组默认折叠，卡片不会又变回一整块长列表；搜索时始终展开。
     val collapsed = remember { mutableStateMapOf<QuickMenuGroup, Boolean>() }
     val searching = query.isNotBlank()
+    val haptic = LocalHapticFeedback.current
 
-    if (matched.isEmpty()) {
+    if (searching && matched.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 text = stringResource(R.string.quick_menu_no_match),
@@ -289,91 +303,167 @@ private fun ToolList(
         return
     }
 
+    val modules = if (searching) emptyList() else QuickMenuPreferences.homeModules()
+    val reorderState = rememberReorderableLazyListState(scrollState) { from, to ->
+        QuickMenuPreferences.moveHomeModule(from.index, to.index)
+    }
+
     LazyColumn(
-        // 状态由上层持有：从子页返回时列表位置不会被重置到顶部（真机反馈）。
-        state = state,
+        state = scrollState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
     ) {
-        // 最近使用：只在没有搜索词时展示（搜索时用户已经知道要找什么，横排只是干扰）。
-        if (query.isBlank() && recents.isNotEmpty()) {
-            item(key = "recent") {
-                SectionTitle(stringResource(R.string.quick_menu_section_recent))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+        if (searching) {
+            item(key = "search-results") {
+                HomeModuleCard(
+                    title = stringResource(R.string.quick_menu_home_search_results),
                 ) {
-                    items(recents, key = { "recent-${it.name}" }) { tool ->
-                        RecentChip(title = titles.getValue(tool)) { onOpenTool(tool) }
+                    matched.forEach { tool ->
+                        ToolRow(
+                            tool = tool,
+                            title = titles.getValue(tool),
+                            description = descs.getValue(tool),
+                            onClick = { onOpenTool(tool) },
+                        )
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
             }
+            return@LazyColumn
         }
 
-        QuickMenuGroup.entries.forEach { group ->
-            val tools = grouped[group].orEmpty()
-            if (tools.isEmpty()) return@forEach
-            val isCollapsed = !searching && collapsed[group] == true
-            item(key = "header-${group.name}") {
-                SectionTitle(
-                    text = stringResource(group.titleRes),
-                    collapsed = isCollapsed,
-                    onToggle = { collapsed[group] = !isCollapsed },
-                )
-            }
-            if (isCollapsed) return@forEach
-            items(tools, key = { it.name }) { tool ->
-                ToolRow(
-                    tool = tool,
-                    title = titles.getValue(tool),
-                    description = descs.getValue(tool),
-                    onClick = { onOpenTool(tool) },
-                )
+        items(modules, key = { it.id }) { module ->
+            ReorderableItem(
+                state = reorderState,
+                key = module.id,
+            ) { isDragging ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .longPressDraggableHandle(
+                            onDragStarted = { _ ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                        ),
+                ) {
+                    when (module) {
+                        QuickMenuHomeModule.Recents -> HomeModuleCard(
+                            title = stringResource(R.string.quick_menu_section_recent),
+                        ) {
+                            if (recents.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.quick_menu_home_recents_empty),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(
+                                        horizontal = 14.dp,
+                                        vertical = 8.dp,
+                                    ),
+                                )
+                            } else {
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 14.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    items(recents, key = { "recent-${it.name}" }) { tool ->
+                                        RecentChip(
+                                            title = titles.getValue(tool),
+                                        ) { onOpenTool(tool) }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        QuickMenuHomeModule.Files -> FileBrowserQuickCard(
+                            onOpen = onOpenFileBrowser,
+                        )
+
+                        is QuickMenuHomeModule.ToolGroup -> {
+                            val group = module.group
+                            val tools = grouped[group].orEmpty()
+                            val isCollapsed = collapsed[group] ?: (tools.size > 4)
+                            val contentScroll = rememberScrollState()
+                            HomeModuleCard(
+                                title = stringResource(group.titleRes),
+                                expanded = !isCollapsed,
+                                onToggle = { collapsed[group] = !isCollapsed },
+                            ) {
+                                if (!isCollapsed) {
+                                    // 展开后的分组卡也可能非常高；限制高度并内部滚动，
+                                    // 避免拖拽时用整张长卡的高度做让位计算。
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 320.dp)
+                                            .verticalScroll(contentScroll),
+                                    ) {
+                                        tools.forEach { tool ->
+                                            // 文件浏览器已经有首页文件卡，避免工具列表里再出现一条重复入口。
+                                            if (tool == QuickMenuTool.FILE_BROWSER) {
+                                                return@forEach
+                                            }
+                                            ToolRow(
+                                                tool = tool,
+                                                title = titles.getValue(tool),
+                                                description = descs.getValue(tool),
+                                                onClick = { onOpenTool(tool) },
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SectionTitle(
-    text: String,
-    collapsed: Boolean? = null,
+private fun HomeModuleCard(
+    title: String,
+    expanded: Boolean? = null,
     onToggle: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
-    val base = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 6.dp)
-    if (onToggle == null) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = base,
-        )
-        return
-    }
-    Row(
+    val shape = RoundedCornerShape(20.dp)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            imageVector = if (collapsed == true) {
-                Icons.Filled.KeyboardArrowDown
-            } else {
-                Icons.Filled.KeyboardArrowUp
-            },
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = onToggle != null) { onToggle?.invoke() }
+                .padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            if (expanded != null) {
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Filled.KeyboardArrowUp
+                    } else {
+                        Icons.Filled.KeyboardArrowDown
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        content()
     }
 }
 
