@@ -305,6 +305,7 @@ data class AppSettings(
     val ocrDownloadWifiOnly get() = floatBall.ocrDownloadWifiOnly
     val floatBallPointerSpeedFraction get() = floatBall.floatBallPointerSpeedFraction
     val floatBallPointerSpeedVerticalFraction get() = floatBall.floatBallPointerSpeedVerticalFraction
+    val floatBallPickAccelZoneFraction get() = floatBall.floatBallPickAccelZoneFraction
     val floatBallPositionMode get() = floatBall.floatBallPositionMode
     val floatBallActiveSide get() = floatBall.floatBallActiveSide
     val floatBallLineHeightFraction get() = floatBall.floatBallLineHeightFraction

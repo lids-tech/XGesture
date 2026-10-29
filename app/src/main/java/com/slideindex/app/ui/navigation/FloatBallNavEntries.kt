@@ -733,6 +733,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onPickBottomTransitionChange = viewModel::setFloatBallPickBottomTransitionFraction,
             onPointerSpeedChange = viewModel::setFloatBallPointerSpeedFraction,
             onPointerSpeedVerticalChange = viewModel::setFloatBallPointerSpeedVerticalFraction,
+            onPickAccelZoneChange = viewModel::setFloatBallPickAccelZoneFraction,
             onPointerSlopChange = viewModel::setFloatBallPointerSlopDp,
             onHoverPauseDelayMsChange = viewModel::setFloatBallHoverPauseDelayMs,
             onRegionalCancelSlopDpChange = viewModel::setFloatBallRegionalCancelSlopDp,

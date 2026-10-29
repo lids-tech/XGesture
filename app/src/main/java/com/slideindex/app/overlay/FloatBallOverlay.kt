@@ -3159,13 +3159,21 @@ object FloatBallOverlay {
         onPositionPersisted?.invoke(xFraction, yFraction)
     }
 
-    private fun showCursorPickPreview(@Suppress("UNUSED_PARAMETER") screenX: Float, @Suppress("UNUSED_PARAMETER") screenY: Float) {
-        if (isDragging) return
-        passivePickPreviewAnchor = computePassivePickAnchor()
-        cursorPreviewActive = true
-        passivePickPreviewAlpha = pickPreviewAlpha(0f)
-        syncCursorPreviewAppearance()
-        cursorPreviewView?.visibility = View.VISIBLE
+    /**
+     * 按下阶段**不再**显示半透明预览十字。
+     *
+     * 原因：预览用「球的停靠点」算位置（[computePassivePickAnchor]），拖动阶段用「屏幕边缘 + 位移×倍率」
+     * 算位置（[FloatBallDragSession]），两者不是同一个点——切过去的那一帧红十字会瞬移，
+     * 这就是用户反馈的"一触摸就从边上跳到屏内"。
+     *
+     * 现在改成：十字第一次出现发生在拖动阶段的第一帧，且锚点已在屏幕外
+     * （[FloatingPointerBounds.PICK_ANCHOR_OUTSIDE_DP]），观感是"从边缘滑进来"，没有可比对的上一帧。
+     */
+    private fun showCursorPickPreview(
+        @Suppress("UNUSED_PARAMETER") screenX: Float,
+        @Suppress("UNUSED_PARAMETER") screenY: Float,
+    ) {
+        // 有意留空。
     }
 
     private fun prepareLineDragStateForSlop() {
