@@ -14,6 +14,7 @@ internal class FileBrowserDragShadow(
     private val source: Bitmap,
     private val touchX: Float,
     private val touchY: Float,
+    private val count: Int = 1,
 ) : View.DragShadowBuilder() {
 
     override fun onProvideShadowMetrics(outShadowSize: android.graphics.Point, outShadowTouchPoint: android.graphics.Point) {
@@ -37,5 +38,20 @@ internal class FileBrowserDragShadow(
         canvas.clipPath(clip)
         canvas.drawBitmap(source, 0f, 0f, null)
         canvas.restore()
+        if (count > 1) {
+            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xE6207CF6.toInt()
+            }
+            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFFFFFFF.toInt()
+                textSize = 34f
+                textAlign = Paint.Align.CENTER
+                isFakeBoldText = true
+            }
+            val cx = source.width - 42f
+            val cy = 42f
+            canvas.drawCircle(cx, cy, 30f, badgePaint)
+            canvas.drawText(count.toString(), cx, cy + 12f, textPaint)
+        }
     }
 }

@@ -458,8 +458,13 @@ internal class FileBrowserController(
     }
 
     fun dropEntryInto(sourcePath: String, targetDir: String, cut: Boolean) {
+        dropEntriesInto(listOf(sourcePath), targetDir, cut)
+    }
+
+    fun dropEntriesInto(sourcePaths: List<String>, targetDir: String, cut: Boolean) {
         val access = state.access ?: return
-        if (state.operationRunning || sourcePath == targetDir) return
+        val paths = sourcePaths.filter { it != targetDir }.distinct()
+        if (state.operationRunning || paths.isEmpty()) return
         state = state.copy(
             operationRunning = true,
             operationProgress = 0f,
@@ -469,7 +474,7 @@ internal class FileBrowserController(
         )
         operationJob = scope.launch {
             val report = FileBrowserOperations.transfer(
-                paths = listOf(sourcePath),
+                paths = paths,
                 targetDir = targetDir,
                 mode = if (cut) FileTransferMode.MOVE else FileTransferMode.COPY,
                 access = access,
