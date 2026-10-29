@@ -1887,6 +1887,7 @@
     <string name="float_ball_idle_delay_value">%1$s 秒</string>
     <string name="float_ball_pointer_speed">加号横向速度</string>
     <string name="float_ball_pointer_speed_vertical">加号纵向速度</string>
+<string name="float_ball_pick_accel_zone">起步加速区（2 倍速）</string>
     <string name="float_ball_pick_offset">加号间距</string>
     <string name="float_ball_pick_text_size">取词文字大小</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
@@ -1942,7 +1943,7 @@
     <string name="float_ball_pick_panel_enter_animation">取词面板弹出动画</string>
     <string name="float_ball_pick_panel_exit_animation">取词面板消失动画</string>
     <string name="float_ball_pick_panel_animation_ms_value">%1$d 毫秒</string>
-    <string name="float_ball_pointer_slop">全屏指针触发距离</string>
+    <string name="float_ball_pointer_slop">拖动死区</string>
     <string name="float_ball_hover_pause_delay">悬停触发延迟</string>
     <string name="float_ball_regional_cancel_slop">截图原点取消容差</string>
     <string name="float_ball_text_copied">已复制文字到剪贴板</string>

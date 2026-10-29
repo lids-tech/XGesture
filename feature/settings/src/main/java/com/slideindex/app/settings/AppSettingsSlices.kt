@@ -256,6 +256,13 @@ data class FloatBallSettings(
      * Independent from [floatBallPointerSpeedFraction].
      */
     val floatBallPointerSpeedVerticalFraction: Float = 0.35f,
+    /**
+     * 取词光标「起步加速区」宽度（0–1，占屏幕该轴尺寸的比例；0 = 关闭）。
+     *
+     * 区内光标至少按 2 倍速移动（见 `FloatingPointerBounds.PICK_ACCEL_GAIN`）：从边缘起手时先把
+     * 十字甩到前面，低速档也能在一屏行程内够到对侧；区外回到用户自己的倍率做精调。
+     */
+    val floatBallPickAccelZoneFraction: Float = 0.5f,
     val floatBallPositionMode: FloatBallPositionMode = FloatBallPositionMode.RIGHT,
     /** Which side shows the ball when [floatBallPositionMode] is [FloatBallPositionMode.BOTH_EDGES]. */
     val floatBallActiveSide: FloatBallSide = FloatBallSide.RIGHT,
@@ -331,7 +338,7 @@ data class FloatBallSettings(
     /** Bottom pick panel slide-out duration in ms (0 = no animation). */
     val floatBallPickPanelExitAnimationMs: Int = 64,
     /** Finger travel before full-screen pointer mode activates. */
-    val floatBallPointerSlopDp: Float = 4f,
+    val floatBallPointerSlopDp: Float = 3f,
     /** Hover dwell time before cursor locks start position for text pick or screenshot (ms). */
     val floatBallHoverPauseDelayMs: Int = 400,
     /** 悬浮球/侧边条长按手势的触发时长（ms）。 */

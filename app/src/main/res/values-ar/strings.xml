@@ -1796,6 +1796,7 @@
     <string name="float_ball_idle_delay_value">%1$s ث</string>
     <string name="float_ball_pointer_speed">السرعة الأفقية لعلامة الجمع</string>
     <string name="float_ball_pointer_speed_vertical">السرعة العمودية لعلامة الجمع</string>
+<string name="float_ball_pick_accel_zone">نطاق التعزيز الابتدائي (2×)</string>
     <string name="float_ball_pick_offset">تباعد علامة الجمع</string>
     <string name="float_ball_pick_text_size">حجم نص الالتقاط</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
@@ -1845,7 +1846,7 @@
     <string name="float_ball_pick_panel_enter_animation">رسوم متحركة لظهور لوحة التقاط النص</string>
     <string name="float_ball_pick_panel_exit_animation">رسوم متحركة لاختفاء لوحة التقاط النص</string>
     <string name="float_ball_pick_panel_animation_ms_value">%1$d مللي ثانية</string>
-    <string name="float_ball_pointer_slop">مسافة تشغيل المؤشر بملء الشاشة</string>
+    <string name="float_ball_pointer_slop">منطقة بدء السحب</string>
     <string name="float_ball_hover_pause_delay">تأخير تشغيل التمرير</string>
     <string name="float_ball_regional_cancel_slop">تسامح إلغاء نقطة بداية لقطة الشاشة</string>
     <string name="float_ball_text_copied">تم نسخ النص إلى الحافظة</string>

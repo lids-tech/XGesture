@@ -596,6 +596,10 @@ class ExtensionSettingsViewModel @Inject constructor(
         settingsRepository.setFloatBallPointerSpeedVerticalFraction(fraction)
     }
 
+    fun setFloatBallPickAccelZoneFraction(fraction: Float) = launchSettingsWrite {
+        settingsRepository.setFloatBallPickAccelZoneFraction(fraction)
+    }
+
     fun setFloatBallPositionMode(mode: FloatBallPositionMode) = launchSettingsWrite {
         settingsRepository.setFloatBallPositionMode(mode)
     }

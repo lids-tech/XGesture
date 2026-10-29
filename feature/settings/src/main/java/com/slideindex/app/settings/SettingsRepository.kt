@@ -605,6 +605,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallPointerSpeedVerticalFraction(value: Float) =
         overlay.setFloatBallPointerSpeedVerticalFraction(value)
 
+    suspend fun setFloatBallPickAccelZoneFraction(value: Float) =
+        overlay.setFloatBallPickAccelZoneFraction(value)
+
     suspend fun setFloatBallPositionMode(mode: FloatBallPositionMode) =
         overlay.setFloatBallPositionMode(mode)
 
