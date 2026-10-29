@@ -36,7 +36,6 @@ object DragFileMirror {
     private const val TAG = "DragFileMirror"
     internal const val PREFS_NAME = "drag_file_mirror_records"
     private const val CACHE_DIR = "SlideIndex/DragCache"
-    private const val MAX_MIRROR_BYTES = 64L * 1024 * 1024
 
     /** [CACHE_DIR] 的小写形式，方便判定 MediaStore 路径是不是拖拽镜像。 */
     internal val PATH_MARKER: String = CACHE_DIR.lowercase(Locale.ROOT)
@@ -71,8 +70,6 @@ object DragFileMirror {
         purgeOrphans(context)
         val app = context.applicationContext
         val resolver = app.contentResolver
-        val sourceSize = querySize(app, source)
-        if (sourceSize != null && sourceSize > MAX_MIRROR_BYTES) return null
         val mime = resolveMime(app, source, displayName, mimeType)
         val name = ensureExtension(
             sanitizeFileName(displayName ?: queryDisplayName(app, source) ?: source.lastPathSegment ?: "file"),

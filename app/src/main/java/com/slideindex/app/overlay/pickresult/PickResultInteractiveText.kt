@@ -204,6 +204,12 @@ internal fun PickResultInteractiveTextSection(
                 textFieldValue = TextFieldValue(text)
             }
             autoSelectedKey = null
+        } else if (textMode != PickResultTextMode.EDIT && text != textFieldValue.text) {
+            // 自动全选时也要把「显示副本」同步到真文字：面板先开、文字后到（扫码 / 延迟 OCR）时，
+            // 正文的空判定读的还是旧副本，会一直显示「未识别到文字」（真机：点开编辑后内容才出现）。
+            // WORD_TAP / SELECT 下正文不可编辑，直接重建不会覆盖用户输入；正在编辑的同步由下面的
+            // EDIT 分支负责（带选区）。
+            textFieldValue = TextFieldValue(text)
         }
     }
 

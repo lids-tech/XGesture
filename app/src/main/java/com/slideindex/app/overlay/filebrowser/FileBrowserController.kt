@@ -1,6 +1,7 @@
 package com.slideindex.app.overlay.filebrowser
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -73,7 +74,8 @@ internal class FileBrowserController(
     private var searchJob: Job? = null
     private var operationJob: Job? = null
     private var nextTabId: Long = 1L
-    private val scrollPositions = mutableMapOf<Long, Pair<Int, Int>>()
+    private val scrollPositions = mutableMapOf<Pair<Long, String>, Pair<Int, Int>>()
+    private var currentScrollProvider: (() -> Pair<Int, Int>)? = null
 
     val internalRoot: String get() = dataSource.internalRoot
 
@@ -157,6 +159,16 @@ internal class FileBrowserController(
         rememberTabs()
     }
 
+    fun bindScrollProvider(provider: () -> Pair<Int, Int>) {
+        currentScrollProvider = provider
+    }
+
+    private fun saveCurrentScroll() {
+        val position = currentScrollProvider?.invoke() ?: return
+        scrollPositions[state.activeTabId to state.path] = position
+        Log.d("FileBrowserScroll", "save path=${state.path} pos=$position")
+    }
+
     fun navigateTo(path: String) {
         navigateTo(path, pushHistory = true)
     }
@@ -164,6 +176,7 @@ internal class FileBrowserController(
     private fun navigateTo(path: String, pushHistory: Boolean) {
         val normalized = FileBrowserPaths.normalize(path, internalRoot)
         if (normalized == state.path && state.error == null) return
+        saveCurrentScroll()
         searchJob?.cancel()
         searchJob = null
         val currentTab = state.tabs.firstOrNull { it.id == state.activeTabId }
@@ -177,7 +190,6 @@ internal class FileBrowserController(
                 it
             }
         }
-        scrollPositions.remove(state.activeTabId)
         state = state.copy(
             path = normalized,
             entries = emptyList(),
@@ -207,6 +219,7 @@ internal class FileBrowserController(
     }
 
     fun goBack() {
+        saveCurrentScroll()
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
         val target = tab?.backStack?.lastOrNull()
         if (target == null) {
@@ -284,7 +297,7 @@ internal class FileBrowserController(
     }
 
     private fun saveActiveTab(): List<FileBrowserTab> {
-        val scroll = scrollPositions[state.activeTabId]
+        val scroll = scrollPositions[state.activeTabId to state.path]
         return state.tabs.map {
             if (it.id == state.activeTabId) {
                 it.copy(
@@ -308,13 +321,23 @@ internal class FileBrowserController(
     }
 
     fun saveScroll(index: Int, offset: Int) {
-        scrollPositions[state.activeTabId] = index to offset
+        saveScrollAt(state.path, index, offset)
+    }
+
+    fun saveScrollAt(path: String, index: Int, offset: Int) {
+        scrollPositions[state.activeTabId to path] = index to offset
     }
 
     fun scrollForActiveTab(): Pair<Int, Int> {
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
-        return scrollPositions[state.activeTabId]
-            ?: (tab?.scrollIndex ?: 0) to (tab?.scrollOffset ?: 0)
+        val cached = scrollPositions[state.activeTabId to state.path]
+        Log.d("FileBrowserScroll", "read path=${state.path} cached=$cached tab=${tab?.path}")
+        return cached
+            ?: if (tab?.path == state.path) {
+                (tab.scrollIndex) to (tab.scrollOffset)
+            } else {
+                0 to 0
+            }
     }
 
     fun refresh() {
@@ -354,9 +377,15 @@ internal class FileBrowserController(
     }
 
     fun enterSelection(entry: FileBrowserEntry) {
+        if (state.selectionMode && entry.path in state.selectedPaths) return
+        val selected = if (state.selectionMode) {
+            state.selectedPaths + entry.path
+        } else {
+            setOf(entry.path)
+        }
         state = state.copy(
             selectionMode = true,
-            selectedPaths = setOf(entry.path),
+            selectedPaths = selected,
             details = null,
         )
     }
@@ -368,7 +397,7 @@ internal class FileBrowserController(
             state.selectedPaths + path
         }
         state = state.copy(
-            selectionMode = selected.isNotEmpty() || state.selectionMode,
+            selectionMode = selected.isNotEmpty(),
             selectedPaths = selected,
         )
     }
@@ -452,6 +481,43 @@ internal class FileBrowserController(
                     else -> null
                 },
                 clipboard = if (report.failures.isEmpty()) null else clipboard,
+            )
+            refresh()
+        }
+    }
+
+    fun dropEntryInto(sourcePath: String, targetDir: String, cut: Boolean) {
+        dropEntriesInto(listOf(sourcePath), targetDir, cut)
+    }
+
+    fun dropEntriesInto(sourcePaths: List<String>, targetDir: String, cut: Boolean) {
+        val access = state.access ?: return
+        val paths = sourcePaths.filter { it != targetDir }.distinct()
+        if (state.operationRunning || paths.isEmpty()) return
+        state = state.copy(
+            operationRunning = true,
+            operationProgress = 0f,
+            operationMessage = null,
+            selectionMode = false,
+            selectedPaths = emptySet(),
+        )
+        operationJob = scope.launch {
+            val report = FileBrowserOperations.transfer(
+                paths = paths,
+                targetDir = targetDir,
+                mode = if (cut) FileTransferMode.MOVE else FileTransferMode.COPY,
+                access = access,
+                policy = FileConflictPolicy.RENAME,
+            ) { done, total ->
+                state = state.copy(
+                    operationProgress = if (total == 0) 0f else done.toFloat() / total,
+                )
+            }
+            if (!isActive) return@launch
+            state = state.copy(
+                operationRunning = false,
+                operationProgress = 0f,
+                operationMessage = if (report.failures.isNotEmpty()) "有 ${report.failures.size} 项失败" else null,
             )
             refresh()
         }

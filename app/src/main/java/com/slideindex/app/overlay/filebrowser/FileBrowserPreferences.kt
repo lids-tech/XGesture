@@ -31,6 +31,7 @@ internal data class FileBrowserPrefs(
     val tabs: List<String> = emptyList(),
     val activeTabIndex: Int = 0,
     val hiddenShortcuts: List<String> = emptyList(),
+    val shortcutOrder: List<String> = emptyList(),
 )
 
 internal object FileBrowserPreferences {
@@ -82,24 +83,84 @@ internal object FileBrowserPreferences {
         )
     }
 
+    fun defaultShortcuts(internalRoot: String): List<String> {
+        val root = FileBrowserPaths.normalize(internalRoot, internalRoot)
+        return (defaultPins(root) + "$root/Android/obb")
+            .map { FileBrowserPaths.normalize(it, root) }
+    }
+
+    private fun allShortcuts(internalRoot: String): List<String> {
+        val root = FileBrowserPaths.normalize(internalRoot, internalRoot)
+        val valid = (defaultShortcuts(root) + userPinned(root)).distinct()
+        val stored = current.shortcutOrder
+            .map { FileBrowserPaths.normalize(it, root) }
+            .filter { it in valid }
+        val missingDefaults = defaultShortcuts(root).filterNot { it in stored }
+        val missingUser = userPinned(root).filterNot { it in stored }
+        return (stored + missingDefaults + missingUser).distinct()
+    }
+
     fun togglePin(path: String) {
-        val normalized = FileBrowserPaths.normalize(path)
         val root = FileBrowserStorage.internalStoragePath()
-        val base = current.pinnedPaths.ifEmpty { defaultPins(root) }
-        val existing = base.map { FileBrowserPaths.normalize(it) }.toMutableList()
+        val normalized = FileBrowserPaths.normalize(path, root)
+        if (isSystemShortcut(normalized, root)) {
+            if (normalized in hiddenSystemShortcuts()) {
+                unhideShortcut(normalized)
+            } else {
+                hideShortcut(normalized)
+            }
+            return
+        }
+        val existing = userPinned(root).toMutableList()
+        val order = allShortcuts(root).toMutableList()
         if (existing.contains(normalized)) {
             existing.remove(normalized)
+            order.remove(normalized)
         } else {
             existing.add(normalized)
+            if (normalized !in order) order.add(normalized)
         }
-        update { it.copy(pinnedPaths = existing.distinct().take(MAX_PINS)) }
+        update {
+            it.copy(
+                pinnedPaths = existing.distinct().take(MAX_PINS),
+                shortcutOrder = order.distinct(),
+            )
+        }
     }
 
     fun isPinned(path: String): Boolean {
         val normalized = FileBrowserPaths.normalize(path)
         val root = FileBrowserStorage.internalStoragePath()
-        val base = current.pinnedPaths.ifEmpty { defaultPins(root) }
-        return base.any { FileBrowserPaths.normalize(it) == normalized }
+        if (isSystemShortcut(normalized, root)) {
+            return normalized !in hiddenSystemShortcuts()
+        }
+        return userPinned(root).contains(normalized)
+    }
+
+    fun removeShortcut(path: String) {
+        val root = FileBrowserStorage.internalStoragePath()
+        val normalized = FileBrowserPaths.normalize(path, root)
+        if (isSystemShortcut(normalized, root)) {
+            hideShortcut(normalized)
+        } else {
+            update {
+                it.copy(
+                    pinnedPaths = userPinned(root)
+                        .filterNot { item -> item == normalized },
+                    shortcutOrder = allShortcuts(root)
+                        .filterNot { item -> item == normalized },
+                )
+            }
+        }
+    }
+
+    fun userPinned(internalRoot: String): List<String> {
+        val root = FileBrowserPaths.normalize(internalRoot, internalRoot)
+        return current.pinnedPaths
+            .map { FileBrowserPaths.normalize(it, root) }
+            .filterNot { isSystemShortcut(it, root) }
+            .distinct()
+            .take(MAX_PINS)
     }
 
     fun rememberTabs(paths: List<String>, activeIndex: Int) {
@@ -114,10 +175,7 @@ internal object FileBrowserPreferences {
     }
 
     fun movePin(from: Int, to: Int, internalRoot: String) {
-        val base = current.pinnedPaths.ifEmpty { defaultPins(internalRoot) }
-            .map { FileBrowserPaths.normalize(it) }
-            .distinct()
-            .toMutableList()
+        val base = userPinned(internalRoot).toMutableList()
         if (from !in base.indices || to !in base.indices || from == to) return
         val item = base.removeAt(from)
         base.add(to, item)
@@ -141,20 +199,44 @@ internal object FileBrowserPreferences {
         }
     }
 
+    fun unhideShortcut(path: String) {
+        val normalized = FileBrowserPaths.normalize(path)
+        update {
+            it.copy(hiddenShortcuts = it.hiddenShortcuts.filterNot { item ->
+                FileBrowserPaths.normalize(item) == normalized
+            })
+        }
+    }
+
     fun resetHiddenShortcuts() {
         update { it.copy(hiddenShortcuts = emptyList()) }
     }
 
     fun quickShortcuts(internalRoot: String): List<String> {
-        val root = FileBrowserPaths.normalize(internalRoot, internalRoot)
         val hidden = hiddenSystemShortcuts()
-        val system = (defaultPins(root) + "$root/Android/obb")
-            .map { FileBrowserPaths.normalize(it, root) }
+        return allShortcuts(internalRoot)
             .filterNot { it in hidden }
-        val user = current.pinnedPaths
-            .map { FileBrowserPaths.normalize(it, root) }
-            .filterNot { it in system }
-        return (system + user).distinct().take(MAX_PINS)
+            .take(MAX_PINS)
+    }
+
+    /**
+     * 按“可见列表”的 from/to 移动，内部映射回完整顺序，
+     * 这样隐藏项不会破坏排序索引。
+     */
+    fun moveShortcut(fromVisible: Int, toVisible: Int, internalRoot: String) {
+        val order = allShortcuts(internalRoot).toMutableList()
+        val hidden = hiddenSystemShortcuts()
+        val visible = order.filterNot { it in hidden }
+        if (fromVisible !in visible.indices || toVisible !in visible.indices) return
+        if (fromVisible == toVisible) return
+        val fromPath = visible[fromVisible]
+        val toPath = visible[toVisible]
+        val fromIndex = order.indexOf(fromPath)
+        val toIndex = order.indexOf(toPath)
+        if (fromIndex < 0 || toIndex < 0) return
+        val item = order.removeAt(fromIndex)
+        order.add(toIndex, item)
+        update { it.copy(shortcutOrder = order) }
     }
 
     fun rememberLastPath(path: String) {        val normalized = FileBrowserPaths.normalize(path)
@@ -184,6 +266,10 @@ internal object FileBrowserPreferences {
             .distinct()
             .take(MAX_PINS),
         lastPath = prefs.lastPath?.takeIf { it.startsWith("/") },
+        shortcutOrder = prefs.shortcutOrder
+            .map { FileBrowserPaths.normalize(it) }
+            .filter { it.startsWith("/") }
+            .distinct(),
     )
 
     private suspend fun read(context: Context): FileBrowserPrefs {

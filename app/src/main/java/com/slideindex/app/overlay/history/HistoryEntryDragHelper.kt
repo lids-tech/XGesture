@@ -195,6 +195,7 @@ internal object HistoryEntryDragHelper {
         onDragStart: () -> Unit,
         onDragEnd: () -> Unit,
         onDropRejected: (() -> Unit)? = null,
+        dragShadow: DragShadowBuilder? = null,
     ): Boolean {
         val context = view.context
         val targetPackage = AccessibilityForegroundResolver.resolve(context)
@@ -230,7 +231,8 @@ internal object HistoryEntryDragHelper {
         }
         grantDragUriPermissionsToForegroundHost(context, effectiveClip, targetPackage)
         val flags = buildDragFlags(effectiveClip)
-        view.startDragAndDrop(effectiveClip, EntryDragShadowBuilder(view, preview), null, flags)
+        val shadow = dragShadow ?: EntryDragShadowBuilder(view, preview)
+        view.startDragAndDrop(effectiveClip, shadow, null, flags)
         return true
     }
 

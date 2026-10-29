@@ -1,11 +1,15 @@
 package com.slideindex.app.overlay.filebrowser
 
+import android.content.ClipData
 import android.graphics.Bitmap
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,21 +57,39 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.core.view.drawToBitmap
 import com.slideindex.app.R
+import com.slideindex.app.clipboard.ClipboardDragShareFallback
+import com.slideindex.app.overlay.history.HistoryDragPreview
+import com.slideindex.app.overlay.history.HistoryEntryDragHelper
+import java.io.File
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 internal fun FileBrowserListContent(
@@ -83,6 +105,7 @@ internal fun FileBrowserListContent(
     onRetry: () -> Unit,
     onRequestAllFiles: () -> Unit,
     onRequestShizuku: () -> Unit,
+    bottomInset: Dp = 0.dp,
 ) {
     val error = state.error
     when {
@@ -104,7 +127,7 @@ internal fun FileBrowserListContent(
         else -> LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 8.dp),
+            contentPadding = PaddingValues(bottom = 8.dp + bottomInset),
         ) {
             itemsIndexed(
                 items = filtered,
@@ -118,6 +141,11 @@ internal fun FileBrowserListContent(
                     access = access,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
+                    dragPaths = if (selectionMode && entry.path in selectedPaths) {
+                        selectedPaths.toList()
+                    } else {
+                        listOf(entry.path)
+                    },
                 )
             }
         }
@@ -134,10 +162,41 @@ private fun FileBrowserEntryRow(
     access: FileBrowserAccessInfo?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    dragPaths: List<String>,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
     val isFolder = entry.kind == FileEntryKind.DIRECTORY
     val context = LocalContext.current
+    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
+    var rowBounds by remember { mutableStateOf(Rect.Zero) }
+    val dragClip = remember(dragPaths) {
+        val uris = dragPaths.mapNotNull { path ->
+            runCatching {
+                val file = File(path)
+                if (file.isFile && file.canRead()) {
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                } else {
+                    null
+                }
+            }.getOrNull()
+        }
+        if (uris.isEmpty()) {
+            ClipData.newPlainText(entry.name, entry.path)
+        } else {
+            ClipData.newUri(context.contentResolver, entry.name, uris.first()).apply {
+                uris.drop(1).forEach { uri -> addItem(ClipData.Item(uri)) }
+            }
+        }
+    }
+    val latestOnClick by rememberUpdatedState(onClick)
+    val latestOnLongClick by rememberUpdatedState(onLongClick)
+    val latestDragPaths by rememberUpdatedState(dragPaths)
+    val latestDragClip by rememberUpdatedState(dragClip)
     val tint = if (isFolder) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -165,6 +224,7 @@ private fun FileBrowserEntryRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .onGloballyPositioned { rowBounds = it.boundsInRoot() }
                 .background(
                     if (selected) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
@@ -172,10 +232,100 @@ private fun FileBrowserEntryRow(
                         Color.Transparent
                     },
                 )
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                )
+                .pointerInput(entry.path) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var tap = false
+                        var scrolled = false
+                        val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                    ?: return@withTimeoutOrNull false
+                                if (!change.pressed) {
+                                    tap = true
+                                    return@withTimeoutOrNull false
+                                }
+                                val moved = (change.position - down.position).getDistance()
+                                if (moved > viewConfiguration.touchSlop || change.isConsumed) {
+                                    scrolled = true
+                                    return@withTimeoutOrNull false
+                                }
+                            }
+                        } == null
+                        if (!timedOut) {
+                            if (tap && !scrolled) latestOnClick()
+                            return@awaitEachGesture
+                        }
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val rowSnapshot = runCatching {
+                            val full = view.drawToBitmap()
+                            val left = rowBounds.left.toInt().coerceIn(0, full.width - 1)
+                            val top = rowBounds.top.toInt().coerceIn(0, full.height - 1)
+                            val width = rowBounds.width.toInt()
+                                .coerceIn(1, full.width - left)
+                            val height = rowBounds.height.toInt()
+                                .coerceIn(1, full.height - top)
+                            Bitmap.createBitmap(full, left, top, width, height)
+                        }.getOrNull()
+                        val lockedPaths = latestDragPaths
+                        val lockedClip = latestDragClip
+                        latestOnLongClick()
+                        // 菜单出现后不松手，继续按住到第二个阈值才进入拖拽。
+                        val released = withTimeoutOrNull(420L) {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                    ?: return@withTimeoutOrNull true
+                                if (!change.pressed) return@withTimeoutOrNull true
+                                change.consume()
+                            }
+                            @Suppress("UNREACHABLE_CODE")
+                            true
+                        }
+                        if (released != null) return@awaitEachGesture
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (rowSnapshot != null) {
+                            val started = HistoryEntryDragHelper.startDrag(
+                                view = view,
+                                clipData = lockedClip,
+                                preview = HistoryDragPreview(),
+                                dragShadow = FileBrowserDragShadow(
+                                    source = rowSnapshot,
+                                    touchX = down.position.x,
+                                    touchY = down.position.y,
+                                    count = lockedPaths.size,
+                                ),
+                                onDragStart = { FileBrowserOverlayWindow.suspendForFileDrag() },
+                                onDragEnd = { FileBrowserOverlayWindow.resumeFromFileDrag() },
+                                onDropRejected = {
+                                    if (ClipboardDragShareFallback.hasShareableContent(lockedClip) &&
+                                        !ClipboardDragShareFallback.shareToForegroundHost(context, lockedClip)
+                                    ) {
+                                        Toast.makeText(
+                                            context,
+                                            R.string.history_drag_unsupported,
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                },
+                            )
+                            if (!started &&
+                                !ClipboardDragShareFallback.shareToForegroundHost(context, lockedClip)
+                            ) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.history_drag_unsupported,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                            Log.d(
+                                "FileBrowserDrag",
+                                "start ${entry.path} started=$started count=${lockedPaths.size} paths=$lockedPaths",
+                            )
+                        }
+                    }
+                }
                 .heightIn(min = 60.dp)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

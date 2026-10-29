@@ -3,18 +3,25 @@ package com.slideindex.app.overlay.filebrowser
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,9 +59,16 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -70,22 +84,32 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,6 +122,8 @@ import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.ui.miuix.MiuixSearchField
 import com.slideindex.app.ui.theme.LocalAppDarkTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbBarDefaults
@@ -129,6 +155,11 @@ internal fun FileBrowserPanel(
         )
     }
     val listState = rememberLazyListState()
+    LaunchedEffect(listState) {
+        controller.bindScrollProvider {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }
+    }
     var quickBarVisible by remember { mutableStateOf(true) }
     LaunchedEffect(state.activeTabId) {
         quickBarVisible = true
@@ -150,18 +181,34 @@ internal fun FileBrowserPanel(
             last = current
         }
     }
-    var restoredTabId by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(state.activeTabId, state.loading) {
-        if (!state.loading && restoredTabId != state.activeTabId) {
-            restoredTabId = state.activeTabId
-            val (index, offset) = controller.scrollForActiveTab()
-            runCatching { listState.scrollToItem(index, offset) }
+    DisposableEffect(state.activeTabId, state.path) {
+        val path = state.path
+        onDispose {
+            controller.saveScrollAt(
+                path,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+            )
         }
     }
-    LaunchedEffect(listState, state.activeTabId) {
+    LaunchedEffect(state.activeTabId, state.path) {
+        val path = state.path
         snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
+            state.loading to listState.layoutInfo.totalItemsCount
+        }.first { (loading, total) -> !loading && total > 0 }
+        withFrameNanos { }
+        val (index, offset) = controller.scrollForActiveTab()
+        Log.d("FileBrowserScroll", "restore path=$path target=$index,$offset total=${listState.layoutInfo.totalItemsCount}")
+        runCatching { listState.scrollToItem(index, offset) }
+        withFrameNanos { }
+        if (listState.firstVisibleItemIndex != index) {
+            runCatching { listState.scrollToItem(index, offset) }
+        }
+        snapshotFlow {
+            if (state.loading || state.path != path) null else {
+                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            }
+        }.filterNotNull().collect { (index, offset) ->
             controller.saveScroll(index, offset)
         }
     }
@@ -171,6 +218,7 @@ internal fun FileBrowserPanel(
             .sumOf { it.sizeBytes }
     }
     val context = LocalContext.current
+    val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
     var copied by remember { mutableStateOf(false) }
     var showPathDialog by remember { mutableStateOf(false) }
@@ -179,6 +227,20 @@ internal fun FileBrowserPanel(
     var showMenu by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
     var imagePreview by remember { mutableStateOf<FileBrowserEntry?>(null) }
+    var selectionBarHeightPx by remember { mutableStateOf(0) }
+    val selectionInset = if (state.selectionMode) {
+        with(density) { selectionBarHeightPx.toDp() }
+    } else {
+        0.dp
+    }
+    LaunchedEffect(state.selectionMode, selectionBarHeightPx, filtered) {
+        if (state.selectionMode && selectionBarHeightPx > 0) {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            if (lastVisible != null && lastVisible.index >= filtered.lastIndex - 1) {
+                runCatching { listState.scrollBy(selectionBarHeightPx.toFloat()) }
+            }
+        }
+    }
     var exportBusy by remember { mutableStateOf(false) }
     var exportFailed by remember { mutableStateOf(false) }
     var nameTarget by remember { mutableStateOf<FileBrowserNameTarget?>(null) }
@@ -199,9 +261,6 @@ internal fun FileBrowserPanel(
         exportFailed = false
     }
 
-    LaunchedEffect(state.path) {
-        runCatching { listState.scrollToItem(0) }
-    }
     LaunchedEffect(copied) {
         if (copied) {
             delay(1_600L)
@@ -247,7 +306,9 @@ internal fun FileBrowserPanel(
                     .height(cardHeight),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
                         FileBrowserHeader(
                             access = state.access,
                             onRefresh = controller::refresh,
@@ -269,8 +330,13 @@ internal fun FileBrowserPanel(
                                 focusManager.clearFocus()
                                 controller.navigateTo(target)
                             },
+                            onLongClick = { copyToClipboard(context, state.path) },
                         )
-                        if (searchExpanded || state.query.isNotEmpty()) {
+                        AnimatedVisibility(
+                            visible = searchExpanded || state.query.isNotEmpty(),
+                            enter = expandVertically(tween(160)) + fadeIn(tween(120)),
+                            exit = shrinkVertically(tween(140)) + fadeOut(tween(100)),
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -338,7 +404,7 @@ internal fun FileBrowserPanel(
                                 listState = listState,
                                 onEntryClick = { entry ->
                                     focusManager.clearFocus()
-                                    if (state.selectionMode) {
+                                    if (state.selectionMode || state.selectedPaths.isNotEmpty()) {
                                         controller.toggleSelection(entry.path)
                                     } else {
                                         when (entry.kind) {
@@ -362,6 +428,7 @@ internal fun FileBrowserPanel(
                                 onRetry = controller::refresh,
                                 onRequestAllFiles = onRequestAllFiles,
                                 onRequestShizuku = onRequestShizuku,
+                                bottomInset = selectionInset,
                             )
                         }
                         if (state.selectionMode) {
@@ -369,6 +436,14 @@ internal fun FileBrowserPanel(
                                 count = state.selectedPaths.size,
                                 onCopy = { controller.copySelection(cut = false) },
                                 onMove = { controller.copySelection(cut = true) },
+                                onShare = {
+                                    val paths = state.selectedPaths.toList()
+                                    if (paths.isNotEmpty()) {
+                                        actionScope.launch {
+                                            shareFileBrowserPaths(context, paths, state.access)
+                                        }
+                                    }
+                                },
                                 onDelete = { showBatchDelete = true },
                                 onDetails = if (state.selectedPaths.size == 1) {
                                     {
@@ -380,6 +455,9 @@ internal fun FileBrowserPanel(
                                     null
                                 },
                                 onCancel = controller::exitSelection,
+                                modifier = Modifier.onSizeChanged {
+                                    selectionBarHeightPx = it.height
+                                },
                             )
                         }
                         if (!state.selectionMode && state.clipboard != null) {
@@ -481,7 +559,6 @@ internal fun FileBrowserPanel(
                         }
                         FileBrowserDetailsOverlay(
                             entry = details,
-                            copied = copied,
                             onCopy = {
                                 copyToClipboard(context, details.path)
                                 copied = true
@@ -714,9 +791,33 @@ internal fun FileBrowserPanel(
                         )
                     }
                     imagePreview?.let { entry ->
+                        val images = filtered.filter {
+                            FileKind.from(it.name, it.kind) == FileKind.IMAGE
+                        }
+                        val imageIndex = images.indexOfFirst { it.path == entry.path }
                         FileBrowserImageViewer(
                             entry = entry,
                             access = state.access,
+                            onPrevious = if (imageIndex > 0) {
+                                { imagePreview = images[imageIndex - 1] }
+                            } else {
+                                null
+                            },
+                            onNext = if (imageIndex >= 0 && imageIndex < images.lastIndex) {
+                                { imagePreview = images[imageIndex + 1] }
+                            } else {
+                                null
+                            },
+                            onDetails = {
+                                imagePreview = null
+                                controller.showDetails(entry)
+                            },
+                            onEdit = { bitmap ->
+                                val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
+                                    .put(context, bitmap)
+                                com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
+                                    .launch(context, editorPath)
+                            },
                             onClose = { imagePreview = null },
                         )
                     }
@@ -889,7 +990,6 @@ private fun FileBrowserTabBar(
                         if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                         else Color.Transparent,
                     )
-                    .clickable { onSelect(tab.id) }
                     .padding(start = 9.dp, end = if (tabs.size > 1) 2.dp else 9.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -899,20 +999,22 @@ private fun FileBrowserTabBar(
                     fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 130.dp),
+                    modifier = Modifier
+                        .widthIn(max = 130.dp)
+                        .clickable { onSelect(tab.id) },
                 )
                 if (tabs.size > 1) {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .clickable { onClose(tab.id) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = null,
-                            modifier = Modifier.size(13.dp),
+                            modifier = Modifier.size(12.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1056,6 +1158,7 @@ private fun FileBrowserBreadcrumb(
     path: String,
     internalRoot: String,
     onNavigate: (String) -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val rootLabel = stringResource(R.string.file_browser_crumb_root)
     val internalLabel = stringResource(R.string.file_browser_crumb_internal)
@@ -1081,7 +1184,12 @@ private fun FileBrowserBreadcrumb(
                 onNavigate(items[index].path)
             }
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onLongClick,
+            ),
         highlightIndex = items.lastIndex,
         colors = BreadcrumbBarDefaults.breadcrumbBarColors(
             color = MiuixTheme.colorScheme.onBackground.copy(alpha = 0.62f),
@@ -1107,60 +1215,162 @@ private fun FileBrowserQuickChips(
     onNavigate: (String) -> Unit,
 ) {
     val paths = FileBrowserPreferences.quickShortcuts(internalRoot)
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    if (paths.isEmpty()) return
+    val scrollState = rememberScrollState()
+    val haptic = LocalHapticFeedback.current
+    val actionScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val spacingPx = with(density) { 8.dp.toPx() }
+    val itemBounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    var draggingPath by remember { mutableStateOf<String?>(null) }
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    var settlingTarget by remember { mutableStateOf<Float?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
     ) {
-        items(paths, key = { it }) { path ->
-            val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
-            val label = when (path) {
-                "/" -> stringResource(R.string.file_browser_quick_root)
-                normalizedRoot -> stringResource(R.string.file_browser_quick_internal)
-                "$normalizedRoot/Android/data" -> stringResource(R.string.file_browser_quick_android_data)
-                "$normalizedRoot/Download" -> stringResource(R.string.file_browser_quick_download)
-                "$normalizedRoot/Android/obb" -> stringResource(R.string.file_browser_quick_obb)
-                "/data/data" -> stringResource(R.string.file_browser_quick_app_data)
-                else -> tabTitle(path)
-            }
-            val icon = when (path) {
-                "/" -> Icons.Outlined.Storage
-                normalizedRoot -> Icons.Outlined.PhoneAndroid
-                "$normalizedRoot/Android/data" -> Icons.Outlined.Android
-                "$normalizedRoot/Download" -> Icons.Outlined.Download
-                "/data/data" -> Icons.Outlined.Apps
-                else -> Icons.Outlined.Folder
-            }
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-                    .combinedClickable(
-                        onClick = { onNavigate(path) },
-                        onLongClick = {
-                            if (FileBrowserPreferences.isSystemShortcut(path, internalRoot)) {
-                                FileBrowserPreferences.hideShortcut(path)
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            paths.forEachIndexed { index, path ->
+                val normalizedRoot = FileBrowserPaths.normalize(internalRoot, internalRoot)
+                val label = when (path) {
+                    "/" -> stringResource(R.string.file_browser_quick_root)
+                    normalizedRoot -> stringResource(R.string.file_browser_quick_internal)
+                    "$normalizedRoot/Android/data" -> stringResource(R.string.file_browser_quick_android_data)
+                    "$normalizedRoot/Download" -> stringResource(R.string.file_browser_quick_download)
+                    "$normalizedRoot/Android/obb" -> stringResource(R.string.file_browser_quick_obb)
+                    "/data/data" -> stringResource(R.string.file_browser_quick_app_data)
+                    else -> tabTitle(path)
+                }
+                val icon = when (path) {
+                    "/" -> Icons.Outlined.Storage
+                    normalizedRoot -> Icons.Outlined.PhoneAndroid
+                    "$normalizedRoot/Android/data" -> Icons.Outlined.Android
+                    "$normalizedRoot/Download" -> Icons.Outlined.Download
+                    "/data/data" -> Icons.Outlined.Apps
+                    else -> Icons.Outlined.Folder
+                }
+                val draggedWidth = itemBounds[draggingPath]?.width ?: 0f
+                val fromIndex = draggingIndex
+                val toIndex = dragTargetIndex
+                val shiftTarget = when {
+                    fromIndex == null || toIndex == null || index == fromIndex -> 0f
+                    fromIndex < toIndex && index in (fromIndex + 1)..toIndex ->
+                        -(draggedWidth + spacingPx)
+                    fromIndex > toIndex && index in toIndex until fromIndex ->
+                        draggedWidth + spacingPx
+                    else -> 0f
+                }
+                val animatedShift by animateFloatAsState(
+                    targetValue = shiftTarget,
+                    animationSpec = if (draggingIndex == null) snap() else tween(120),
+                    label = "quick-chip-shift",
+                )
+                val draggedVisual by animateFloatAsState(
+                    targetValue = settlingTarget ?: dragOffset,
+                    animationSpec = if (settlingTarget != null) tween(150) else snap(),
+                    label = "quick-chip-drag",
+                )
+                Row(
+                    modifier = Modifier
+                        .onGloballyPositioned { coords ->
+                            val position = coords.positionInParent()
+                            val bounds = androidx.compose.ui.geometry.Rect(
+                                left = position.x,
+                                top = position.y,
+                                right = position.x + coords.size.width,
+                                bottom = position.y + coords.size.height,
+                            )
+                            if (itemBounds[path] != bounds) itemBounds[path] = bounds
+                        }
+                        .offset {
+                            if (draggingPath == path) {
+                                IntOffset(draggedVisual.roundToInt(), 0)
                             } else {
-                                FileBrowserPreferences.togglePin(path)
+                                IntOffset(animatedShift.roundToInt(), 0)
                             }
-                        },
+                        }
+                        .pointerInput(paths, path, index) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    draggingPath = path
+                                    draggingIndex = index
+                                    dragTargetIndex = index
+                                    dragOffset = 0f
+                                },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    dragOffset += amount.x
+                                    val draggedCenter = itemBounds[path]?.center?.x ?: return@detectDragGesturesAfterLongPress
+                                    val pointerX = draggedCenter + dragOffset
+                                    val target = paths.indices.minByOrNull { candidate ->
+                                        kotlin.math.abs(
+                                            (itemBounds[paths[candidate]]?.center?.x ?: 0f) - pointerX,
+                                        )
+                                    }
+                                    if (target != null && target != dragTargetIndex) {
+                                        dragTargetIndex = target
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                },
+                                onDragEnd = {
+                                    val target = dragTargetIndex ?: index
+                                    val draggedCenter = itemBounds[path]?.center?.x ?: 0f
+                                    val targetCenter = itemBounds[paths.getOrNull(target)]?.center?.x ?: draggedCenter
+                                    settlingTarget = targetCenter - draggedCenter
+                                    actionScope.launch {
+                                        delay(160)
+                                        if (target != index) {
+                                            FileBrowserPreferences.moveShortcut(
+                                                index,
+                                                target,
+                                                internalRoot,
+                                            )
+                                        }
+                                        draggingPath = null
+                                        draggingIndex = null
+                                        dragTargetIndex = null
+                                        dragOffset = 0f
+                                        settlingTarget = null
+                                    }
+                                },
+                                onDragCancel = {
+                                    draggingPath = null
+                                    draggingIndex = null
+                                    dragTargetIndex = null
+                                    dragOffset = 0f
+                                    settlingTarget = null
+                                },
+                            )
+                        }
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                        .clickable { onNavigate(path) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp),
                     )
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(15.dp),
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -1177,9 +1387,13 @@ private fun FileBrowserFavoritesOverlay(
         mutableStateOf(FileBrowserPreferences.quickShortcuts(internalRoot))
     }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragTargetIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
+    var settlingTarget by remember { mutableStateOf<Float?>(null) }
+    val actionScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 56.dp.toPx() }
+    val haptic = LocalHapticFeedback.current
     fun refresh() {
         favorites = FileBrowserPreferences.quickShortcuts(internalRoot)
     }
@@ -1227,84 +1441,117 @@ private fun FileBrowserFavoritesOverlay(
                     )
                 } else {
                     favorites.forEachIndexed { index, path ->
+                        val fromIndex = draggingIndex
+                        val toIndex = dragTargetIndex
+                        val shiftTarget = when {
+                            fromIndex == null || toIndex == null || index == fromIndex -> 0f
+                            fromIndex < toIndex && index in (fromIndex + 1)..toIndex -> -rowHeightPx
+                            fromIndex > toIndex && index in toIndex until fromIndex -> rowHeightPx
+                            else -> 0f
+                        }
+                        val animatedShift by animateFloatAsState(
+                            targetValue = shiftTarget,
+                            animationSpec = if (draggingIndex == null) snap() else tween(120),
+                            label = "favorite-row-shift",
+                        )
+                        val draggedVisual by animateFloatAsState(
+                            targetValue = settlingTarget ?: dragOffset,
+                            animationSpec = if (settlingTarget != null) tween(150) else snap(),
+                            label = "favorite-row-drag",
+                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .offset {
-                                    IntOffset(
-                                        0,
-                                        if (draggingIndex == index) dragOffset.roundToInt() else 0,
-                                    )
+                                    if (draggingIndex == index) {
+                                        IntOffset(0, draggedVisual.roundToInt())
+                                    } else {
+                                        IntOffset(0, animatedShift.roundToInt())
+                                    }
                                 }
-                                .pointerInput(favorites) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            draggingIndex = index
-                                            dragOffset = 0f
-                                        },
-                                        onDrag = { _, amount ->
-                                            dragOffset += amount.y
-                                        },
-                                        onDragEnd = {
-                                            val from = draggingIndex
-                                            if (from != null) {
-                                                val delta = (dragOffset / rowHeightPx).roundToInt()
-                                                val to = (from + delta)
-                                                    .coerceIn(0, favorites.lastIndex)
-                                                if (to != from) {
-                                                    FileBrowserPreferences.movePin(
-                                                        from,
-                                                        to,
-                                                        internalRoot,
-                                                    )
-                                                    refresh()
-                                                }
-                                            }
-                                            draggingIndex = null
-                                            dragOffset = 0f
-                                        },
-                                        onDragCancel = {
-                                            draggingIndex = null
-                                            dragOffset = 0f
-                                        },
-                                    )
-                                }
-                                .clickable { onNavigate(path) }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Folder,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = tabTitle(path),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .pointerInput(favorites, index) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                draggingIndex = index
+                                                dragTargetIndex = index
+                                                dragOffset = 0f
+                                            },
+                                            onDrag = { change, amount ->
+                                                change.consume()
+                                                dragOffset += amount.y
+                                                val target = (index + (dragOffset / rowHeightPx).roundToInt())
+                                                    .coerceIn(0, favorites.lastIndex)
+                                                if (target != dragTargetIndex) {
+                                                    dragTargetIndex = target
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                val to = dragTargetIndex ?: index
+                                                settlingTarget = (to - index) * rowHeightPx
+                                                actionScope.launch {
+                                                    delay(160)
+                                                    if (to != index) {
+                                                        FileBrowserPreferences.moveShortcut(
+                                                            index,
+                                                            to,
+                                                            internalRoot,
+                                                        )
+                                                        refresh()
+                                                    }
+                                                    draggingIndex = null
+                                                    dragTargetIndex = null
+                                                    dragOffset = 0f
+                                                    settlingTarget = null
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                draggingIndex = null
+                                                dragTargetIndex = null
+                                                dragOffset = 0f
+                                                settlingTarget = null
+                                            },
+                                        )
+                                    }
+                                    .clickable { onNavigate(path) },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Folder,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
                                 )
-                                Text(
-                                    text = path,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = tabTitle(path),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = path,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                             Box(
                                 modifier = Modifier
                                     .size(26.dp)
                                     .clip(RoundedCornerShape(7.dp))
                                     .clickable {
-                                        if (FileBrowserPreferences.isSystemShortcut(path, internalRoot)) {
-                                            FileBrowserPreferences.hideShortcut(path)
-                                        } else {
-                                            FileBrowserPreferences.togglePin(path)
-                                        }
+                                        FileBrowserPreferences.removeShortcut(path)
                                         refresh()
                                     },
                                 contentAlignment = Alignment.Center,
@@ -1423,41 +1670,71 @@ private fun FileBrowserSelectionBar(
     count: Int,
     onCopy: () -> Unit,
     onMove: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit,
     onDetails: (() -> Unit)?,
     onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .height(48.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(R.string.file_browser_selected_count, count),
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.weight(1f),
+            text = count.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 8.dp),
         )
-        TextButton(onClick = onCopy) {
-            Text(stringResource(R.string.file_browser_copy))
-        }
-        TextButton(onClick = onMove) {
-            Text(stringResource(R.string.file_browser_move))
-        }
-        if (onDetails != null) {
-            TextButton(onClick = onDetails) {
-                Text(stringResource(R.string.file_browser_selection_details))
-            }
-        }
-        TextButton(onClick = onDelete) {
-            Text(
-                text = stringResource(R.string.file_browser_delete),
-                color = MaterialTheme.colorScheme.error,
+        IconButton(onClick = onCopy, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = stringResource(R.string.file_browser_copy),
+                modifier = Modifier.size(20.dp),
             )
         }
-        TextButton(onClick = onCancel) {
-            Text(stringResource(R.string.file_browser_cancel))
+        IconButton(onClick = onMove, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.DriveFileMove,
+                contentDescription = stringResource(R.string.file_browser_move),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        IconButton(onClick = onShare, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Share,
+                contentDescription = stringResource(R.string.file_browser_share),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        if (onDetails != null) {
+            IconButton(onClick = onDetails, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = stringResource(R.string.file_browser_selection_details),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Delete,
+                contentDescription = stringResource(R.string.file_browser_delete),
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Box(modifier = Modifier.weight(1f))
+        IconButton(onClick = onCancel, modifier = Modifier.size(40.dp)) {
+            Icon(
+                Icons.Outlined.Close,
+                contentDescription = stringResource(R.string.file_browser_cancel),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }

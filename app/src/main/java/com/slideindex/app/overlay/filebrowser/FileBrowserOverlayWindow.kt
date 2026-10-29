@@ -6,6 +6,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import com.slideindex.app.di.OverlayDependencyAccess
@@ -35,6 +36,8 @@ import rikka.shizuku.Shizuku
 internal object FileBrowserOverlayWindow {
     private const val TAG = "FileBrowserOverlay"
     private const val DISMISS_ANIMATION_MS = 180L
+    /** 起拖后若收不到 [android.view.DragEvent.ACTION_DRAG_ENDED] 的兜底恢复 */
+    private const val FILE_DRAG_RESTORE_TIMEOUT_MS = 10_000L
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -68,6 +71,8 @@ internal object FileBrowserOverlayWindow {
     private var backHandler: OverlayViewBackHandler? = null
     private var dismissToken = 0
     private var externalRequestToken = 0
+    private var fileDragSuspended = false
+    private var dragRestoreWatchdog: Runnable? = null
     private var shizukuListenerRegistered = false
 
     private val shizukuListener = Shizuku.OnRequestPermissionResultListener { _, result ->
@@ -80,7 +85,9 @@ internal object FileBrowserOverlayWindow {
     }
 
     val isShowing: Boolean
-        get() = host.isAttached && session?.visible?.value == true
+        get() = isUserVisible()
+
+    fun isServiceReady(): Boolean = isShellAttached()
 
     fun show(
         context: Context,
@@ -98,7 +105,9 @@ internal object FileBrowserOverlayWindow {
             return result
         }
 
-        if (isShowing) {
+        reconcileStaleShell()
+
+        if (isUserVisible()) {
             if (!initialPath.isNullOrBlank()) {
                 session?.controller?.navigateTo(initialPath)
             }
@@ -119,27 +128,42 @@ internal object FileBrowserOverlayWindow {
         val current = session ?: Session(context, scope).also { session = it }
         current.settings = settings
 
-        if (!host.isAttached) {
+        if (!isShellAttached()) {
             if (!ensureWindowAttached(hostContext, current)) return false
             attachBackHandler()
             registerShizukuListener()
         }
 
-        current.visible.value = true
-        host.setViewVisible(true)
-        host.setTouchable(true)
-        host.setInputActive(true)
-        if (initialPath.isNullOrBlank()) {
-            current.controller.onShow()
-        } else {
-            current.controller.navigateTo(initialPath)
+        activatePanel(current, initialPath)
+
+        host.composeView?.post {
+            val view = host.composeView ?: return@post
+            if (view.isAttachedToWindow && view.width > 0) return@post
+            Log.w(TAG, "show: shell not attached after first frame, rebuilding")
+            tearDownHostShell(resetVisible = true)
+            if (!ensureWindowAttached(hostContext, current)) return@post
+            attachBackHandler()
+            registerShizukuListener()
+            activatePanel(current, initialPath)
         }
-        return true
+        return host.composeView != null
+    }
+
+    /** 系统文件拖放会话开始：藏窗但保留 [Session]（与授权页挂起同类）。 */
+    fun suspendForFileDrag() {
+        mainHandler.post { suspendForFileDragOnMain() }
+    }
+
+    /** 拖放结束或超时兜底：恢复浮窗。 */
+    fun resumeFromFileDrag() {
+        mainHandler.post { resumeFromFileDragOnMain() }
     }
 
     fun dismiss() {
         val token = ++dismissToken
         externalRequestToken++
+        cancelDragRestoreWatchdog()
+        fileDragSuspended = false
         mainHandler.post {
             if (token != dismissToken) return@post
             val current = session ?: return@post
@@ -199,13 +223,61 @@ internal object FileBrowserOverlayWindow {
      */
     private fun suspendForExternalActivity() {
         runOnMainSync {
+            cancelDragRestoreWatchdog()
+            fileDragSuspended = false
             val current = session ?: return@runOnMainSync
             if (!host.isAttached) return@runOnMainSync
-            current.visible.value = false
-            host.setInputActive(false)
-            host.setTouchable(false)
-            host.setViewVisible(false)
+            hidePanelShell(current)
         }
+    }
+
+    private fun suspendForFileDragOnMain() {
+        cancelDragRestoreWatchdog()
+        val current = session ?: return
+        if (!host.isAttached || !isUserVisible()) return
+        fileDragSuspended = true
+        hidePanelShell(current)
+        val runnable = Runnable { resumeFromFileDragOnMain(force = true) }
+        dragRestoreWatchdog = runnable
+        mainHandler.postDelayed(runnable, FILE_DRAG_RESTORE_TIMEOUT_MS)
+    }
+
+    private fun resumeFromFileDragOnMain(force: Boolean = false) {
+        cancelDragRestoreWatchdog()
+        if (!fileDragSuspended && !force) return
+        fileDragSuspended = false
+        val current = session ?: return
+        val hostContext = OverlayDependencyAccess.overlayHostContext()
+        if (hostContext == null) {
+            Log.w(TAG, "resumeFromFileDrag: accessibility service not connected")
+            return
+        }
+        reconcileStaleShell()
+        if (!isShellAttached()) {
+            if (!ensureWindowAttached(hostContext, current)) return
+            attachBackHandler()
+            registerShizukuListener()
+        }
+        restorePanelInteractivity(current)
+    }
+
+    private fun cancelDragRestoreWatchdog() {
+        dragRestoreWatchdog?.let(mainHandler::removeCallbacks)
+        dragRestoreWatchdog = null
+    }
+
+    private fun hidePanelShell(current: Session) {
+        current.visible.value = false
+        host.setInputActive(false)
+        host.setTouchable(false)
+        host.setViewVisible(false)
+    }
+
+    private fun restorePanelInteractivity(current: Session) {
+        current.visible.value = true
+        host.setViewVisible(true)
+        host.setTouchable(true)
+        host.setInputActive(true)
     }
 
     private fun resumeFromExternalActivity() {
@@ -216,16 +288,48 @@ internal object FileBrowserOverlayWindow {
                 Log.w(TAG, "resume: accessibility service not connected")
                 return@runOnMainSync
             }
-            if (!host.isAttached) {
+            reconcileStaleShell()
+            if (!isShellAttached()) {
                 if (!ensureWindowAttached(hostContext, current)) return@runOnMainSync
                 attachBackHandler()
                 registerShizukuListener()
             }
-            current.visible.value = true
-            host.setViewVisible(true)
-            host.setTouchable(true)
-            host.setInputActive(true)
+            activatePanel(current, initialPath = null)
+        }
+    }
+
+    /** 用户眼里「面板正开着」：Session 要可见，且壳子真在 WindowManager 上。 */
+    private fun isUserVisible(): Boolean {
+        if (session?.visible?.value != true) return false
+        val view = host.composeView ?: return false
+        if (!view.isAttachedToWindow) return false
+        return view.visibility == View.VISIBLE
+    }
+
+    private fun isShellAttached(): Boolean =
+        host.composeView?.isAttachedToWindow == true
+
+    /** 内存里还留着 ComposeView，但已被系统摘掉 → 先拆壳再建，避免 isShowing 早退死循环。 */
+    private fun reconcileStaleShell() {
+        val view = host.composeView ?: return
+        if (view.isAttachedToWindow) return
+        Log.w(TAG, "show: stale shell not attached, rebuilding window")
+        tearDownHostShell(resetVisible = true)
+    }
+
+    private fun tearDownHostShell(resetVisible: Boolean) {
+        detachBackHandler()
+        unregisterShizukuListener()
+        if (resetVisible) session?.visible?.value = false
+        if (host.isAttached) host.destroy()
+    }
+
+    private fun activatePanel(current: Session, initialPath: String?) {
+        restorePanelInteractivity(current)
+        if (initialPath.isNullOrBlank()) {
             current.controller.onShow()
+        } else {
+            current.controller.navigateTo(initialPath)
         }
     }
 

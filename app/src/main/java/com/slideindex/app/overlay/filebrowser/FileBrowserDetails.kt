@@ -2,6 +2,7 @@ package com.slideindex.app.overlay.filebrowser
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,7 +45,6 @@ import com.slideindex.app.R
 @Composable
 internal fun FileBrowserDetailsOverlay(
     entry: FileBrowserEntry,
-    copied: Boolean,
     onCopy: () -> Unit,
     onOpenWith: (() -> Unit)?,
     openWithLabel: String?,
@@ -115,7 +115,8 @@ internal fun FileBrowserDetailsOverlay(
                     DetailRow(
                         label = stringResource(R.string.file_browser_detail_path),
                         value = entry.path,
-                        selectable = true,
+                        selectable = false,
+                        onClick = onCopy,
                     )
                     DetailRow(
                         label = stringResource(R.string.file_browser_detail_size),
@@ -137,70 +138,58 @@ internal fun FileBrowserDetailsOverlay(
                         label = stringResource(R.string.file_browser_detail_permissions),
                         value = entry.permissions ?: "—",
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = onCopy,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                if (copied) {
-                                    R.string.file_browser_copied
-                                } else {
-                                    R.string.file_browser_copy_path
-                                },
-                            ),
-                        )
-                    }
-                    if (onOpenImage != null) {
-                        OutlinedButton(
-                            onClick = onOpenImage,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(R.string.file_browser_image_open))
-                        }
-                    }
-                    TextButton(
-                        onClick = onClose,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.file_browser_close))
-                    }
-                    if (onOpenWith != null) {
-                        OutlinedButton(
-                            onClick = onOpenWith,
-                            enabled = openWithEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = openWithLabel
-                                    ?: stringResource(R.string.file_browser_open_with),
-                            )
-                        }
-                    }
-                    if (onRename != null || onDelete != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    if (onOpenImage != null || onOpenWith != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            if (onRename != null) {
-                                OutlinedButton(
-                                    onClick = onRename,
+                            if (onOpenImage != null) {
+                                Button(
+                                    onClick = onOpenImage,
                                     modifier = Modifier.weight(1f),
                                 ) {
-                                    Text(stringResource(R.string.file_browser_rename))
+                                    Text(stringResource(R.string.file_browser_image_open))
                                 }
                             }
-                            if (onDelete != null) {
-                                TextButton(
-                                    onClick = onDelete,
+                            if (onOpenWith != null) {
+                                OutlinedButton(
+                                    onClick = onOpenWith,
+                                    enabled = openWithEnabled,
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.file_browser_delete),
-                                        color = MaterialTheme.colorScheme.error,
+                                        text = openWithLabel
+                                            ?: stringResource(R.string.file_browser_open_with),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (onRename != null) {
+                            OutlinedButton(
+                                onClick = onRename,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(stringResource(R.string.file_browser_rename))
+                            }
+                        }
+                        if (onDelete != null) {
+                            TextButton(
+                                onClick = onDelete,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.file_browser_delete),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                             }
                         }
                     }
@@ -222,10 +211,12 @@ private fun DetailRow(
     label: String,
     value: String,
     selectable: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
