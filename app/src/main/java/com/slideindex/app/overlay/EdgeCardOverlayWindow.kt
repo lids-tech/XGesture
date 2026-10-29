@@ -274,8 +274,13 @@ object EdgeCardOverlayWindow {
             mainHandler.post { handleLockScreenBoundary() }
             return
         }
-        if (entries.isEmpty()) return
-        if (entries.any { !it.preview && !it.plan.settings.edgeCardKeepAcrossLock }) {
+        if (entries.isEmpty()) {
+            Log.d(TAG, "lock boundary: no entries")
+            return
+        }
+        val keep = entries.filter { !it.preview }.all { it.plan.settings.edgeCardKeepAcrossLock }
+        Log.d(TAG, "lock boundary: entries=${entries.size} keep=$keep")
+        if (!keep) {
             Log.d(TAG, "lock boundary: dismiss (keep disabled)")
             dismiss()
             return
@@ -286,6 +291,7 @@ object EdgeCardOverlayWindow {
 
     /** 只摘窗口，保留条目数据（消息、未读数、时间戳）。 */
     private fun suspendForLockScreen() {
+        Log.d(TAG, "suspendForLockScreen: ${entries.size} cards")
         entries.forEach { entry ->
             cancelAutoCollapse(entry)
             entry.spring?.cancel()
@@ -305,16 +311,30 @@ object EdgeCardOverlayWindow {
             mainHandler.post { replayAfterUnlock(context) }
             return
         }
-        if (entries.none { it.view == null }) return
-        val hostContext = MessageOverlayHost.resolveHostContext(context) ?: return
+        if (entries.none { it.view == null }) {
+            Log.d(TAG, "replay skipped: nothing suspended")
+            return
+        }
+        val hostContext = MessageOverlayHost.resolveHostContext(context)
+        if (hostContext == null) {
+            Log.d(TAG, "replay skipped: host null")
+            return
+        }
+        Log.d(TAG, "replayAfterUnlock: entries=${entries.size}")
         appContext = hostContext
         windowManager = hostContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         registerDisplayListener(hostContext)
-        val now = System.currentTimeMillis()
+        // createdAt 用的是 uptimeMillis，这里必须同一基准；混用 currentTimeMillis
+        // 会把所有条目算成“几十年前创建”，解锁时被当成过期全部删掉。
+        val now = android.os.SystemClock.uptimeMillis()
         val expired = entries.filter { !it.preview && now - it.createdAt > LOCK_SUSPEND_TTL_MS }
         expired.forEach { cancelAutoCollapse(it) }
+        Log.d(TAG, "replay expired=${expired.size} entries=${entries.size}")
         if (expired.isNotEmpty()) entries.removeAll(expired.toSet())
-        if (entries.isEmpty()) return
+        if (entries.isEmpty()) {
+            Log.d(TAG, "replay skipped: all expired")
+            return
+        }
         trimToCount(entries.first().plan.settings)
         entries.toList().forEach { entry ->
             if (entry.view == null) {
@@ -627,7 +647,11 @@ object EdgeCardOverlayWindow {
         entry.params = params
         view.alpha = settings.edgeCardOpacity.coerceIn(0f, 1f)
 
-        val wm = windowManager ?: return
+        val wm = windowManager
+        if (wm == null) {
+            Log.d(TAG, "ensureWindow skipped: windowManager null")
+            return
+        }
         val added = runCatching { wm.addView(view, params) }
             .onFailure { Log.e(TAG, "addView failed", it) }
             .isSuccess
