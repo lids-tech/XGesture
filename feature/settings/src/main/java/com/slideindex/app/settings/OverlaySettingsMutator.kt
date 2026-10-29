@@ -876,6 +876,10 @@ class OverlaySettingsMutator @Inject constructor(
         it[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] = enabled
     }
 
+    suspend fun setFloatBallIdleFreezeGif(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] = enabled
+    }
+
     suspend fun setFloatBallIdleOpacity(value: Float) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] = value.coerceIn(0f, 1f)
     }

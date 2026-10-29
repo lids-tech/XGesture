@@ -436,6 +436,7 @@ internal object SettingsSnapshotReader {
             floatBallPickCrossArmDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_CROSS_ARM_DP] ?: 7.5f,
             floatBallOpacity = prefs[SettingsPreferenceKeys.FLOAT_BALL_OPACITY] ?: 0.88f,
             floatBallHideWhenIdle = prefs[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] ?: false,
+            floatBallIdleFreezeGif = prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] ?: false,
             floatBallIdleOpacity =
                 (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] ?: 0f).coerceIn(0f, 1f),
             floatBallIdleDelayMs =

@@ -1798,6 +1798,8 @@
     <string name="float_ball_opacity">不透明度</string>
     <string name="float_ball_hide_when_idle">アイドル時に隠す</string>
     <string name="float_ball_hide_when_idle_desc">一定時間ボールに触れないと、アイドル時の不透明度で描画します。ボール領域に触れると再表示され、非表示中もジェスチャーは有効です。</string>
+    <string name="float_ball_idle_freeze_gif">アイドル時にアニメを停止</string>
+    <string name="float_ball_idle_freeze_gif_desc">一定時間操作がないと現在のフレームで停止します（ボールは表示されたまま）。触れると再生を再開します。</string>
     <string name="float_ball_idle_opacity">アイドル時の不透明度</string>
     <string name="float_ball_idle_delay">アイドル判定時間</string>
     <string name="float_ball_idle_delay_value">%1$s 秒</string>

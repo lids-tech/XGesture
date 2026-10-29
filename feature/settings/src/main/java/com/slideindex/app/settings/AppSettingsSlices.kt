@@ -228,6 +228,8 @@ data class FloatBallSettings(
      * 只说"看不见"，不影响命中：隐身期间球窗照常接收单击/滑动/长按。
      */
     val floatBallHideWhenIdle: Boolean = false,
+    /** 闲置时停止 GIF 出帧（保留当前帧，触摸后恢复播放）。 */
+    val floatBallIdleFreezeGif: Boolean = false,
     /** 闲置隐身生效时球的不透明度（0–1，0 = 完全看不见）。 */
     val floatBallIdleOpacity: Float = 0f,
     /** 距最后一次触摸多久算闲置（ms，0 = 松手后立即隐身）。 */

@@ -59,6 +59,7 @@ fun FloatBallAppearanceSettingsScreen(
     onSizeChange: (Float) -> Unit,
     onOpacityChange: (Float) -> Unit,
     onHideWhenIdleChange: (Boolean) -> Unit,
+    onIdleFreezeGifChange: (Boolean) -> Unit,
     onIdleOpacityChange: (Float) -> Unit,
     onIdleDelayChange: (Int) -> Unit,
     onPositionModeChange: (FloatBallPositionMode) -> Unit,
@@ -206,6 +207,13 @@ fun FloatBallAppearanceSettingsScreen(
                                 onValueChange = { seconds ->
                                     onIdleDelayChange((seconds * 1000f).roundToInt())
                                 }
+                            )
+                            SettingSwitchRow(
+                                title = stringResource(R.string.float_ball_idle_freeze_gif),
+                                subtitle = stringResource(R.string.float_ball_idle_freeze_gif_desc),
+                                checked = settings.floatBallIdleFreezeGif,
+                                enabled = true,
+                                onCheckedChange = onIdleFreezeGifChange
                             )
                         }
                     }

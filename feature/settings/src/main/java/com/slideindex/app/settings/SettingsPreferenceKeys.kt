@@ -567,6 +567,8 @@ internal object SettingsPreferenceKeys {
     /** 闲置隐身：超过闲置判定时间后球按 idle opacity 绘制。 */
     val FLOAT_BALL_HIDE_WHEN_IDLE = booleanPreferencesKey("float_ball_hide_when_idle")
     val FLOAT_BALL_IDLE_OPACITY = floatPreferencesKey("float_ball_idle_opacity")
+    /** 闲置时停止 GIF 出帧（定格当前帧，触摸恢复）。 */
+    val FLOAT_BALL_IDLE_FREEZE_GIF = booleanPreferencesKey("float_ball_idle_freeze_gif")
     val FLOAT_BALL_IDLE_DELAY_MS = intPreferencesKey("float_ball_idle_delay_ms")
     val FLOAT_BALL_VISIBLE_FRACTION = floatPreferencesKey("float_ball_visible_fraction")
     val FLOAT_BALL_POSITION_X_FRACTION = floatPreferencesKey("float_ball_position_x_fraction")

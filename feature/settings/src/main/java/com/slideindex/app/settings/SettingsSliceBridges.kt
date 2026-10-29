@@ -184,6 +184,7 @@ fun OverlaySettings.toMinimalAppSettings(): AppSettings = AppSettings(
         floatBallPickCrossArmDp = floatBallPickCrossArmDp,
         floatBallOpacity = floatBallOpacity,
         floatBallHideWhenIdle = floatBallHideWhenIdle,
+        floatBallIdleFreezeGif = floatBallIdleFreezeGif,
         floatBallIdleOpacity = floatBallIdleOpacity,
         floatBallIdleDelayMs = floatBallIdleDelayMs,
         floatBallVisibleFraction = floatBallVisibleFraction,

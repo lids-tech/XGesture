@@ -1876,6 +1876,8 @@
     <string name="float_ball_opacity">不透明度</string>
     <string name="float_ball_hide_when_idle">闲置隐身</string>
     <string name="float_ball_hide_when_idle_desc">超过闲置判定时间没有触摸球区后，球按「闲置时不透明度」绘制。触摸球区立即显示；隐身期间手势照常响应。</string>
+    <string name="float_ball_idle_freeze_gif">闲置时停止动图</string>
+    <string name="float_ball_idle_freeze_gif_desc">超过闲置判定时间后停在当前帧（球仍可见），触摸后恢复播放。省掉动图逐帧重绘的耗电。</string>
     <string name="float_ball_idle_opacity">闲置时不透明度</string>
     <string name="float_ball_idle_delay">闲置判定时长</string>
     <string name="float_ball_idle_delay_value">%1$s 秒</string>

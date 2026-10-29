@@ -1002,6 +1002,8 @@
     <string name="float_ball_opacity">Opacity</string>
     <string name="float_ball_hide_when_idle">Hide when idle</string>
     <string name="float_ball_hide_when_idle_desc">After the idle timeout without touching the ball, draw it at the idle opacity. Touching the ball area shows it again; gestures keep working while hidden.</string>
+    <string name="float_ball_idle_freeze_gif">Freeze animation when idle</string>
+    <string name="float_ball_idle_freeze_gif_desc">Stop the animated ball at the current frame after the idle timeout. Touching it resumes playback. Saves the per-frame redraw while it is still visible.</string>
     <string name="float_ball_idle_opacity">Idle opacity</string>
     <string name="float_ball_idle_delay">Idle timeout</string>
     <string name="float_ball_idle_delay_value">%1$s s</string>

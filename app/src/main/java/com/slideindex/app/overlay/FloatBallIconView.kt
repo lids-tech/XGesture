@@ -172,6 +172,12 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
         }
     }
 
+    /** 闲置定格：停止 GIF 出帧但保留当前画面；false 恢复播放。 */
+    fun setGifFrozen(frozen: Boolean) {
+        if (contentMode != ContentMode.GIF) return
+        gifPlayer.setPaused(frozen)
+    }
+
     fun setDragging(dragging: Boolean) {
         when (contentMode) {
             ContentMode.GIF -> gifPlayer.setPaused(false)

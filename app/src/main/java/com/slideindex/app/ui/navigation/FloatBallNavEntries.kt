@@ -333,6 +333,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onSizeChange = viewModel::setFloatBallSizeDp,
             onOpacityChange = viewModel::setFloatBallOpacity,
             onHideWhenIdleChange = viewModel::setFloatBallHideWhenIdle,
+            onIdleFreezeGifChange = viewModel::setFloatBallIdleFreezeGif,
             onIdleOpacityChange = viewModel::setFloatBallIdleOpacity,
             onIdleDelayChange = viewModel::setFloatBallIdleDelayMs,
             onPositionModeChange = viewModel::setFloatBallPositionMode,

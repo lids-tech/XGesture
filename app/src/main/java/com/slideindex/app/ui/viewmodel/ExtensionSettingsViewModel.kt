@@ -555,6 +555,13 @@ class ExtensionSettingsViewModel @Inject constructor(
         block = { settingsRepository.setFloatBallHideWhenIdle(enabled) },
     )
 
+    fun setFloatBallIdleFreezeGif(enabled: Boolean) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallIdleFreezeGif = enabled))
+        },
+        block = { settingsRepository.setFloatBallIdleFreezeGif(enabled) },
+    )
+
     fun setFloatBallIdleOpacity(opacity: Float) = launchOptimisticSettingsWrite(
         optimisticUpdate = { settings ->
             settings.copy(floatBall = settings.floatBall.copy(floatBallIdleOpacity = opacity.coerceIn(0f, 1f)))

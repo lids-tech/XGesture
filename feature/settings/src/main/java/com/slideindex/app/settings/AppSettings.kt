@@ -294,6 +294,7 @@ data class AppSettings(
     val floatBallPickCrossArmDp get() = floatBall.floatBallPickCrossArmDp
     val floatBallOpacity get() = floatBall.floatBallOpacity
     val floatBallHideWhenIdle get() = floatBall.floatBallHideWhenIdle
+    val floatBallIdleFreezeGif get() = floatBall.floatBallIdleFreezeGif
     val floatBallIdleOpacity get() = floatBall.floatBallIdleOpacity
     val floatBallIdleDelayMs get() = floatBall.floatBallIdleDelayMs
     val floatBallVisibleFraction get() = floatBall.floatBallVisibleFraction

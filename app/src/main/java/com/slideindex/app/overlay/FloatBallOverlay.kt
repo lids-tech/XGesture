@@ -700,14 +700,15 @@ object FloatBallOverlay {
         if (ballIconView == null) return
         val shown = ballRevealed || ballPressed || ballForceRevealed || isDragging
         publishBallIdleTarget(settings, shown)
-        if (!settings.floatBallHideWhenIdle) {
+        applyBallGifFreeze(settings, shown)
+        if (!idleVisualsEnabled(settings)) {
             cancelBallAlphaAnimation()
             cancelBallIdleHide()
             ballRevealed = true
             applyBallAlpha(null)
             return
         }
-        val target = if (shown) null else settings.floatBallIdleOpacity
+        val target = if (shown || !settings.floatBallHideWhenIdle) null else settings.floatBallIdleOpacity
         if (animate) {
             animateBallAlphaTo(target, settings)
         } else {
@@ -723,6 +724,15 @@ object FloatBallOverlay {
     private fun applyBallAlpha(value: Float?) {
         ballAlphaOverrideValue = value
         ballIconView?.setAlphaOverride(value)
+    }
+
+    /** 闲置相关的视觉开关：隐身和「闲置定格动图」任意一个开着，都继续跑闲置计时。 */
+    private fun idleVisualsEnabled(settings: AppSettings): Boolean =
+        settings.floatBallHideWhenIdle || settings.floatBallIdleFreezeGif
+
+    /** 闲置定格：球仍可见，但停止 GIF 出帧；触摸/拖动由 shown 恢复。 */
+    private fun applyBallGifFreeze(settings: AppSettings, shown: Boolean) {
+        ballIconView?.setGifFrozen(!shown && settings.floatBallIdleFreezeGif)
     }
 
     /** 把「当前该不该隐身」发布给窗内那份球（BOTH_EDGES 模式下球画在触摸窗里）。 */
@@ -806,13 +816,13 @@ object FloatBallOverlay {
 
     private fun scheduleBallIdleHide(settings: AppSettings) {
         cancelBallIdleHide()
-        if (!settings.floatBallHideWhenIdle || ballPressed || ballForceRevealed || isDragging) return
+        if (!idleVisualsEnabled(settings) || ballPressed || ballForceRevealed || isDragging) return
         val delayMs = settings.floatBallIdleDelayMs.coerceIn(0, BALL_IDLE_DELAY_MAX_MS)
         val runnable = Runnable {
             ballIdleHideRunnable = null
             ballIdleHideDelayMs = -1
             val current = settingsState?.value ?: return@Runnable
-            if (!current.floatBallHideWhenIdle || ballPressed || ballForceRevealed || isDragging) {
+            if (!idleVisualsEnabled(current) || ballPressed || ballForceRevealed || isDragging) {
                 return@Runnable
             }
             ballRevealed = false

@@ -265,6 +265,7 @@ internal fun FloatBallIdleBallChrome(
                 )
                 view.setDragging(false)
                 view.setAlphaOverride(animatedBallAlpha)
+                view.setGifFrozen(idleHidden && settings.floatBallIdleFreezeGif)
             }
         )
     }
