@@ -41,7 +41,17 @@ data class FileBrowserUiState(
     val lastTrash: List<TrashedItem> = emptyList(),
     val tabs: List<FileBrowserTab> = emptyList(),
     val activeTabId: Long = 0L,
+    val mediaItems: List<FileBrowserMediaItem> = emptyList(),
+    val mediaLoading: Boolean = false,
+    val mediaHasMore: Boolean = false,
+    val mediaTotalCount: Int? = null,
+    val mediaTotalBytes: Long? = null,
+    val mediaSelectedIds: Set<Long> = emptySet(),
+    val mediaPreview: FileBrowserMediaItem? = null,
 )
+
+val FileBrowserUiState.mediaCategory: FileBrowserMediaCategory?
+    get() = FileBrowserMediaCategory.forPath(path)
 
 data class FileClipboard(
     val mode: FileTransferMode,
@@ -73,6 +83,7 @@ internal class FileBrowserController(
     private var sizeJob: Job? = null
     private var searchJob: Job? = null
     private var operationJob: Job? = null
+    private var mediaJob: Job? = null
     private var nextTabId: Long = 1L
     private val scrollPositions = mutableMapOf<Pair<Long, String>, Pair<Int, Int>>()
     private var currentScrollProvider: (() -> Pair<Int, Int>)? = null
@@ -90,7 +101,13 @@ internal class FileBrowserController(
                 if (state.path != dataSource.initialPath()) return@launch
                 if (prefs.tabs.isNotEmpty() && state.tabs.size <= 1) {
                     val restored = prefs.tabs.mapIndexed { index, path ->
-                        FileBrowserTab(id = index.toLong(), path = FileBrowserPaths.normalize(path, internalRoot))
+                        FileBrowserTab(
+                            id = index.toLong(),
+                            path = FileBrowserMedia.normalizeLocation(path, internalRoot),
+                        )
+                    }.toMutableList()
+                    if (restored.size == 1 && restored.first().path == "/") {
+                        restored[0] = restored.first().copy(path = preferredStart(null))
                     }
                     val activeIndex = prefs.activeTabIndex.coerceIn(0, restored.lastIndex)
                     val active = restored[activeIndex]
@@ -105,7 +122,7 @@ internal class FileBrowserController(
                     return@launch
                 }
                 val last = prefs.lastPath ?: return@launch
-                val target = FileBrowserPaths.normalize(last, internalRoot)
+                val target = preferredStart(last)
                 if (target == state.path) return@launch
                 state = state.copy(
                     path = target,
@@ -119,10 +136,7 @@ internal class FileBrowserController(
             }
         }
         val prefs = FileBrowserPreferences.current
-        val initialPath = FileBrowserPaths.normalize(
-            prefs.lastPath ?: dataSource.initialPath(),
-            dataSource.internalRoot,
-        )
+        val initialPath = preferredStart(prefs.lastPath)
         state = FileBrowserUiState(
             path = initialPath,
             showHidden = prefs.showHidden,
@@ -133,29 +147,55 @@ internal class FileBrowserController(
     }
 
     /** 面板重新可见：保留 Tab，清掉当前搜索词/详情，然后刷新。 */
+    /**
+     * 启动目录：保留上次位置，但系统根目录不当作默认入口，回落到内部存储。
+     * 根目录仍可手动进入，只是下次打开不再一上来就是 `/`。
+     */
+    private fun preferredStart(lastPath: String?): String {
+        val fallback = FileBrowserMedia.normalizeLocation(
+            dataSource.initialPath(),
+            internalRoot,
+        )
+        val raw = lastPath?.takeIf { it.isNotBlank() } ?: return fallback
+        val normalized = FileBrowserMedia.normalizeLocation(raw, internalRoot)
+        return if (normalized == "/") fallback else normalized
+    }
+
     fun onShow() {
         val prefs = FileBrowserPreferences.current
         val target = if (state.path == dataSource.initialPath() && !prefs.lastPath.isNullOrBlank()) {
-            FileBrowserPaths.normalize(prefs.lastPath, internalRoot)
+            preferredStart(prefs.lastPath)
         } else {
             state.path
         }
+        val mediaMode = FileBrowserMediaCategory.isMediaPath(target)
         state = state.copy(
             path = target,
             query = "",
             details = null,
             showHidden = prefs.showHidden,
             sort = prefs.sortOrderOrDefault(),
-            loading = true,
+            loading = !mediaMode,
             error = null,
             directorySizeBytes = null,
             directorySizeLoading = false,
             directorySizeComputed = false,
+            mediaItems = emptyList(),
+            mediaLoading = mediaMode,
+            mediaHasMore = mediaMode,
+            mediaTotalCount = null,
+            mediaTotalBytes = null,
+            mediaSelectedIds = emptySet(),
+            mediaPreview = null,
             tabs = state.tabs.map {
                 if (it.id == state.activeTabId) it.copy(path = target, query = "") else it
             },
         )
-        reload(resolveAccess = true)
+        if (mediaMode) {
+            loadMedia(reset = true)
+        } else {
+            reload(resolveAccess = true)
+        }
         rememberTabs()
     }
 
@@ -174,8 +214,15 @@ internal class FileBrowserController(
     }
 
     private fun navigateTo(path: String, pushHistory: Boolean) {
+        if (FileBrowserMediaCategory.isMediaPath(path)) {
+            val category = FileBrowserMediaCategory.forPath(path) ?: return
+            navigateToMedia(category, pushHistory)
+            return
+        }
         val normalized = FileBrowserPaths.normalize(path, internalRoot)
         if (normalized == state.path && state.error == null) return
+        mediaJob?.cancel()
+        mediaJob = null
         saveCurrentScroll()
         searchJob?.cancel()
         searchJob = null
@@ -207,6 +254,13 @@ internal class FileBrowserController(
             searchLoading = false,
             selectionMode = false,
             selectedPaths = emptySet(),
+            mediaItems = emptyList(),
+            mediaLoading = false,
+            mediaHasMore = false,
+            mediaTotalCount = null,
+            mediaTotalBytes = null,
+            mediaSelectedIds = emptySet(),
+            mediaPreview = null,
             tabs = tabs,
         )
         FileBrowserPreferences.rememberLastPath(normalized)
@@ -214,8 +268,78 @@ internal class FileBrowserController(
         reload(resolveAccess = false)
     }
 
+    /** 进入 FV 式媒体分类；不是文件系统目录。 */
+    private fun navigateToMedia(
+        category: FileBrowserMediaCategory,
+        pushHistory: Boolean,
+    ) {
+        val normalized = category.path
+        if (normalized == state.path &&
+            state.error == null &&
+            (state.mediaItems.isNotEmpty() || state.mediaLoading)
+        ) {
+            return
+        }
+        loadJob?.cancel()
+        loadJob = null
+        sizeJob?.cancel()
+        sizeJob = null
+        searchJob?.cancel()
+        searchJob = null
+        val currentTab = state.tabs.firstOrNull { it.id == state.activeTabId }
+        val history = currentTab?.backStack.orEmpty().let { stack ->
+            if (pushHistory && state.path != normalized) stack + state.path else stack
+        }
+        val tabs = state.tabs.map {
+            if (it.id == state.activeTabId) {
+                it.copy(path = normalized, query = "", backStack = history)
+            } else {
+                it
+            }
+        }
+        state = state.copy(
+            path = normalized,
+            entries = emptyList(),
+            query = "",
+            details = null,
+            loading = false,
+            error = null,
+            limited = false,
+            truncated = false,
+            directorySizeBytes = null,
+            directorySizeLoading = false,
+            directorySizeComputed = false,
+            searchResults = null,
+            searchQuery = null,
+            searchLoading = false,
+            selectionMode = false,
+            selectedPaths = emptySet(),
+            mediaItems = emptyList(),
+            mediaLoading = true,
+            mediaHasMore = true,
+            mediaTotalCount = null,
+            mediaTotalBytes = null,
+            mediaSelectedIds = emptySet(),
+            mediaPreview = null,
+            tabs = tabs,
+        )
+        FileBrowserPreferences.rememberLastPath(normalized)
+        rememberTabs()
+        loadMedia(reset = true)
+    }
+
     fun goParent() {
-        FileBrowserPaths.parent(state.path, internalRoot)?.let(::navigateTo)
+        goParent(pushHistory = true)
+    }
+
+    private fun goParent(pushHistory: Boolean) {
+        if (FileBrowserMediaCategory.isMediaPath(state.path)) {
+            navigateTo(internalRoot, pushHistory = pushHistory)
+            return
+        }
+        FileBrowserPaths.parent(state.path, internalRoot)?.let { parent ->
+            navigateTo(parent, pushHistory = pushHistory)
+        }
     }
 
     fun goBack() {
@@ -223,7 +347,7 @@ internal class FileBrowserController(
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
         val target = tab?.backStack?.lastOrNull()
         if (target == null) {
-            goParent()
+            goParent(pushHistory = false)
             return
         }
         val tabs = state.tabs.map {
@@ -237,6 +361,7 @@ internal class FileBrowserController(
         if (id == state.activeTabId) return
         val saved = saveActiveTab()
         val target = saved.firstOrNull { it.id == id } ?: return
+        val mediaMode = FileBrowserMediaCategory.isMediaPath(target.path)
         state = state.copy(
             tabs = saved,
             activeTabId = id,
@@ -248,8 +373,15 @@ internal class FileBrowserController(
             searchQuery = null,
             selectionMode = false,
             selectedPaths = emptySet(),
-            loading = true,
+            loading = !mediaMode,
             error = null,
+            mediaItems = emptyList(),
+            mediaLoading = mediaMode,
+            mediaHasMore = mediaMode,
+            mediaTotalCount = null,
+            mediaTotalBytes = null,
+            mediaSelectedIds = emptySet(),
+            mediaPreview = null,
         )
         FileBrowserPreferences.rememberLastPath(target.path)
         rememberTabs()
@@ -266,6 +398,8 @@ internal class FileBrowserController(
             selectionMode = false,
             selectedPaths = emptySet(),
             details = null,
+            mediaSelectedIds = emptySet(),
+            mediaPreview = null,
         )
         rememberTabs()
     }
@@ -282,6 +416,7 @@ internal class FileBrowserController(
             return
         }
         val next = remaining[(index - 1).coerceAtLeast(0)]
+        val mediaMode = FileBrowserMediaCategory.isMediaPath(next.path)
         state = state.copy(
             tabs = remaining,
             activeTabId = next.id,
@@ -289,8 +424,15 @@ internal class FileBrowserController(
             query = next.query,
             entries = emptyList(),
             details = null,
-            loading = true,
+            loading = !mediaMode,
             error = null,
+            mediaItems = emptyList(),
+            mediaLoading = mediaMode,
+            mediaHasMore = mediaMode,
+            mediaTotalCount = null,
+            mediaTotalBytes = null,
+            mediaSelectedIds = emptySet(),
+            mediaPreview = null,
         )
         rememberTabs()
         reload(resolveAccess = true)
@@ -374,6 +516,32 @@ internal class FileBrowserController(
 
     fun hideDetails() {
         state = state.copy(details = null)
+    }
+
+    fun toggleMediaSelection(item: FileBrowserMediaItem) {
+        val selected = if (item.id in state.mediaSelectedIds) {
+            state.mediaSelectedIds - item.id
+        } else {
+            state.mediaSelectedIds + item.id
+        }
+        state = state.copy(
+            mediaSelectedIds = selected,
+            mediaPreview = null,
+        )
+    }
+
+    fun clearMediaSelection() {
+        if (state.mediaSelectedIds.isEmpty()) return
+        state = state.copy(mediaSelectedIds = emptySet())
+    }
+
+    fun showMediaPreview(item: FileBrowserMediaItem) {
+        state = state.copy(mediaPreview = item, mediaSelectedIds = emptySet())
+    }
+
+    fun hideMediaPreview() {
+        if (state.mediaPreview == null) return
+        state = state.copy(mediaPreview = null)
     }
 
     fun enterSelection(entry: FileBrowserEntry) {
@@ -612,6 +780,8 @@ internal class FileBrowserController(
         searchJob = null
         operationJob?.cancel()
         operationJob = null
+        mediaJob?.cancel()
+        mediaJob = null
     }
 
     fun searchRecursive(query: String) {
@@ -650,6 +820,7 @@ internal class FileBrowserController(
     }
 
     fun computeDirectorySize() {
+        if (state.mediaCategory != null) return
         if (state.loading || state.directorySizeLoading) return
         val access = state.access ?: return
         val targetPath = state.path
@@ -670,7 +841,80 @@ internal class FileBrowserController(
         }
     }
 
+    fun loadMoreMedia() {
+        if (state.mediaLoading || !state.mediaHasMore) return
+        loadMedia(reset = false)
+    }
+
+    private fun loadMedia(reset: Boolean) {
+        val category = state.mediaCategory ?: return
+        if (!reset && (state.mediaLoading || !state.mediaHasMore)) return
+        loadJob?.cancel()
+        loadJob = null
+        sizeJob?.cancel()
+        sizeJob = null
+        mediaJob?.cancel()
+        val offset = if (reset) 0 else state.mediaItems.size
+        if (reset) {
+            state = state.copy(
+                mediaItems = emptyList(),
+                mediaLoading = true,
+                mediaHasMore = true,
+                mediaTotalCount = null,
+                mediaTotalBytes = null,
+                mediaSelectedIds = emptySet(),
+                mediaPreview = null,
+                error = null,
+            )
+        } else {
+            state = state.copy(mediaLoading = true, error = null)
+        }
+        mediaJob = scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                FileBrowserMediaSource.loadPage(
+                    context = appContext,
+                    category = category,
+                    offset = offset,
+                )
+            }
+            if (!isActive || state.mediaCategory != category) return@launch
+            state = when (result) {
+                is FileBrowserMediaResult.Success -> state.copy(
+                    path = category.path,
+                    mediaItems = if (reset) {
+                        result.page.items
+                    } else {
+                        state.mediaItems + result.page.items
+                    },
+                    mediaLoading = false,
+                    mediaHasMore = result.page.hasMore,
+                    mediaTotalCount = result.page.totalCount ?: state.mediaTotalCount,
+                    mediaTotalBytes = result.page.totalBytes ?: state.mediaTotalBytes,
+                    error = null,
+                )
+                FileBrowserMediaResult.PermissionDenied -> state.copy(
+                    mediaLoading = false,
+                    mediaHasMore = false,
+                    error = FileBrowserError.PermissionDenied,
+                )
+                is FileBrowserMediaResult.Failure -> state.copy(
+                    mediaLoading = false,
+                    mediaHasMore = false,
+                    error = FileBrowserError.Unknown(result.detail),
+                )
+            }
+        }
+    }
+
     private fun reload(resolveAccess: Boolean = false) {
+        if (FileBrowserMediaCategory.isMediaPath(state.path)) {
+            loadJob?.cancel()
+            loadJob = null
+            loadMedia(reset = true)
+            return
+        }
+        mediaJob?.cancel()
+        mediaJob = null
         loadJob?.cancel()
         sizeJob?.cancel()
         val targetPath = state.path
@@ -692,6 +936,8 @@ internal class FileBrowserController(
 
             val result = withContext(Dispatchers.IO) { dataSource.list(targetPath, access) }
             if (!isActive) return@launch
+            // 读盘期间用户可能切到了媒体分类或另一个目录；旧结果不能把路径改回去。
+            if (state.path != targetPath || state.mediaCategory != null) return@launch
 
             state = when (result) {
                 is FileBrowserListingResult.Success -> state.copy(

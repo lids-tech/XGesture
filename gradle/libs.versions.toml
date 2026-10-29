@@ -39,6 +39,7 @@ zxing = "3.5.4"
 camera = "1.6.2"
 markdown-renderer = "0.45.0"
 haze = "1.7.3"
+reorderable = "2.5.1"
 palette = "1.0.0"
 webkit = "1.17.0"
 material = "1.14.0"
@@ -123,6 +124,7 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" 
 markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "markdown-renderer" }
 markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdown-renderer" }
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
+reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version.ref = "hiddenapibypass" }

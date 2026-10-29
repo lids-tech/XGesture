@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文件浏览器媒体模式（独立资源文件，避免改动现有 strings.xml）。 -->
+<resources>
+    <string name="file_browser_media_today">今天</string>
+    <string name="file_browser_media_yesterday">昨天</string>
+    <string name="file_browser_media_empty">没有媒体文件。</string>
+    <string name="file_browser_media_permission_title">需要媒体访问权限</string>
+    <string name="file_browser_media_permission_hint">请授予图片/视频/音频访问权限，或开启“所有文件访问”，才能浏览媒体库。</string>
+    <string name="file_browser_media_grant">授予媒体权限</string>
+    <string name="file_browser_media_open_failed">无法打开这个媒体文件。</string>
+    <string name="file_browser_media_summary">%1$s · %2$d 项 · %3$s</string>
+    <string name="file_browser_media_count_size">%1$d 项 · %2$s</string>
+    <string name="file_browser_media_more">加载更多</string>
+    <string name="file_browser_media_previous">上一张</string>
+    <string name="file_browser_media_next">下一张</string>
+    <string name="file_browser_media_rotate">旋转</string>
+    <string name="file_browser_media_image_failed">无法打开这张图片。</string>
+    <string name="file_browser_media_selected">已选 %1$d 项</string>
+</resources>

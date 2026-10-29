@@ -164,7 +164,7 @@ internal object FileBrowserPreferences {
     }
 
     fun rememberTabs(paths: List<String>, activeIndex: Int) {
-        val normalized = paths.map { FileBrowserPaths.normalize(it) }.distinct().take(6)
+        val normalized = paths.map(::normalizeStored).distinct().take(6)
         if (normalized.isEmpty()) return
         update {
             it.copy(
@@ -173,6 +173,9 @@ internal object FileBrowserPreferences {
             )
         }
     }
+
+    private fun normalizeStored(path: String): String =
+        FileBrowserMedia.normalizeLocation(path, FileBrowserStorage.internalStoragePath())
 
     fun movePin(from: Int, to: Int, internalRoot: String) {
         val base = userPinned(internalRoot).toMutableList()
@@ -239,7 +242,8 @@ internal object FileBrowserPreferences {
         update { it.copy(shortcutOrder = order) }
     }
 
-    fun rememberLastPath(path: String) {        val normalized = FileBrowserPaths.normalize(path)
+    fun rememberLastPath(path: String) {
+        val normalized = normalizeStored(path)
         if (current.lastPath == normalized) return
         update { it.copy(lastPath = normalized) }
     }
@@ -265,7 +269,13 @@ internal object FileBrowserPreferences {
             .filter { it.startsWith("/") }
             .distinct()
             .take(MAX_PINS),
-        lastPath = prefs.lastPath?.takeIf { it.startsWith("/") },
+        lastPath = prefs.lastPath
+            ?.takeIf { it.startsWith("/") || FileBrowserMediaCategory.isMediaPath(it) },
+        tabs = prefs.tabs
+            .map(::normalizeStored)
+            .distinct()
+            .take(6),
+        activeTabIndex = prefs.activeTabIndex.coerceAtLeast(0),
         shortcutOrder = prefs.shortcutOrder
             .map { FileBrowserPaths.normalize(it) }
             .filter { it.startsWith("/") }
