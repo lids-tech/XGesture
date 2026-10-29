@@ -83,6 +83,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.view.drawToBitmap
@@ -107,6 +108,7 @@ internal fun FileBrowserListContent(
     onRetry: () -> Unit,
     onRequestAllFiles: () -> Unit,
     onRequestShizuku: () -> Unit,
+    bottomInset: Dp = 0.dp,
 ) {
     val error = state.error
     when {
@@ -128,7 +130,7 @@ internal fun FileBrowserListContent(
         else -> LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 8.dp),
+            contentPadding = PaddingValues(bottom = 8.dp + bottomInset),
         ) {
             itemsIndexed(
                 items = filtered,

@@ -357,9 +357,15 @@ internal class FileBrowserController(
     }
 
     fun enterSelection(entry: FileBrowserEntry) {
+        if (state.selectionMode && entry.path in state.selectedPaths) return
+        val selected = if (state.selectionMode) {
+            state.selectedPaths + entry.path
+        } else {
+            setOf(entry.path)
+        }
         state = state.copy(
             selectionMode = true,
-            selectedPaths = setOf(entry.path),
+            selectedPaths = selected,
             details = null,
         )
     }
