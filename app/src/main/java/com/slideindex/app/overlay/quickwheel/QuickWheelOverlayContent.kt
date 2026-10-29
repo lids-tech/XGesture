@@ -82,6 +82,8 @@ fun QuickWheelOverlayContent(
     anchorX: Float,
     anchorY: Float,
     screenWidthPx: Float,
+    /** 屏幕可用高度（px）；预览 / 编辑层不传（NaN）时跳过“底部不出屏”兜底。 */
+    screenHeightPx: Float = Float.NaN,
     onExecuteTap: (QuickWheelSlot) -> Unit,
     onExecuteLongPress: (QuickWheelSlot) -> Unit,
     onDismiss: () -> Unit,
@@ -163,6 +165,19 @@ fun QuickWheelOverlayContent(
             secondaryAdaptive = secondaryAdaptive,
         )
     }
+
+    // 底部不出屏兜底：自适应求解只保证一级容器不越界，这里再把中心大圆 / 一级 / 二级
+    // 整组向上平移，保证轮盘最底端不超过屏幕底边。
+    val adjustedLayout = if (screenHeightPx.isFinite() && screenHeightPx > 0f) {
+        QuickWheelLayoutEngine.clampLayoutToBottom(
+            layout = layout,
+            screenHeightPx = screenHeightPx,
+            bottomMarginPx = QuickWheelLayoutEngine.BOTTOM_SAFE_MARGIN_DP * densityFloat,
+        )
+    } else {
+        layout
+    }
+
     // 自适应求解结果（诊断用）：便于确认"贴着触发点最终选了哪个扇区 / 哪个网格基准角"。
     LaunchedEffect(layout.sectorMask, layout.rectCorner, expandedPrimary) {
         if (adaptive != null) {
@@ -175,7 +190,7 @@ fun QuickWheelOverlayContent(
     }
 
     // 外部回调是长生命周期闭包，必须读取最新的布局与展开态。
-    val layoutState = rememberUpdatedState(layout)
+    val layoutState = rememberUpdatedState(adjustedLayout)
 
     fun expandedSlotsNow(): List<QuickWheelSlot> =
         wheel.slots.getOrNull(expandedPrimary)?.subSlots.orEmpty()
@@ -512,7 +527,7 @@ fun QuickWheelOverlayContent(
 
         // 与配置页预览 / 编辑层共用同一个渲染器，保证三处轮盘外形完全一致。
         QuickWheelWheelRenderer(
-            layout = layout,
+            layout = adjustedLayout,
             wheel = wheel,
             // 呼出动画：从锚点向外铺开（lambda 读取，动画期间不重组）。
             appearProgress = { appear.value },

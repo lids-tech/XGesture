@@ -1259,6 +1259,40 @@ object QuickWheelLayoutEngine {
     }
 
     /**
+     * 真机呼出时轮盘最底部距屏幕底边的安全余量（dp）。
+     *
+     * 0 = 容器底边刚好贴住屏幕最底端；想再留一点空隙就调大（例如 8f）。
+     */
+    const val BOTTOM_SAFE_MARGIN_DP = 4f
+
+    /**
+     * 布局完成后的纵向兜底：只要中心大圆 / 一级 / 二级任一容器的底边越过屏幕底边，
+     * 就把整组容器整体向上平移相同距离，保证轮盘最底端不超出屏幕。
+     */
+    fun clampLayoutToBottom(
+        layout: QuickWheelLayout,
+        screenHeightPx: Float,
+        bottomMarginPx: Float,
+    ): QuickWheelLayout {
+        if (!screenHeightPx.isFinite() || screenHeightPx <= 0f) return layout
+        val limit = screenHeightPx - bottomMarginPx
+        var maxBottom = layout.centerY + layout.centerSizePx / 2f
+        layout.primarySlots.forEach { slot ->
+            maxBottom = maxOf(maxBottom, slot.centerY + slot.sizePx / 2f)
+        }
+        layout.secondarySlots.forEach { slot ->
+            maxBottom = maxOf(maxBottom, slot.centerY + slot.sizePx / 2f)
+        }
+        val shift = (maxBottom - limit).coerceAtLeast(0f)
+        if (shift <= 0.5f) return layout
+        return layout.copy(
+            centerY = layout.centerY - shift,
+            primarySlots = layout.primarySlots.map { it.copy(centerY = it.centerY - shift) },
+            secondarySlots = layout.secondarySlots.map { it.copy(centerY = it.centerY - shift) },
+        )
+    }
+
+    /**
      * 浮层 / 编辑层 / 预览共用的锚点解析。
      *
      * 三处必须完全一致，否则「轮盘预览」与「轮盘功能设置」里的轮盘位置会对不上。

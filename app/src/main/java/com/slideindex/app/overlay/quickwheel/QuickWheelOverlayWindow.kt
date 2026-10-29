@@ -287,6 +287,7 @@ object QuickWheelOverlayWindow {
                         anchorX = anchorX,
                         anchorY = anchorY,
                         screenWidthPx = screenWidthPx,
+                        screenHeightPx = screenHeightPx,
                         onExecuteTap = { slot -> executeSlot(slot, longPress = false, anchorX, anchorY) },
                         onExecuteLongPress = { slot -> executeSlot(slot, longPress = true, anchorX, anchorY) },
                         onDismiss = { dismissForSession(mySession) },
