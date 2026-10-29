@@ -154,10 +154,12 @@ object EdgeCardOverlayWindow {
         val existing = entries.firstOrNull { it.matches(plan.data) && !it.preview }
         if (existing != null) {
             val changed = NotificationContentGate.signature(existing.plan.data) != NotificationContentGate.signature(plan.data)
+            // 角标按“本会话收到的条数”累计，不再取通知的 number：微信/QQ 把 number 设成
+            // 整个 App 的未读总数，混进来会显示成 99+ 并且永远减不下来。
             val unread = if (changed) {
-                maxOf(plan.data.badgeCount, existing.state.unreadCount + 1)
+                existing.state.unreadCount + 1
             } else {
-                maxOf(plan.data.badgeCount, existing.state.unreadCount)
+                existing.state.unreadCount
             }
             existing.plan = plan
             existing.actionCallback = onAction
@@ -181,7 +183,8 @@ object EdgeCardOverlayWindow {
         entry.plan = plan
         entry.state = EdgeCardUiState(
             phase = EdgeCardPhase.Expanded,
-            unreadCount = plan.data.badgeCount.coerceAtLeast(1),
+            // 新卡从 1 开始，之后每来一条同会话消息 +1（对齐悬浮菜单的做法）。
+            unreadCount = 1,
         )
         entry.actionCallback = onAction
         entry.dismissCallback = onDismiss
