@@ -1,6 +1,7 @@
 package com.slideindex.app.overlay.filebrowser
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -74,6 +75,7 @@ internal class FileBrowserController(
     private var operationJob: Job? = null
     private var nextTabId: Long = 1L
     private val scrollPositions = mutableMapOf<Pair<Long, String>, Pair<Int, Int>>()
+    private var currentScrollProvider: (() -> Pair<Int, Int>)? = null
 
     val internalRoot: String get() = dataSource.internalRoot
 
@@ -157,6 +159,16 @@ internal class FileBrowserController(
         rememberTabs()
     }
 
+    fun bindScrollProvider(provider: () -> Pair<Int, Int>) {
+        currentScrollProvider = provider
+    }
+
+    private fun saveCurrentScroll() {
+        val position = currentScrollProvider?.invoke() ?: return
+        scrollPositions[state.activeTabId to state.path] = position
+        Log.d("FileBrowserScroll", "save path=${state.path} pos=$position")
+    }
+
     fun navigateTo(path: String) {
         navigateTo(path, pushHistory = true)
     }
@@ -164,6 +176,7 @@ internal class FileBrowserController(
     private fun navigateTo(path: String, pushHistory: Boolean) {
         val normalized = FileBrowserPaths.normalize(path, internalRoot)
         if (normalized == state.path && state.error == null) return
+        saveCurrentScroll()
         searchJob?.cancel()
         searchJob = null
         val currentTab = state.tabs.firstOrNull { it.id == state.activeTabId }
@@ -206,6 +219,7 @@ internal class FileBrowserController(
     }
 
     fun goBack() {
+        saveCurrentScroll()
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
         val target = tab?.backStack?.lastOrNull()
         if (target == null) {
@@ -312,7 +326,9 @@ internal class FileBrowserController(
 
     fun scrollForActiveTab(): Pair<Int, Int> {
         val tab = state.tabs.firstOrNull { it.id == state.activeTabId }
-        return scrollPositions[state.activeTabId to state.path]
+        val cached = scrollPositions[state.activeTabId to state.path]
+        Log.d("FileBrowserScroll", "read path=${state.path} cached=$cached tab=${tab?.path}")
+        return cached
             ?: if (tab?.path == state.path) {
                 (tab.scrollIndex) to (tab.scrollOffset)
             } else {
