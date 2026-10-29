@@ -372,6 +372,12 @@ internal fun FileBrowserPanel(
                                     focusManager.clearFocus()
                                     controller.enterSelection(entry)
                                 },
+                                onDropEntry = { sourcePath, targetDir ->
+                                    controller.dropEntryInto(sourcePath, targetDir, cut = true)
+                                },
+                                onDragStart = {
+                                    controller.exitSelection()
+                                },
                                 selectionMode = state.selectionMode,
                                 selectedPaths = state.selectedPaths,
                                 access = state.access,

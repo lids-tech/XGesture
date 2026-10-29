@@ -1,11 +1,16 @@
 package com.slideindex.app.overlay.filebrowser
 
+import android.content.ClipData
 import android.graphics.Bitmap
+import android.util.Log
+import android.view.View
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,17 +62,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.core.view.drawToBitmap
 import com.slideindex.app.R
+import java.io.File
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 internal fun FileBrowserListContent(
@@ -77,6 +95,8 @@ internal fun FileBrowserListContent(
     listState: LazyListState,
     onEntryClick: (FileBrowserEntry) -> Unit,
     onEntryLongClick: (FileBrowserEntry) -> Unit,
+    onDropEntry: (sourcePath: String, targetDir: String) -> Unit = { _, _ -> },
+    onDragStart: () -> Unit = {},
     selectionMode: Boolean = false,
     selectedPaths: Set<String> = emptySet(),
     access: FileBrowserAccessInfo? = null,
@@ -118,6 +138,8 @@ internal fun FileBrowserListContent(
                     access = access,
                     onClick = { onEntryClick(entry) },
                     onLongClick = { onEntryLongClick(entry) },
+                    onDropEntry = onDropEntry,
+                    onDragStart = onDragStart,
                 )
             }
         }
@@ -134,10 +156,60 @@ private fun FileBrowserEntryRow(
     access: FileBrowserAccessInfo?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onDropEntry: (String, String) -> Unit,
+    onDragStart: () -> Unit,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
     val isFolder = entry.kind == FileEntryKind.DIRECTORY
     val context = LocalContext.current
+    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
+    var dragHover by remember { mutableStateOf(false) }
+    val dragTarget = remember(entry.path, isFolder, onDropEntry) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val source = event.toAndroidDragEvent().localState as? FileBrowserEntry
+                Log.d("FileBrowserDrag", "drop target=${entry.path} source=${source?.path}")
+                if (!isFolder || source == null || source.path == entry.path) return false
+                dragHover = false
+                onDropEntry(source.path, entry.path)
+                return true
+            }
+
+            override fun onEntered(event: DragAndDropEvent) {
+                val source = event.toAndroidDragEvent().localState as? FileBrowserEntry
+                if (isFolder && source != null && source.path != entry.path) dragHover = true
+            }
+
+            override fun onExited(event: DragAndDropEvent) {
+                dragHover = false
+            }
+
+            override fun onEnded(event: DragAndDropEvent) {
+                dragHover = false
+            }
+        }
+    }
+    val dragClip = remember(entry.path) {
+        runCatching {
+            val file = File(entry.path)
+            if (file.isFile && file.canRead()) {
+                ClipData.newUri(
+                    context.contentResolver,
+                    entry.name,
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    ),
+                )
+            } else {
+                ClipData.newPlainText(entry.name, entry.path)
+            }
+        }.getOrElse {
+            ClipData.newPlainText(entry.name, entry.path)
+        }
+    }
     val tint = if (isFolder) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -166,16 +238,73 @@ private fun FileBrowserEntryRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    if (selected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    } else {
-                        Color.Transparent
+                    when {
+                        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                        dragHover -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        else -> Color.Transparent
                     },
                 )
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
+                .dragAndDropTarget(
+                    shouldStartDragAndDrop = { event ->
+                        isFolder && event.toAndroidDragEvent().localState is FileBrowserEntry
+                    },
+                    target = dragTarget,
                 )
+                .pointerInput(entry.path) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var tap = false
+                        var scrolled = false
+                        val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                    ?: return@withTimeoutOrNull false
+                                if (!change.pressed) {
+                                    tap = true
+                                    return@withTimeoutOrNull false
+                                }
+                                val moved = (change.position - down.position).getDistance()
+                                if (moved > viewConfiguration.touchSlop || change.isConsumed) {
+                                    scrolled = true
+                                    return@withTimeoutOrNull false
+                                }
+                            }
+                        } == null
+                        if (!timedOut) {
+                            if (tap && !scrolled) onClick()
+                            return@awaitEachGesture
+                        }
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick()
+                        var dragged = Offset.Zero
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            dragged += change.position - change.previousPosition
+                            if (dragged.getDistance() > viewConfiguration.touchSlop * 1.5f) {
+                                change.consume()
+                                val snapshot = runCatching { view.drawToBitmap() }.getOrNull()
+                                if (snapshot != null) {
+                                    val started = view.startDragAndDrop(
+                                        dragClip,
+                                        FileBrowserDragShadow(
+                                            source = snapshot,
+                                            touchX = down.position.x,
+                                            touchY = down.position.y,
+                                        ),
+                                        entry,
+                                        View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
+                                    )
+                                    Log.d("FileBrowserDrag", "start ${entry.path} started=$started")
+                                }
+                                onDragStart()
+                                break
+                            }
+                        }
+                    }
+                }
                 .heightIn(min = 60.dp)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
