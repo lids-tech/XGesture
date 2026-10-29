@@ -3,6 +3,7 @@ package com.slideindex.app.overlay.filebrowser
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -89,6 +90,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -158,6 +160,11 @@ internal fun FileBrowserPanel(
         )
     }
     val listState = rememberLazyListState()
+    LaunchedEffect(listState) {
+        controller.bindScrollProvider {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }
+    }
     var listBounds by remember { mutableStateOf(Rect.Zero) }
     var autoScrollDelta by remember { mutableStateOf(0f) }
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -237,8 +244,14 @@ internal fun FileBrowserPanel(
         snapshotFlow {
             state.loading to listState.layoutInfo.totalItemsCount
         }.first { (loading, total) -> !loading && total > 0 }
+        withFrameNanos { }
         val (index, offset) = controller.scrollForActiveTab()
+        Log.d("FileBrowserScroll", "restore path=$path target=$index,$offset total=${listState.layoutInfo.totalItemsCount}")
         runCatching { listState.scrollToItem(index, offset) }
+        withFrameNanos { }
+        if (listState.firstVisibleItemIndex != index) {
+            runCatching { listState.scrollToItem(index, offset) }
+        }
         snapshotFlow {
             if (state.loading || state.path != path) null else {
                 listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
