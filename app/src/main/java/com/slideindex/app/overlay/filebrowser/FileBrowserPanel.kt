@@ -232,19 +232,15 @@ internal fun FileBrowserPanel(
             last = current
         }
     }
-    var restoredKey by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.activeTabId, state.path) {
-        val key = "${state.activeTabId}:${state.path}"
-        if (restoredKey != key) {
-            snapshotFlow {
-                state.loading to listState.layoutInfo.totalItemsCount
-            }.first { (loading, total) -> !loading && total > 0 }
-            val (index, offset) = controller.scrollForActiveTab()
-            runCatching { listState.scrollToItem(index, offset) }
-            restoredKey = key
-        }
+        val path = state.path
         snapshotFlow {
-            if (state.loading) null else {
+            state.loading to listState.layoutInfo.totalItemsCount
+        }.first { (loading, total) -> !loading && total > 0 }
+        val (index, offset) = controller.scrollForActiveTab()
+        runCatching { listState.scrollToItem(index, offset) }
+        snapshotFlow {
+            if (state.loading || state.path != path) null else {
                 listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
             }
         }.filterNotNull().collect { (index, offset) ->

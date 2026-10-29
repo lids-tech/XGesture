@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -231,6 +232,11 @@ private fun FileBrowserEntryRow(
     val dragPayload = remember(dragPaths) {
         FileBrowserDragPayload(dragPaths.distinct())
     }
+    val latestOnClick by rememberUpdatedState(onClick)
+    val latestOnLongClick by rememberUpdatedState(onLongClick)
+    val latestDragPaths by rememberUpdatedState(dragPaths)
+    val latestDragClip by rememberUpdatedState(dragClip)
+    val latestDragPayload by rememberUpdatedState(dragPayload)
     val tint = if (isFolder) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -294,7 +300,7 @@ private fun FileBrowserEntryRow(
                             }
                         } == null
                         if (!timedOut) {
-                            if (tap && !scrolled) onClick()
+                            if (tap && !scrolled) latestOnClick()
                             return@awaitEachGesture
                         }
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -308,7 +314,10 @@ private fun FileBrowserEntryRow(
                                 .coerceIn(1, full.height - top)
                             Bitmap.createBitmap(full, left, top, width, height)
                         }.getOrNull()
-                        onLongClick()
+                        val lockedPaths = latestDragPaths
+                        val lockedClip = latestDragClip
+                        val lockedPayload = latestDragPayload
+                        latestOnLongClick()
                         // 菜单出现后不松手，继续按住到第二个阈值才进入拖拽。
                         val released = withTimeoutOrNull(420L) {
                             while (true) {
@@ -325,19 +334,19 @@ private fun FileBrowserEntryRow(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (rowSnapshot != null) {
                             val started = view.startDragAndDrop(
-                                dragClip,
+                                lockedClip,
                                 FileBrowserDragShadow(
                                     source = rowSnapshot,
                                     touchX = down.position.x,
                                     touchY = down.position.y,
-                                    count = dragPaths.size,
+                                    count = lockedPaths.size,
                                 ),
-                                dragPayload,
+                                lockedPayload,
                                 View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ,
                             )
                             Log.d(
                                 "FileBrowserDrag",
-                                "start ${entry.path} started=$started count=${dragPaths.size} paths=$dragPaths",
+                                "start ${entry.path} started=$started count=${lockedPaths.size} paths=$lockedPaths",
                             )
                         }
                     }
