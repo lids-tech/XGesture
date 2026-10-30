@@ -493,6 +493,8 @@ object FloatBallOverlay {
         }
     }
 
+    private var chromeRaiseCount = 0
+
     private fun bringChromeAbovePanelsNow(forceExplicitReAdd: Boolean = false) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post { bringChromeAbovePanelsNow(forceExplicitReAdd) }
@@ -759,7 +761,7 @@ object FloatBallOverlay {
 
     /** 闲置定格：球仍可见，但停止 GIF 出帧；触摸/拖动由 shown 恢复。 */
     private fun applyBallGifFreeze(settings: AppSettings, shown: Boolean) {
-        ballIconView?.setGifFrozen(!shown && settings.floatBallIdleFreezeGif)
+                ballIconView?.setGifFrozen(!shown && settings.floatBallIdleFreezeGif)
     }
 
     /** 把「当前该不该隐身」发布给窗内那份球（BOTH_EDGES 模式下球画在触摸窗里）。 */
@@ -1147,8 +1149,6 @@ object FloatBallOverlay {
         lineWindowLeft = null
         lineWindowRight?.dispose()
         lineWindowRight = null
-        ballIconWindow?.dispose()
-        ballIconWindow = null
         displayView?.let { view -> wm?.let { runCatching { it.removeView(view) } } }
         touchHost?.let { view -> wm?.let { runCatching { it.removeView(view) } } }
         lineTouchHost?.let { view -> wm?.let { runCatching { it.removeView(view) } } }
@@ -1709,13 +1709,18 @@ object FloatBallOverlay {
             return
         }
 
-        // 球体独立小窗：常驻、球大小。挂在这里保证 z-order 在 display 层之上、触摸窗之下。
-        ballIconWindow = FloatBallIconWindow(hostContext, ballIcon).also { it.attach() }
         // 线条改成两条独立窄窗（纯 View 绘制），运行时不再走全屏 Compose 线层。
         lineWindowLeft = FloatBallLineWindow(hostContext, alignRight = false).also { it.attach() }
         lineWindowRight = FloatBallLineWindow(hostContext, alignRight = true).also { it.attach() }
         // 关掉 display 层里的 Compose 线条，避免画两份。
         displayHost.lineChromeComposeView.visibility = View.GONE
+
+        // 【单窗】球图标直接挂进触摸窗：窗口既画球又是命中区，不再有第二个"球窗"要同步位置。
+        ballIcon.layoutParams = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        )
+        touchLayout.addView(ballIcon)
 
         val touchAdded = runCatching { wm.addView(touchLayout, touchLp) }
             .onFailure { Log.e(TAG, "failed to add ball touch overlay", it) }
@@ -2825,6 +2830,7 @@ object FloatBallOverlay {
         }.onFailure { Log.w(TAG, "bringOverlayToFront updateViewLayout failed", it) }
     }
 
+
     private fun applyAllLayouts(settings: AppSettings, relayoutChrome: Boolean = true) {
         applyBallLayout(settings)
         if (relayoutChrome) {
@@ -2860,8 +2866,9 @@ object FloatBallOverlay {
         )
         val (left, top) = state.ballWindowTopLeft(settings, metrics, activeSide, center, screenHeightPx)
         val ballSize = FloatBallLayout.ballSize(settings, metrics.density)
-        ballIconWindow?.moveTo(left, top, ballSize.widthPx, ballSize.heightPx)
-        ballIconWindow?.setVisible(state.ballVisible.value)
+        moveBallTouchWindow(left, top, ballSize.widthPx, ballSize.heightPx)
+        ballIconView?.visibility =
+            if (state.ballVisible.value) View.VISIBLE else View.GONE
         if (!layoutOnly) {
             ballIconView?.bind(
                 settings = settings,
@@ -2938,7 +2945,7 @@ object FloatBallOverlay {
         if (captureSuppressed) {
             state.chromeVisible.value = false
             syncTouchWindowLayout(settings)
-            ballIconWindow?.setVisible(false)
+            ballIconView?.visibility = View.GONE
             return
         }
         if (FloatBallLayout.isKeyboardTriggerDisabled(settings, isLandscapeLayout())) {
@@ -2946,7 +2953,7 @@ object FloatBallOverlay {
             state.ballVisible.value = false
             state.lineVisible.value = false
             syncTouchWindowLayout(settings)
-            ballIconWindow?.setVisible(false)
+            ballIconView?.visibility = View.GONE
             return
         }
         state.chromeVisible.value = true
@@ -4089,6 +4096,21 @@ object FloatBallOverlay {
         }
         pendingPickAnchor = pick
         scheduleCursorCommitOnNextFrame()
+    }
+
+    /** 单窗模式：球窗 = 触摸窗，移动球就是移动这个窗口（窗口坐标即命中区）。 */
+    private fun moveBallTouchWindow(left: Int, top: Int, widthPx: Int, heightPx: Int) {
+        val view = touchHost ?: return
+        val wm = windowManager ?: return
+        val params = touchLayoutParams ?: return
+        val w = widthPx.coerceAtLeast(1)
+        val h = heightPx.coerceAtLeast(1)
+        if (params.x == left && params.y == top && params.width == w && params.height == h) return
+        params.x = left
+        params.y = top
+        params.width = w
+        params.height = h
+        runCatching { wm.updateViewLayout(view, params) }
     }
 
     private fun applyDragBallLayout(settings: AppSettings) {

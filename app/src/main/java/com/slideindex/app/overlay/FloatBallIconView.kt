@@ -70,6 +70,9 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
 
     private var currentOpacityValue = 1f
 
+    /** 「闲置时停止动图」的冻结状态：setDragging 等路径不能把它顶掉。 */
+    private var gifFrozen = false
+
     /** 闲置隐身：非 null 时覆盖根 View 的 alpha（null = 跟随设置不透明度）。 */
     private var alphaOverride: Float? = null
 
@@ -175,12 +178,14 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
     /** 闲置定格：停止 GIF 出帧但保留当前画面；false 恢复播放。 */
     fun setGifFrozen(frozen: Boolean) {
         if (contentMode != ContentMode.GIF) return
+        gifFrozen = frozen
         gifPlayer.setPaused(frozen)
     }
 
     fun setDragging(dragging: Boolean) {
         when (contentMode) {
-            ContentMode.GIF -> gifPlayer.setPaused(false)
+            // 冻结期间不能被布局刷新顺手解冻（否则「闲置时停止动图」会被每帧顶掉）。
+            ContentMode.GIF -> if (!gifFrozen) gifPlayer.setPaused(false)
             ContentMode.BUILTIN -> builtinAnimView.setPaused(false)
             ContentMode.STATIC -> Unit
         }
@@ -307,7 +312,8 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
                     retainGifSequence(handle)
                     FloatBallGifDragSnapshot.update(uri, decodePx, handle.sequence)
                     gifPlayer.setSequence(handle.sequence)
-                    gifPlayer.setPaused(false)
+                    // 重新绑定后仍要尊重冻结状态（否则改设置/重建视图会把冻结顶掉）。
+                    gifPlayer.setPaused(gifFrozen)
                     gifPlayer.start()
                 } else {
                     showStaticBitmap(FloatBallDragVisualRenderer.render(context, settings), owns = true)
