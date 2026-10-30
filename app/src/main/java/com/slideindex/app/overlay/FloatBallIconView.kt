@@ -271,8 +271,33 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
         // 不再经过 HWUI 的 Vulkan 提交与逐帧纹理上传（对齐 FV 的做法）。
         val token = ++gifDecodeToken
         Thread {
-            // 共享缓存：同一 (uri, 尺寸) 只解码一份，不再每次进 GIF 样式都解一整只。
+            // 策略：小 GIF（能全帧缓存）走“预解码帧 + tick”——实测运行成本最低；
+            // 大 GIF（只能流式）或解码失败才用 ImageDecoder / AnimatedImageDrawable。
             val handle = FloatBallGifSequenceCache.acquire(context, uri, decodePx)
+            val cachedSequence = handle?.sequence
+            if (cachedSequence !is FloatBallGifFrameDecoder.Sequence.Cached) {
+                val animated = runCatching {
+                    val source = android.graphics.ImageDecoder.createSource(
+                        context.contentResolver,
+                        android.net.Uri.parse(uri),
+                    )
+                    android.graphics.ImageDecoder.decodeDrawable(source) { decoder, _, _ ->
+                        decoder.setTargetSize(decodePx.coerceAtLeast(1), decodePx.coerceAtLeast(1))
+                    }
+                }.getOrNull()
+                if (animated is android.graphics.drawable.AnimatedImageDrawable) {
+                    runCatching {
+                        animated.repeatCount =
+                            android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE
+                    }
+                    handle?.close()
+                    mainHandler.post {
+                        if (token != gifDecodeToken) return@post
+                        gifPlayer.setAnimatedDrawable(animated)
+                    }
+                    return@Thread
+                }
+            }
             mainHandler.post {
                 if (token != gifDecodeToken) {
                     handle?.close()

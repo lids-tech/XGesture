@@ -1,5 +1,6 @@
 package com.slideindex.app.overlay
 
+import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -15,6 +16,9 @@ internal class FloatBallGifPlayer(
     private var sequence: FloatBallGifFrameDecoder.Sequence? = null
     private var frameIndex = 0
     private var paused = false
+
+    /** ImageDecoder 解出的动图；非空时由它自己播放，不需要 tick。 */
+    private var animatedDrawable: Drawable? = null
     private var streamingStartUptimeMs = 0L
 
     private val tickRunnable = object : Runnable {
@@ -57,8 +61,20 @@ internal class FloatBallGifPlayer(
         gifView = view
     }
 
+    /**
+     * 用系统动图（ImageDecoder → AnimatedImageDrawable）播放：它自己按帧推进，
+     * 不需要我们的 tick 循环，也不再经过 Movie 那套废弃 API。
+     */
+    fun setAnimatedDrawable(drawable: Drawable?) {
+        stop()
+        animatedDrawable = drawable
+        sequence = null
+        gifView?.setAnimatedDrawable(drawable)
+    }
+
     fun setSequence(seq: FloatBallGifFrameDecoder.Sequence?) {
         stop()
+        animatedDrawable = null
         // 位图归 FloatBallGifSequenceCache 所有，可能被别处共享，这里只能松手不能 recycle。
         sequence = seq
         frameIndex = 0
@@ -70,6 +86,8 @@ internal class FloatBallGifPlayer(
         if (paused == pause) return
         paused = pause
         gifView?.setAnimating(!pause && sequence != null)
+        // 动图自己播：必须显式冻结/恢复，「闲置时停止动图」才对它生效。
+        gifView?.setAnimatedFrozen(pause)
         if (pause) {
             handler.removeCallbacks(tickRunnable)
         } else {
@@ -91,6 +109,8 @@ internal class FloatBallGifPlayer(
      * 隐藏期间 tick 会退化成每秒一次的探测；触摸显形后不等那 1 秒，直接唤醒。
      */
     fun wake() {
+        // 显形时把动图的运行状态重新对齐一次（冻结中则保持不动）。
+        gifView?.setAnimatedFrozen(paused)
         if (paused || sequence == null) return
         handler.removeCallbacks(tickRunnable)
         handler.post(tickRunnable)
@@ -103,6 +123,7 @@ internal class FloatBallGifPlayer(
 
     fun release() {
         stop()
+        animatedDrawable = null
         sequence = null
         gifView?.clearFrame()
         gifView = null
