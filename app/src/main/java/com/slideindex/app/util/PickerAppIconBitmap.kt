@@ -10,7 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object PickerAppIconBitmap {
-    private const val ICON_SIZE_PX = 96
+    // 挑应用网格里的图标按 58dp 渲染，3x 屏是 174px，这里取 176px 留余量。
+    // 单条约 124KB（176² × 4B），缓存顶满 256 条约 32MB；实际条目数通常 100~200。
+    private const val ICON_SIZE_PX = 176
 
     private val cache = object : LruCache<String, ImageBitmap>(
         (Runtime.getRuntime().maxMemory() / 1024 / 16).toInt().coerceIn(48, 256),

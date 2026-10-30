@@ -515,7 +515,7 @@ fun Md3PickerPackageLeading(
 }
 
 @Composable
-fun Md3PickerAppLeading(app: AppInfo) {
+fun Md3PickerAppLeading(app: AppInfo, sizeDp: Int = 40) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val inactive = app.isFrozen || app.isPaused
     val grayscale = if (inactive) {
@@ -525,7 +525,7 @@ fun Md3PickerAppLeading(app: AppInfo) {
     }
     // 选择操作类型 / 环 / 快捷启动器添加页共用这个 leading：冻结、暂停、分身的状态
     // 必须在这里统一画出来，否则同一个应用在不同列表里的样子会不一致。
-    Box(modifier = Modifier.size(40.dp)) {
+    Box(modifier = Modifier.size(sizeDp.dp)) {
         // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
         val iconOverride = remember(app.packageName) {
             GlobalIconStore.appIcon(context, app.packageName)
@@ -537,7 +537,7 @@ fun Md3PickerAppLeading(app: AppInfo) {
                     cloneUserId = app.cloneUserId,
                 ),
                 iconKey = iconOverride,
-                sizeDp = 40,
+                sizeDp = sizeDp,
                 // 与其它真实图标保持一致：不画底色方块。
                 showBackground = false,
             )
@@ -561,6 +561,7 @@ fun Md3PickerAppLeading(app: AppInfo) {
                 failed = failed,
                 contentDescription = app.label,
                 colorFilter = grayscale,
+                sizeDp = sizeDp,
             )
         }
         // 分身标记：右上角黄点，与索引 / 搜索面板同色。
@@ -631,6 +632,7 @@ private fun Md3PickerBitmapLeading(
     failed: Boolean,
     contentDescription: String,
     colorFilter: ColorFilter? = null,
+    sizeDp: Int = 40,
 ) {
     when {
         bitmap != null -> {
@@ -638,15 +640,15 @@ private fun Md3PickerBitmapLeading(
                 bitmap = bitmap,
                 contentDescription = contentDescription,
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp)),
+                    .size(sizeDp.dp)
+                    .clip(RoundedCornerShape((sizeDp * 0.25f).dp)),
                 contentScale = ContentScale.Fit,
                 colorFilter = colorFilter,
             )
         }
         failed -> {
             Box(
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(sizeDp.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -658,7 +660,7 @@ private fun Md3PickerBitmapLeading(
             }
         }
         else -> {
-            Box(modifier = Modifier.size(40.dp))
+            Box(modifier = Modifier.size(sizeDp.dp))
         }
     }
 }
