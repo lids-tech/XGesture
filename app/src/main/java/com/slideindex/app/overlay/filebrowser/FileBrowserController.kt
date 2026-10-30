@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.slideindex.app.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -644,8 +645,14 @@ internal class FileBrowserController(
                 operationRunning = false,
                 operationProgress = 0f,
                 operationMessage = when {
-                    report.failures.isNotEmpty() -> "有 ${report.failures.size} 项失败"
-                    report.skipped > 0 -> "已跳过 ${report.skipped} 项"
+                    report.failures.isNotEmpty() -> appContext.getString(
+                        R.string.file_browser_failed_count,
+                        report.failures.size,
+                    )
+                    report.skipped > 0 -> appContext.getString(
+                        R.string.file_browser_skipped_count,
+                        report.skipped,
+                    )
                     else -> null
                 },
                 clipboard = if (report.failures.isEmpty()) null else clipboard,
@@ -685,7 +692,11 @@ internal class FileBrowserController(
             state = state.copy(
                 operationRunning = false,
                 operationProgress = 0f,
-                operationMessage = if (report.failures.isNotEmpty()) "有 ${report.failures.size} 项失败" else null,
+                operationMessage = if (report.failures.isEmpty()) {
+                    null
+                } else {
+                    appContext.getString(R.string.file_browser_failed_count, report.failures.size)
+                },
             )
             refresh()
         }
@@ -697,7 +708,7 @@ internal class FileBrowserController(
         state = state.copy(
             operationRunning = false,
             operationProgress = 0f,
-            operationMessage = "已取消",
+            operationMessage = appContext.getString(R.string.file_browser_cancelled),
         )
     }
 
@@ -715,7 +726,11 @@ internal class FileBrowserController(
             state = state.copy(
                 operationRunning = false,
                 operationProgress = 0f,
-                operationMessage = if (report.failures.isEmpty()) null else "删除失败",
+                operationMessage = if (report.failures.isEmpty()) {
+                    null
+                } else {
+                    appContext.getString(R.string.file_browser_delete_failed)
+                },
                 lastTrash = report.trashed,
                 details = null,
             )
@@ -734,7 +749,11 @@ internal class FileBrowserController(
             state = state.copy(
                 operationRunning = false,
                 operationProgress = 0f,
-                operationMessage = if (failures.isEmpty()) null else "有 ${failures.size} 项恢复失败",
+                operationMessage = if (failures.isEmpty()) {
+                    null
+                } else {
+                    appContext.getString(R.string.file_browser_restore_failed, failures.size)
+                },
                 lastTrash = if (failures.isEmpty()) emptyList() else items,
             )
             refresh()
@@ -761,8 +780,11 @@ internal class FileBrowserController(
             state = state.copy(
                 operationRunning = false,
                 operationProgress = 0f,
-                operationMessage = if (report.failures.isEmpty()) null else
-                    "有 ${report.failures.size} 项失败",
+                operationMessage = if (report.failures.isEmpty()) {
+                    null
+                } else {
+                    appContext.getString(R.string.file_browser_failed_count, report.failures.size)
+                },
                 selectionMode = false,
                 selectedPaths = emptySet(),
                 lastTrash = report.trashed,

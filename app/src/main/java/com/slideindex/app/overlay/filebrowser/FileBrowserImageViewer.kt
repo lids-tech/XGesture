@@ -42,8 +42,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.slideindex.app.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -84,7 +86,7 @@ internal fun FileBrowserImageViewer(
     ) {
         when {
             failed -> Text(
-                text = "无法打开图片",
+                text = stringResource(R.string.file_browser_media_image_failed),
                 color = MaterialTheme.colorScheme.error,
             )
             bitmap == null -> CircularProgressIndicator(modifier = Modifier.size(28.dp))
@@ -131,26 +133,34 @@ internal fun FileBrowserImageViewer(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onPrevious != null) {
-                    TextButton(onClick = onPrevious) { Text("上一张") }
+                    TextButton(onClick = onPrevious) {
+                        Text(stringResource(R.string.file_browser_media_previous))
+                    }
                 }
                 if (onNext != null) {
-                    TextButton(onClick = onNext) { Text("下一张") }
+                    TextButton(onClick = onNext) {
+                        Text(stringResource(R.string.file_browser_media_next))
+                    }
                 }
                 TextButton(onClick = {
                     scale = 1f
                     offset = Offset.Zero
                 }) { Text("1:1") }
                 TextButton(onClick = { rotation = (rotation + 90f) % 360f }) {
-                    Text("旋转")
+                    Text(stringResource(R.string.file_browser_media_rotate))
                 }
                 TextButton(onClick = {
                     shareBitmap(context, loaded)
-                }) { Text("分享") }
-                TextButton(onClick = { onEdit(loaded) }) { Text("编辑") }
-                if (onDetails != null) {
-                    TextButton(onClick = onDetails) { Text("详情") }
+                }) { Text(stringResource(R.string.file_browser_share)) }
+                TextButton(onClick = { onEdit(loaded) }) {
+                    Text(stringResource(R.string.file_browser_edit))
                 }
-                TextButton(onClick = onClose) { Text("关闭") }
+                if (onDetails != null) {
+                    TextButton(onClick = onDetails) {
+                        Text(stringResource(R.string.file_browser_details_title))
+                    }
+                }
+                TextButton(onClick = onClose) { Text(stringResource(R.string.file_browser_close)) }
             }
         }
     }
@@ -177,7 +187,7 @@ private suspend fun loadBitmap(
 
 private fun shareBitmap(context: Context, bitmap: Bitmap) {
     Log.d("FileBrowserShare", "shareBitmap start")
-    Toast.makeText(context, "分享中…", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, context.getString(R.string.file_browser_sharing), Toast.LENGTH_SHORT).show()
     try {
         val dir = File(context.cacheDir, "filebrowser").apply { mkdirs() }
         val file = File(dir, "share_${System.currentTimeMillis()}.png")
@@ -194,7 +204,10 @@ private fun shareBitmap(context: Context, bitmap: Bitmap) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(intent, "分享图片").apply {
+        val chooser = Intent.createChooser(
+            intent,
+            context.getString(R.string.file_browser_share_image),
+        ).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         // 悬浮窗是 TYPE_APPLICATION_OVERLAY，会盖住系统分享面板；先关掉再拉起。
@@ -204,7 +217,11 @@ private fun shareBitmap(context: Context, bitmap: Bitmap) {
     } catch (t: Throwable) {
         Log.e("FileBrowserShare", "share failed", t)
         runCatching {
-            Toast.makeText(context, "分享失败：${t.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                context.getString(R.string.file_browser_share_failed, t.message ?: t.toString()),
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
 }

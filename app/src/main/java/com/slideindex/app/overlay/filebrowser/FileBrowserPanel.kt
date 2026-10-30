@@ -1124,7 +1124,7 @@ private fun tabTitle(path: String): String {
     }
     return when (path) {
         "/" -> "/"
-        "/storage/emulated/0" -> "内部存储"
+        "/storage/emulated/0" -> stringResource(R.string.file_browser_crumb_internal)
         else -> path.trimEnd('/').substringAfterLast('/').ifEmpty { path }
     }
 }

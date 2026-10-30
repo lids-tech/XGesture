@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.slideindex.app.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,7 +41,10 @@ internal suspend fun shareFileBrowserPaths(
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList<Uri>(uris))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(intent, "分享文件").apply {
+        val chooser = Intent.createChooser(
+            intent,
+            context.getString(R.string.file_browser_share_files),
+        ).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         FileBrowserOverlayWindow.dismiss()

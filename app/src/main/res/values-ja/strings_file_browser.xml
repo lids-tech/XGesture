@@ -126,4 +126,16 @@
     <string name="file_browser_restore_shortcuts">組み込みショートカットを復元</string>
     <string name="file_browser_image_open">開く</string>
     <string name="file_browser_share">共有</string>
+
+    <!-- 操作反馈 / 图片查看器 / 分享：代码里由 UI 层取资源，不再硬编码 -->
+    <string name="file_browser_failed_count">%1$d 件失敗しました</string>
+    <string name="file_browser_skipped_count">%1$d 件をスキップしました</string>
+    <string name="file_browser_cancelled">キャンセルしました</string>
+    <string name="file_browser_delete_failed">削除に失敗しました</string>
+    <string name="file_browser_restore_failed">%1$d 件の復元に失敗しました</string>
+    <string name="file_browser_edit">編集</string>
+    <string name="file_browser_sharing">共有中…</string>
+    <string name="file_browser_share_image">画像を共有</string>
+    <string name="file_browser_share_failed">共有に失敗しました：%1$s</string>
+    <string name="file_browser_share_files">ファイルを共有</string>
 </resources>

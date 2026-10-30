@@ -126,4 +126,16 @@
     <string name="file_browser_restore_shortcuts">استعادة الاختصارات المدمجة</string>
     <string name="file_browser_image_open">فتح</string>
     <string name="file_browser_share">مشاركة</string>
+
+    <!-- 操作反馈 / 图片查看器 / 分享：代码里由 UI 层取资源，不再硬编码 -->
+    <string name="file_browser_failed_count">فشل %1$d عنصر</string>
+    <string name="file_browser_skipped_count">تم تخطي %1$d عنصر</string>
+    <string name="file_browser_cancelled">أُلغي</string>
+    <string name="file_browser_delete_failed">فشل الحذف</string>
+    <string name="file_browser_restore_failed">فشل استعادة %1$d عنصر</string>
+    <string name="file_browser_edit">تعديل</string>
+    <string name="file_browser_sharing">جارٍ المشاركة…</string>
+    <string name="file_browser_share_image">مشاركة الصورة</string>
+    <string name="file_browser_share_failed">فشلت المشاركة: %1$s</string>
+    <string name="file_browser_share_files">مشاركة الملفات</string>
 </resources>
