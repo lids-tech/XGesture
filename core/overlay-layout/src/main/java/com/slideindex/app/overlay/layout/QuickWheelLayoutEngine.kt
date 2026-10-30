@@ -235,6 +235,16 @@ object QuickWheelLayoutEngine {
     const val MAX_RINGS = 8
 
     /**
+     * 矩形网格的最大行数。
+     *
+     * 矩形每行容量 = 列数（2–10 个），和圆形的"环"不是一回事：共用 [MAX_RINGS] 会让
+     * 容器数超过 8×列数 的部分（以及编辑层末尾的「+」）被静默丢掉——表现就是
+     * "切到矩形后加号消失、点空白占位没反应"。48 个容器的极限只需 24 行，
+     * 64 行仅是防死循环的硬上限。
+     */
+    const val MAX_RECT_ROWS = 64
+
+    /**
      * 自适应求解时容器离屏幕边缘预留的边距（dp）。
      *
      * 运行时浮层与配置页预览 / 编辑层共用同一数值，避免"预览里刚好贴边、真机却出屏"。
@@ -773,7 +783,8 @@ object QuickWheelLayoutEngine {
 
         var remaining = slotCount
         var rings = 0
-        while (remaining > 0 && rings < MAX_RINGS) {
+        val maxRings = if (shape == QuickWheelShape.RECT) MAX_RECT_ROWS else MAX_RINGS
+        while (remaining > 0 && rings < maxRings) {
             val radiusPx = ringRowRadiusPx(shape, initialPx, sizePx, gapPx, ringGapPx, rings)
             val capacity = ringCapacity(
                 radiusPx = radiusPx,
@@ -925,7 +936,9 @@ object QuickWheelLayoutEngine {
             )
         }
 
-        while (ringIndex < MAX_RINGS) {
+        // 矩形按"行"铺，每行 = 列数：行数上限不能用圆形的 MAX_RINGS（否则 >8 行的容器直接消失）。
+        val maxRings = if (shape == QuickWheelShape.RECT) MAX_RECT_ROWS else MAX_RINGS
+        while (ringIndex < maxRings) {
             val radiusPx = ringRowRadiusPx(shape, initialPx, sizePx, gapPx, ringGapPx, ringIndex)
             val capacity = ringCapacity(
                 radiusPx = radiusPx,
@@ -956,7 +969,7 @@ object QuickWheelLayoutEngine {
                             capacity = capacity,
                             globalIndex = globalIndex,
                         )
-                    } else if (ringIndex + 1 < MAX_RINGS) {
+                    } else if (ringIndex + 1 < maxRings) {
                         // 末环已满 → 下一环的第一个位置。
                         val nextRadius = ringRowRadiusPx(
                             shape,

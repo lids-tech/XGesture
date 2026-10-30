@@ -252,7 +252,7 @@
     <string name="message_style_edge_card_keep_across_lock">ロック画面でも保持</string>
     <string name="message_style_edge_card_keep_across_lock_desc">ロック解除後にカードを再表示します</string>
     <string name="message_style_edge_card_collapse_when_scroll_done">最後まで表示したら折りたたむ</string>
-    <string name="message_style_edge_card_collapse_when_scroll_done_desc">長いメッセージは最後までスクロールしてから折りたたみます（上の時間設定は無視）</string>
+    <string name="message_style_edge_card_collapse_when_scroll_done_desc">長いメッセージは最後までスクロールしてから折りたたみます（下の時間設定は無視）</string>
     <string name="message_style_edge_card_desc">画面端に貼り付く1枚のカード。通常は半透明でアバターのみ表示し、新着で展開。右スワイプで折りたたみ、左スワイプで展開、上下スワイプで消去</string>
     <string name="message_style_edge_card_opacity">折りたたみ時の不透明度</string>
     <string name="message_style_edge_card_auto_collapse">自動で折りたたむ</string>
@@ -1513,6 +1513,7 @@
     <string name="screen_record_channel_name">画面録画</string>
     <string name="screen_record_notification_recording">画面を録画中…</string>
     <string name="screen_record_notification_saved">画面録画をギャラリーに保存しました</string>
+    <string name="screen_record_open_with">動画を開く</string>
     <string name="screen_capture_channel_name">画面キャプチャ</string>
     <string name="screen_capture_notification_active">画面キャプチャの準備完了</string>
     <string name="screen_capture_permission_required">部分スクリーンショットには画面キャプチャの権限が必要です</string>
@@ -1809,6 +1810,7 @@
     <string name="float_ball_idle_delay_value">%1$s 秒</string>
     <string name="float_ball_pointer_speed">プラス水平速度</string>
     <string name="float_ball_pointer_speed_vertical">プラス垂直速度</string>
+<string name="float_ball_pick_accel_zone">開始ブースト範囲（2 倍速）</string>
     <string name="float_ball_pick_offset">プラス間隔</string>
     <string name="float_ball_pick_text_size">選択テキストサイズ</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
@@ -1852,7 +1854,7 @@
     <string name="float_ball_pick_panel_enter_animation">選択パネル表示アニメーション</string>
     <string name="float_ball_pick_panel_exit_animation">選択パネル非表示アニメーション</string>
     <string name="float_ball_pick_panel_animation_ms_value">%1$d ミリ秒</string>
-    <string name="float_ball_pointer_slop">全画面ポインター閾値</string>
+    <string name="float_ball_pointer_slop">ドラッグのデッドゾーン</string>
     <string name="float_ball_hover_pause_delay">ホバー一時停止遅延</string>
     <string name="float_ball_regional_cancel_slop">スクリーンショットキャンセル閾値</string>
     <string name="float_ball_text_copied">テキストをクリップボードにコピーしました</string>

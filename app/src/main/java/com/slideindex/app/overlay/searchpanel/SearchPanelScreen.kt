@@ -129,7 +129,6 @@ import com.slideindex.app.overlay.pickresult.PickResultTextSearchGrid
 import com.slideindex.app.overlay.pickresult.PickResultUrl
 import com.slideindex.app.overlay.rememberOverlaySelectionToolbarState
 import com.slideindex.app.overlay.suppressSystemTextContextMenu
-import com.slideindex.app.overlay.viewportModifier
 import com.slideindex.app.search.SearchEngineLauncher
 import com.slideindex.app.search.SearchHistoryAccess
 import com.slideindex.app.search.SearchHistoryRecorder
@@ -1208,9 +1207,7 @@ fun SearchPanelScreen(
                                                 },
                                             )
                                             Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .then(Modifier.viewportModifier(toolbarState)),
+                                                modifier = Modifier.fillMaxWidth(),
                                             ) {
                                                 TextField(
                                                     value = textFieldValue,
@@ -1357,7 +1354,6 @@ fun SearchPanelScreen(
                                                     text = textFieldValue.text,
                                                     textLayoutResult = toolbarState.textLayoutResult,
                                                     fieldCoordinates = toolbarState.fieldCoordinates,
-                                                    viewportCoordinates = toolbarState.viewportCoordinates,
                                                     actions = searchToolbarActions,
                                                 )
                                             }

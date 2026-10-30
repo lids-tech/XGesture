@@ -927,6 +927,11 @@ class OverlaySettingsMutator @Inject constructor(
             value.coerceIn(0f, 0.75f)
     }
 
+    suspend fun setFloatBallPickAccelZoneFraction(value: Float) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_ACCEL_ZONE_FRACTION] =
+            value.coerceIn(0f, 1f)
+    }
+
     suspend fun setFloatBallPositionMode(mode: FloatBallPositionMode) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_POSITION_MODE] = mode.storageKey
         when (mode) {

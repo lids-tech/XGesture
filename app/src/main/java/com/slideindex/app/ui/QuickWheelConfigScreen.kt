@@ -1156,8 +1156,10 @@ private fun QuickWheelSliderRow(
         value = value,
         valueRange = range,
         steps = quickWheelSliderSteps(range),
-        formatLabel = { "${it.toInt()} $unit" },
-        onValueChange = onValueChange,
+        formatLabel = { "${it.roundToInt()} $unit" },
+        // 现在 1 个单位一档：存进样式的值也取整，避免滑条给出 100.9999 这类值
+        // （显示已按 roundToInt 四舍五入，不取整会出现"显示 100、实际 100.99"）。
+        onValueChange = { onValueChange(it.roundToInt().toFloat()) },
     )
 }
 
@@ -1194,15 +1196,16 @@ private fun QuickWheelPercentRow(
         value = value.toFloat(),
         valueRange = QuickWheelLayoutEngine.MIN_PERCENT.toFloat()..
             QuickWheelLayoutEngine.MAX_PERCENT.toFloat(),
-        steps = 15,
-        formatLabel = { "${it.toInt()} %" },
-        onValueChange = { onValueChange(it.toInt()) },
+        // 1% 一档（区间 20–100 → 79 个中间档位）。
+        steps = (QuickWheelLayoutEngine.MAX_PERCENT - QuickWheelLayoutEngine.MIN_PERCENT) - 1,
+        formatLabel = { "${it.roundToInt()} %" },
+        onValueChange = { onValueChange(it.roundToInt()) },
     )
 }
 
-/** 与旧 Material3 滑条口径一致：每 5 个单位一档。 */
+/** 1 个单位一档（精度优先）：档位数 = 区间长度 − 1。 */
 private fun quickWheelSliderSteps(range: ClosedFloatingPointRange<Float>): Int =
-    (((range.endInclusive - range.start) / 5f).toInt() - 1).coerceAtLeast(0)
+    ((range.endInclusive - range.start).roundToInt() - 1).coerceAtLeast(0)
 
 /** 浮层跨窗口模糊半径（px）上限，与 QuickWheelOverlayWindow 的 coerceIn(1, 80) 保持一致。 */
 private const val OVERLAY_BLUR_MAX_RADIUS_PX = 80f

@@ -204,6 +204,20 @@ class GestureAnimationOverlayController(
 
 
 
+    /**
+     * 手势按下时预热：如果浮层已经挂上、但 Compose 内容还没跑过首次 composition
+     * （[animationState] 仍为 null），这里主动触发一次 traversal，让状态在**按下这一帧**就绑好。
+     *
+     * 目的：把「判定该出动画了 → 动画真的开始」之间那段等待（实测 15~100ms）压掉；
+     * 否则第一次 MOVE 到来时只能 post 重试，看起来就是"手指滑了一段动画才冒出来"。
+     */
+    fun prepareForGesture() {
+        val view = composeView ?: return
+        if (animationStateRef != null) return
+        view.requestLayout()
+        view.invalidate()
+    }
+
     fun bringToFront() {
 
         val view = composeView ?: return

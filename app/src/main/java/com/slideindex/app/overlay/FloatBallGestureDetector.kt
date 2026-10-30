@@ -201,7 +201,10 @@ internal class FloatBallGestureDetector(
         downSwipeShortPx = swipeThresholdPx(settings.floatBallDownSwipeShortPercent, density)
         sideSwipeShortPx = swipeThresholdPx(settings.floatBallSideSwipeShortPercent, density)
         upSwipeShortPx = swipeThresholdPx(settings.floatBallUpSwipeShortPercent, density)
-        slopPx = settings.floatBallPointerSlopDp.coerceIn(4f, 32f) * density
+        slopPx = settings.floatBallPointerSlopDp.coerceIn(
+            FloatingPointerBounds.PICK_SLOP_MIN_DP,
+            FloatingPointerBounds.PICK_SLOP_MAX_DP,
+        ) * density
         longPressMs = settings.floatBallLongPressMs.coerceIn(200, 2000).toLong()
         configuredActions = settings.floatBallGestureActions
         this.onPickStart = onPickStart

@@ -86,7 +86,7 @@ fun SearchEngineSortableGrid(
 ) {
     if (engines.isEmpty()) return
 
-    val columnCount = columns.coerceIn(3, 7)
+    val columnCount = columns.coerceIn(3, 8)
     val rowCount = rows.coerceIn(1, 4)
     val pageSize = QuickLauncherGridLogic.pageSize(columnCount, rowCount)
     val pageCount = QuickLauncherGridLogic.pageCount(engines.size, pageSize)

@@ -583,6 +583,8 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_POINTER_SPEED_FRACTION = floatPreferencesKey("float_ball_pointer_speed_fraction")
     val FLOAT_BALL_POINTER_SPEED_VERTICAL_FRACTION =
         floatPreferencesKey("float_ball_pointer_speed_vertical_fraction")
+    val FLOAT_BALL_PICK_ACCEL_ZONE_FRACTION =
+        floatPreferencesKey("float_ball_pick_accel_zone_fraction")
     val FLOAT_BALL_POSITION_MODE = stringPreferencesKey("float_ball_position_mode")
     val FLOAT_BALL_ACTIVE_SIDE = stringPreferencesKey("float_ball_active_side")
     val FLOAT_BALL_LINE_HEIGHT_FRACTION = floatPreferencesKey("float_ball_line_height_fraction")

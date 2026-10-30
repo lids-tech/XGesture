@@ -1,8 +1,11 @@
-﻿package com.slideindex.app.overlay
+package com.slideindex.app.overlay
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import com.slideindex.app.settings.AppSettings
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 
@@ -20,6 +23,33 @@ internal object FloatingPointerBounds {
      * 0% 时手指需拖过约 95% 屏幕尺寸才能把指针推满整屏，用于精细取词。
      */
     const val PICK_POINTER_SPEED_MIN = 0f
+
+    /**
+     * 取词光标「起步加速区」内保证的最小倍率。
+     *
+     * 这一段的目的是让光标从边缘出发时**先跑起来**（对应 FV 里靠近边缘那条 2 倍带）：
+     * 低速档（倍率 < 2）的人也能靠它在一屏行程内够到对侧；高速档本来就比 2 大，此项对它们不生效。
+     * 因此"两条滑条相乘"不会出现 10×：区内取 `max(倍率, 2)`，区外才是用户自己的倍率。
+     */
+    const val PICK_ACCEL_GAIN = 2f
+
+    /** 「起步加速区」宽度占屏幕尺寸的比例（0 = 关闭）。 */
+    const val PICK_ACCEL_ZONE_DEFAULT = 0.5f
+    const val PICK_ACCEL_ZONE_MIN = 0f
+    const val PICK_ACCEL_ZONE_MAX = 1f
+
+    /** 光标锚点相对唤醒侧屏幕边缘向屏外偏移的距离（dp）：让红十字"从屏幕外滑进来"。 */
+    const val PICK_ANCHOR_OUTSIDE_DP = 20f
+
+    /**
+     * 取词拖动死区（slop）的可调范围（dp）。
+     *
+     * 下限**不取 0**：0 时按下的 1~2px 抖动就会被判成拖动，长按/单击都会被吞掉。
+     * 默认值仍是 4dp，想看"几乎零延迟"时可以调到 1dp（≈3px）。
+     */
+    const val PICK_SLOP_MIN_DP = 1f
+    const val PICK_SLOP_MAX_DP = 32f
+
   /** Reference width used when migrating legacy px-based area settings. */
     private const val MIGRATION_REFERENCE_SCREEN_WIDTH = 1080f
 
@@ -87,6 +117,47 @@ internal object FloatingPointerBounds {
             y = (pointerAnchorY + normDeltaY * screenHeight).coerceIn(0f, screenHeight)
         )
     }
+
+    /**
+     * 取词光标：把「手指位移」折成「光标位移（px）」。
+     *
+     * - `zonePx` 以内：按 `max(用户倍率, [PICK_ACCEL_GAIN])` 走（默认 2×）——起步先跑起来，
+     *   低速档也能在一屏行程内够到对侧；
+     * - `zonePx` 以外：回到用户自己的倍率（`屏宽 / travelPx`）做 1:1 精调；
+     * - `zonePx = 0` 时退化成原来的纯线性映射。
+     *
+     * 位置在交界处连续：两段都从 `fastGain × zonePx` 接上，所以只会改变"速度"，不会产生跳变。
+     */
+    fun pickCursorTravelPx(
+        delta: Float,
+        travelPx: Float,
+        screenPx: Float,
+        zonePx: Float
+    ): Float {
+        if (travelPx <= 0f || screenPx <= 0f || delta == 0f) return 0f
+        val gain = screenPx / travelPx
+        val zone = zonePx.coerceIn(0f, screenPx)
+        val d = abs(delta)
+        val inZone = min(d, zone)
+        val fastGain = max(gain, PICK_ACCEL_GAIN)
+        val moved = fastGain * inZone + gain * (d - inZone)
+        return if (delta < 0f) -moved else moved
+    }
+
+    /**
+     * 「起步加速区」宽度，单位是**手指行程**（px）：配置比例 × 该轴「走完整屏所需的手指行程」。
+     *
+     * 用行程而不是屏幕尺寸做基准，是为了让高速档不被"吃掉"：高速档的行程本来就很短，
+     * 区宽随之等比缩小；低速档行程接近整屏，区宽也就接近半屏——和"屏幕的一半"的直觉一致，
+     * 同时保证任何档位都不会出现"整段都在加速区里"。
+     */
+    fun pickAccelZonePx(fraction: Float, travelPx: Float): Float =
+        if (travelPx <= 0f) {
+            0f
+        } else {
+            (fraction.coerceIn(PICK_ACCEL_ZONE_MIN, PICK_ACCEL_ZONE_MAX) * travelPx)
+                .coerceAtLeast(0f)
+        }
 
     /**
      * Initial pointer position when continuing an in-flight edge gesture without lifting the finger.

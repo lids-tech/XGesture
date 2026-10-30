@@ -5,6 +5,7 @@ import com.slideindex.app.settings.FloatBallSettings
 import com.slideindex.app.settings.FloatBallSide
 import com.slideindex.app.settings.FreeWindowMode
 import com.slideindex.app.settings.FreeWindowSettings
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,6 +22,7 @@ class FloatBallDragSessionTest {
     floatBallPointerSpeedFraction: Float = 0.35f,
     floatBallPointerSpeedVerticalFraction: Float = 0.35f,
     floatBallPointerSlopDp: Float = 8f,
+    floatBallPickAccelZoneFraction: Float = 0.5f,
   ): AppSettings = AppSettings(
     freeWindow = FreeWindowSettings(freeWindowModeId = FreeWindowMode.STANDARD.id),
     floatBall = FloatBallSettings(
@@ -28,8 +30,12 @@ class FloatBallDragSessionTest {
       floatBallPointerSpeedFraction = floatBallPointerSpeedFraction,
       floatBallPointerSpeedVerticalFraction = floatBallPointerSpeedVerticalFraction,
       floatBallPointerSlopDp = floatBallPointerSlopDp,
+      floatBallPickAccelZoneFraction = floatBallPickAccelZoneFraction,
     ),
   )
+
+  /** 光标锚点相对屏幕外的偏移（20dp × density）。 */
+  private val anchorOutsidePx = FloatingPointerBounds.PICK_ANCHOR_OUTSIDE_DP * density
 
   @Test
   fun pointer_mode_keeps_pick_above_ball_at_mid_screen() {
@@ -65,100 +71,79 @@ class FloatBallDragSessionTest {
   }
 
   @Test
-  fun pointer_mode_vertical_speed_scales_y_movement() {
-    val centerY = screenHeight * 0.55f
-    val fingerMoveY = 120f
-
-    fun pickYForVerticalSpeed(verticalSpeed: Float): Float {
-      val session = FloatBallDragSession()
-      val settings = testSettings(
-        floatBallPointerSpeedVerticalFraction = verticalSpeed,
-      )
-      session.armAtTouch(
-        settings = settings,
-        touchDownX = 500f,
-        touchDownY = centerY,
-        fingerX = 500f,
-        fingerY = centerY,
-        ballCenterX = 500f,
-        ballCenterY = centerY,
-        ballSize = ballSize,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
-        density = density,
-        pickDockSide = FloatBallSide.RIGHT,
-      )
-      session.onFingerMove(0f, fingerMoveY)
-      session.computePick(
-        settings = settings,
-        ballSize = ballSize,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
-        density = density,
-        marginPx = marginPx,
-      )
-      session.onFingerMove(0f, 80f)
-      return session.computePick(
-        settings = settings,
-        ballSize = ballSize,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
-        density = density,
-        marginPx = marginPx,
-      ).y
-    }
-
-    val slowY = pickYForVerticalSpeed(FloatingPointerBounds.SENSITIVITY_MIN)
-    val fastY = pickYForVerticalSpeed(FloatingPointerBounds.SENSITIVITY_MAX)
-    val slowestY = pickYForVerticalSpeed(FloatingPointerBounds.PICK_POINTER_SPEED_MIN)
-    assertTrue(fastY > slowY)
-    // 滑杆下限放开到 0% 后，0% 档比原来的 20% 档更慢。
-    assertTrue(slowY > slowestY)
+  fun boost_zone_is_twice_the_finger_travel_inside() {
+    val travel = 1000f
+    val zone = 400f
+    val moved = FloatingPointerBounds.pickCursorTravelPx(
+      delta = 200f,
+      travelPx = travel,
+      screenPx = 1080f,
+      zonePx = zone,
+    )
+    assertEquals(400f, moved, 0.01f)
   }
 
   @Test
-  fun pointer_mode_zero_horizontal_speed_is_slower_than_slider_minimum() {
-    val centerY = screenHeight * 0.55f
-    val fingerMoveX = 60f
-
-    fun pickXForHorizontalSpeed(horizontalSpeed: Float): Float {
-      val session = FloatBallDragSession()
-      val settings = testSettings(
-        floatBallPointerSpeedFraction = horizontalSpeed,
-      )
-      session.armAtTouch(
-        settings = settings,
-        touchDownX = 500f,
-        touchDownY = centerY,
-        fingerX = 500f,
-        fingerY = centerY,
-        ballCenterX = 500f,
-        ballCenterY = centerY,
-        ballSize = ballSize,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
-        density = density,
-        pickDockSide = FloatBallSide.RIGHT,
-      )
-      session.onFingerMove(-fingerMoveX, 0f)
-      return session.computePick(
-        settings = settings,
-        ballSize = ballSize,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
-        density = density,
-        marginPx = marginPx,
-      ).x
-    }
-
-    val slowestX = pickXForHorizontalSpeed(FloatingPointerBounds.PICK_POINTER_SPEED_MIN)
-    val minSpeedX = pickXForHorizontalSpeed(FloatingPointerBounds.SENSITIVITY_MIN)
-    // 手指左移相同距离：0% 档指针位移更小，取词十字停在更靠右的位置。
-    assertTrue(slowestX > minSpeedX)
+  fun boost_zone_switches_to_user_gain_after_the_zone() {
+    val travel = 1000f
+    val screen = 1080f
+    val zone = 400f
+    val delta = 700f
+    val expected = 2f * zone + (delta - zone) * (screen / travel)
+    val moved = FloatingPointerBounds.pickCursorTravelPx(
+      delta = delta,
+      travelPx = travel,
+      screenPx = screen,
+      zonePx = zone,
+    )
+    assertEquals(expected, moved, 0.01f)
   }
 
   @Test
-  fun right_docked_pick_snaps_to_right_edge_before_pointer_mode() {
+  fun boost_zone_is_continuous_at_its_boundary() {
+    val travel = 1000f
+    val screen = 1080f
+    val zone = 400f
+    val before = FloatingPointerBounds.pickCursorTravelPx(zone - 0.5f, travel, screen, zone)
+    val after = FloatingPointerBounds.pickCursorTravelPx(zone + 0.5f, travel, screen, zone)
+    // 交界处只换"速度"，不换"位置"：两侧差值应约等于 1px 的手指位移，而不是一次跳变。
+    assertTrue(abs(after - before) < 2f)
+  }
+
+  @Test
+  fun zero_zone_falls_back_to_legacy_linear_mapping() {
+    val travel = 1000f
+    val screen = 1080f
+    val delta = 300f
+    val moved = FloatingPointerBounds.pickCursorTravelPx(delta, travel, screen, zonePx = 0f)
+    assertEquals(delta * (screen / travel), moved, 0.01f)
+  }
+
+  @Test
+  fun lowest_speed_reaches_the_opposite_edge_thanks_to_the_boost_zone() {
+    val travelPx = 0.95f * screenWidth
+    val zonePx = FloatingPointerBounds.pickAccelZonePx(0.5f, travelPx)
+    val thumbReach = 0.6f * screenWidth
+
+    val movedWithZone = FloatingPointerBounds.pickCursorTravelPx(
+      delta = -thumbReach,
+      travelPx = travelPx,
+      screenPx = screenWidth,
+      zonePx = zonePx,
+    )
+    val movedWithoutZone = FloatingPointerBounds.pickCursorTravelPx(
+      delta = -thumbReach,
+      travelPx = travelPx,
+      screenPx = screenWidth,
+      zonePx = 0f,
+    )
+    // 0% 档 + 加速区：半屏多的手指行程就够跨完整个屏幕；关掉加速区则不够（这就是原来的投诉）。
+    assertTrue(abs(movedWithZone) >= screenWidth + anchorOutsidePx)
+    assertTrue(abs(movedWithoutZone) < screenWidth)
+  }
+
+  @Test
+  fun right_docked_pick_anchor_starts_outside_the_right_edge() {
     val session = FloatBallDragSession()
     val settings = testSettings()
     val centerY = screenHeight * 0.55f
@@ -188,7 +173,8 @@ class FloatBallDragSessionTest {
       density = density,
       marginPx = marginPx,
     )
-    assertEquals(screenWidth, pick.x, 0.5f)
+    // 起点在屏幕外：红十字第一帧不可见，靠拖进来出场（避免"贴边出现然后跳"）。
+    assertEquals(screenWidth + anchorOutsidePx, pick.x, 0.5f)
   }
 
   @Test
@@ -220,7 +206,7 @@ class FloatBallDragSessionTest {
       density = density,
       marginPx = marginPx,
     )
-    assertEquals(0f, pick.x, 0.5f)
+    assertEquals(-anchorOutsidePx, pick.x, 0.5f)
   }
 
   @Test

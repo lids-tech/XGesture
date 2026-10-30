@@ -451,6 +451,9 @@ internal object SettingsSnapshotReader {
                 ?: 0.35f,
             floatBallPointerSpeedVerticalFraction =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SPEED_VERTICAL_FRACTION] ?: 0.35f,
+            floatBallPickAccelZoneFraction =
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_ACCEL_ZONE_FRACTION] ?: 0.5f)
+                    .coerceIn(0f, 1f),
             floatBallPositionMode = FloatBallPositionMode.fromStorageKey(
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_POSITION_MODE],
             ),
@@ -532,7 +535,7 @@ internal object SettingsSnapshotReader {
                     prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_PANEL_EXIT_ANIMATION_MS]
                         ?: PickPanelSlideAnimationDefaults.DEFAULT_MS,
                 ),
-            floatBallPointerSlopDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SLOP_DP] ?: 4f,
+            floatBallPointerSlopDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SLOP_DP] ?: 3f,
             floatBallHoverPauseDelayMs =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_HOVER_PAUSE_DELAY_MS]?.coerceIn(200, 1000) ?: 400,
             floatBallLongPressMs =
