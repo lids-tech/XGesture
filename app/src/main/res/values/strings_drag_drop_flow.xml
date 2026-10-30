@@ -37,6 +37,12 @@
     <string name="drag_drop_flow_cancel">Cancel</string>
     <string name="drag_drop_flow_release_to_send">Release to send</string>
 
+    <!-- 操作枢纽 -->
+    <string name="drag_drop_flow_hub">Actions</string>
+    <string name="drag_drop_flow_action_segment">Split words</string>
+    <string name="drag_drop_flow_action_search">Search</string>
+    <string name="drag_drop_flow_action_pin">Pin to screen</string>
+
     <!-- 流转目标 -->
     <string name="drag_drop_flow_target_image_search">Image search</string>
     <string name="drag_drop_flow_target_copy_image">Copy image</string>
@@ -55,4 +61,7 @@
     <string name="drag_drop_flow_toast_target_missing">That target is no longer in the flow bar</string>
     <string name="drag_drop_flow_toast_text_copied">Text copied to clipboard</string>
     <string name="drag_drop_flow_toast_share_failed">Sharing failed</string>
+    <string name="drag_drop_flow_toast_pinned">Pinned to the screen</string>
+    <string name="drag_drop_flow_toast_no_text">No text recognised in the image</string>
+    <string name="drag_drop_flow_toast_ocr_unavailable">No OCR engine is available</string>
 </resources>

@@ -1950,7 +1950,9 @@
     <string name="float_ball_regional_cancel_slop">截图原点取消容差</string>
     <string name="float_ball_text_copied">已复制文字到剪贴板</string>
     <string name="float_ball_image_copied">已复制图片到剪贴板</string>
-    <string name="share_image_ocr_target_label">X手势 OCR 取词</string>
+    <string name="share_image_ocr_target_label">OCR 取词</string>
+    <string name="share_image_search_target_label">图片搜索</string>
+    <string name="share_image_edit_target_label">图片编辑</string>
     <string name="share_image_ocr_service_required">请先开启X手势无障碍服务</string>
     <string name="share_image_ocr_model_required">请先在取词设置中下载并选用 OCR 模型</string>
     <string name="share_image_ocr_image_load_failed">无法读取分享的图片</string>
