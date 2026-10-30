@@ -218,6 +218,13 @@ def report(root: Path, per_file: dict[Path, list[tuple[int, str, str]]]) -> int:
 
 
 def main() -> int:
+    # Windows 控制台默认按 GBK 输出，而本仓库的 Kotlin 注释里大量使用 ⚠（U+26A0）；命中后
+    # report() 会把源码行原样打印出来，编不出的字符会让 Python 抛 UnicodeEncodeError 中断。
+    # 只放宽错误处理、不动编码：中文照常显示，个别符号退化成 '?'，扫描本身不受影响。
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(
         description="Flag Chinese string literals in Kotlin sources that never became resources.",
     )
