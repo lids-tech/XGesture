@@ -232,6 +232,7 @@ internal fun FileBrowserPanel(
             .sumOf { it.sizeBytes }
     }
     val context = LocalContext.current
+    val openWithTitle = stringResource(R.string.file_browser_open_with)
     val fileImageItems = remember(filtered, context) {
         filtered.mapNotNull { entry ->
             if (FileKind.from(entry.name, entry.kind) != FileKind.IMAGE) return@mapNotNull null
@@ -517,9 +518,7 @@ internal fun FileBrowserPanel(
                                                         val opened = FileBrowserOpen.open(
                                                             context = context,
                                                             path = entry.path,
-                                                            chooserTitle = context.getString(
-                                                                R.string.file_browser_open_with,
-                                                            ),
+                                                            chooserTitle = openWithTitle,
                                                         )
                                                         if (!opened) {
                                                             controller.showDetails(entry)
@@ -660,7 +659,6 @@ internal fun FileBrowserPanel(
 
                     val details = state.details
                     if (details != null) {
-                        val openWithTitle = stringResource(R.string.file_browser_open_with)
                         val canDirectOpen = FileBrowserOpen.canOpen(details.path)
                         val canExport = !canDirectOpen &&
                             state.access?.mode == AccessMode.ROOT
