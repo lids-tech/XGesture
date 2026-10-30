@@ -300,7 +300,7 @@ data class FloatBallSettings(
     /** Body text size for pick-result panel in sp. */
     val floatBallPickTextSizeSp: Float = 15f,
     /** Screen-height fraction for smooth above→below pick transition near bottom. */
-    val floatBallPickBottomTransitionFraction: Float = 0.22f,
+    val floatBallPickBottomTransitionFraction: Float = 0f,
     /** Pick panel: show text + search by default; image section stays collapsed until the image row is tapped. */
     val floatBallPickTextFirstPanel: Boolean = false,
     /** Pick panel presentation style: INTEGRATED_SCROLL vs TAB_PAGED. */

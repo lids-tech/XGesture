@@ -1007,8 +1007,8 @@ class OverlaySettingsMutator @Inject constructor(
     }
 
     suspend fun setFloatBallPickBottomTransitionFraction(value: Float) = editor.edit {
-        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION] =
-            value.coerceIn(0.05f, 0.22f)
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION_V2] =
+            value.coerceIn(0f, 0.4f)
     }
 
     suspend fun setFloatBallPickTextFirstPanel(enabled: Boolean) = editor.edit {

@@ -50,6 +50,42 @@ internal object FloatingPointerBounds {
     const val PICK_SLOP_MIN_DP = 1f
     const val PICK_SLOP_MAX_DP = 32f
 
+    /**
+     * 红十字被"压"在手指上方时保留的竖直余量（dp）。
+     *
+     * 40dp ≈ 球半径（24dp）+ 16dp：被地板压住时十字停在**球顶上方约 16dp**，不会压到球上、
+     * 也不会和球心齐平。取值越大，十字越早被压住（例如 72dp 时等于往下永远 1:1）。
+     */
+    /** 「贴底过渡区」滑条上限（0 = 关闭；最大 40% 屏高）。 */
+    const val PICK_BOTTOM_TRANSITION_MAX = 0.4f
+
+    const val PICK_FINGER_MARGIN_DP = 40f
+
+    /**
+     * 「贴底过渡区」：红十字的**下限（最大 Y）**。
+     *
+     * - 带子外：`手指Y − 余量`（红十字只能待在手指上方，纵向倍率再大也追不过手指）；
+     * - 手指进到底部带子后：按 smoothstep 从"手指上方"平滑放开到"屏幕底边"，
+     *   红十字于是从贴着手指上沿慢慢滑到手指下方；到最底时完全不限制。
+     *
+     * @param bandFraction 过渡带高度占屏高的比例（设置项 0~40%）
+     */
+    fun pickCursorFloorY(
+        fingerY: Float,
+        screenHeight: Float,
+        bandFraction: Float,
+        marginPx: Float
+    ): Float {
+        if (screenHeight <= 0f) return 0f
+        val band = (bandFraction.coerceIn(0f, PICK_BOTTOM_TRANSITION_MAX) * screenHeight)
+            .coerceAtLeast(1f)
+        val bandTop = (screenHeight - band).coerceAtLeast(0f)
+        val t = if (fingerY <= bandTop) 0f else ((fingerY - bandTop) / band).coerceIn(0f, 1f)
+        val eased = t * t * (3f - 2f * t)
+        val nearFinger = fingerY - marginPx
+        return nearFinger + (screenHeight - nearFinger) * eased
+    }
+
   /** Reference width used when migrating legacy px-based area settings. */
     private const val MIGRATION_REFERENCE_SCREEN_WIDTH = 1080f
 

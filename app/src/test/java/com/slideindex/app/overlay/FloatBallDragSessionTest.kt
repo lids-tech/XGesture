@@ -177,6 +177,217 @@ class FloatBallDragSessionTest {
     assertEquals(screenWidth + anchorOutsidePx, pick.x, 0.5f)
   }
 
+  /** 纵向倍率拉到最大时，红十字也不许掉到手指下面（这是「贴底过渡区」的核心语义）。 */
+  @Test
+  fun cross_never_drops_below_the_finger_even_with_high_vertical_gain() {
+    val session = FloatBallDragSession()
+    val settings = testSettings(floatBallPointerSpeedVerticalFraction = 0.75f)
+    val startY = screenHeight * 0.55f
+    session.armAtTouch(
+      settings = settings,
+      touchDownX = 500f,
+      touchDownY = startY,
+      fingerX = 500f,
+      fingerY = startY,
+      ballCenterX = 500f,
+      ballCenterY = startY,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      pickDockSide = FloatBallSide.RIGHT,
+    )
+    val dragDy = 400f
+    session.onFingerMove(0f, dragDy)
+    val pick = session.computePick(
+      settings = settings,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      marginPx = marginPx,
+    )
+    val fingerY = startY + dragDy
+    val marginPx = FloatingPointerBounds.PICK_FINGER_MARGIN_DP * density
+    // 手指还在屏幕中部（没进底部过渡带）⇒ 红十字被压在手指上方。
+    assertTrue(pick.y <= fingerY - marginPx + 0.5f)
+  }
+
+  /** 手指进到底部过渡带后，红十字才允许翻到手指下方。 */
+  @Test
+  fun cross_may_drop_below_the_finger_inside_the_bottom_band() {
+    val session = FloatBallDragSession()
+    val settings = testSettings(floatBallPointerSpeedVerticalFraction = 0.75f)
+    val startY = screenHeight * 0.55f
+    session.armAtTouch(
+      settings = settings,
+      touchDownX = 500f,
+      touchDownY = startY,
+      fingerX = 500f,
+      fingerY = startY,
+      ballCenterX = 500f,
+      ballCenterY = startY,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      pickDockSide = FloatBallSide.RIGHT,
+    )
+    // 让手指落到屏高 83% 处（22% 带子的上沿之内）
+    val dragDy = screenHeight * 0.83f - startY
+    session.onFingerMove(0f, dragDy)
+    val pick = session.computePick(
+      settings = settings,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      marginPx = marginPx,
+    )
+    val fingerY = startY + dragDy
+    val marginPx = FloatingPointerBounds.PICK_FINGER_MARGIN_DP * density
+    assertTrue(pick.y > fingerY - marginPx)
+  }
+
+  /** 贴底过渡区 = 0（关闭）：不做上限，红十字可以随便跑到手指下方（旧手感）。 */
+  @Test
+  fun bottom_transition_disabled_lets_cross_go_below_the_finger() {
+    val session = FloatBallDragSession()
+    val settings = testSettings(
+      floatBallPointerSpeedVerticalFraction = 0.75f,
+      floatBallPickBottomTransitionFraction = 0f,
+    )
+    val startY = screenHeight * 0.55f
+    session.armAtTouch(
+      settings = settings,
+      touchDownX = 500f,
+      touchDownY = startY,
+      fingerX = 500f,
+      fingerY = startY,
+      ballCenterX = 500f,
+      ballCenterY = startY,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      pickDockSide = FloatBallSide.RIGHT,
+    )
+    val dragDy = 200f
+    session.onFingerMove(0f, dragDy)
+    val pick = session.computePick(
+      settings = settings,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      marginPx = marginPx,
+    )
+    // 手指还在屏幕中部，但 5 倍速下十字已经跑到手指下方。
+    assertTrue(pick.y > startY + dragDy)
+  }
+
+  /** 进入过渡区后一次性解除上限：位置连续、速度立刻回到用户设置的倍率。 */
+  @Test
+  fun release_in_bottom_band_restores_user_gain_without_jump() {
+    val session = FloatBallDragSession()
+    val settings = testSettings(floatBallPointerSpeedVerticalFraction = 0.75f)
+    val startY = screenHeight * 0.55f
+    session.armAtTouch(
+      settings = settings,
+      touchDownX = 500f,
+      touchDownY = startY,
+      fingerX = 500f,
+      fingerY = startY,
+      ballCenterX = 500f,
+      ballCenterY = startY,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      pickDockSide = FloatBallSide.RIGHT,
+    )
+
+    fun pickY(): Float = session.computePick(
+      settings = settings,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      marginPx = marginPx,
+    ).y
+
+    val band = 0.22f * screenHeight
+    val bandTop = screenHeight - band
+    val marginPx = FloatingPointerBounds.PICK_FINGER_MARGIN_DP * density
+
+    // 拖到带子上沿下方 1px：这一帧触发"解除上限"，位置必须等于原来的上限（连续，不跳）。
+    session.onFingerMove(0f, bandTop + 1f - startY)
+    val yAtRelease = pickY()
+    val floorAtRelease = FloatingPointerBounds.pickCursorFloorY(
+      fingerY = bandTop + 1f,
+      screenHeight = screenHeight,
+      bandFraction = 0.22f,
+      marginPx = marginPx,
+    )
+    assertEquals(floorAtRelease, yAtRelease, 1f)
+
+    // 再往下拖 50px：解除之后应按用户倍率（0.75 → 5×）继续，而不是被限制线拖着。
+    session.onFingerMove(0f, 50f)
+    val gain = 1f / FloatingPointerBounds.travelFractionFromSpeed(0.75f)
+    assertEquals(50f * gain, pickY() - yAtRelease, 1.5f)
+  }
+
+  /** 往上拖不设上限：纵向倍率全额生效。 */
+  @Test
+  fun cross_keeps_full_gain_when_dragging_upwards() {
+    val session = FloatBallDragSession()
+    val settings = testSettings(floatBallPointerSpeedVerticalFraction = 0.75f)
+    val startY = screenHeight * 0.55f
+    session.armAtTouch(
+      settings = settings,
+      touchDownX = 500f,
+      touchDownY = startY,
+      fingerX = 500f,
+      fingerY = startY,
+      ballCenterX = 500f,
+      ballCenterY = startY,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      pickDockSide = FloatBallSide.RIGHT,
+    )
+    val yAtArm = session.computePick(
+      settings = settings,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      marginPx = marginPx,
+    ).y
+    // 只走 150px：5 倍速下十字上移 750px，仍停在屏幕内（不触发夹取），才能验证上限没生效。
+    val dragDy = -150f
+    session.onFingerMove(0f, dragDy)
+    val yAfter = session.computePick(
+      settings = settings,
+      ballSize = ballSize,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      marginPx = marginPx,
+    ).y
+
+    val travel = (FloatingPointerBounds.SENSITIVITY_MIN + FloatingPointerBounds.SENSITIVITY_MAX -
+      settings.floatBallPointerSpeedVerticalFraction) * screenHeight
+    val movedByFinger = FloatingPointerBounds.pickCursorTravelPx(
+      delta = dragDy,
+      travelPx = travel,
+      screenPx = screenHeight,
+      zonePx = 0f,
+    )
+    assertEquals(movedByFinger, yAfter - yAtArm, 1f)
+  }
+
   @Test
   fun line_drag_pick_snaps_to_ball_side_not_opposite_edge() {
     val session = FloatBallDragSession()

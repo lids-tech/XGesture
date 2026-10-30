@@ -1814,7 +1814,8 @@
     <string name="float_ball_pick_offset">プラス間隔</string>
     <string name="float_ball_pick_text_size">選択テキストサイズ</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">下部遷移ゾーン</string>
+    <string name="float_ball_pick_bottom_transition">プラス下部遷移ゾーン</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = オフ。オンにするとプラス記号は指より下に行きません（画面下部までドラッグした場合を除く）。</string>
     <string name="float_ball_pick_panel_style">選択パネルスタイル</string>
     <string name="float_ball_pick_panel_style_desc">テキスト選択とスクリーンショット結果の表示スタイルを選択します</string>
     <string name="float_ball_pick_panel_style_integrated">同画面デュアルカード</string>

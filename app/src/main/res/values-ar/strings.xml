@@ -1801,7 +1801,8 @@
     <string name="float_ball_pick_offset">تباعد علامة الجمع</string>
     <string name="float_ball_pick_text_size">حجم نص الالتقاط</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">منطقة الانتقال السفلية</string>
+    <string name="float_ball_pick_bottom_transition">منطقة الانتقال السفلية لعلامة الجمع</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = إيقاف. عند التفعيل لا تنزل علامة الجمع تحت إصبعك، باستثناء السحب إلى أسفل الشاشة.</string>
     <string name="float_ball_pick_panel_style">نمط لوحة الالتقاط</string>
     <string name="float_ball_pick_panel_style_desc">اختر تخطيط عرض نتائج الالتقاط ولقطة الشاشة</string>
     <string name="float_ball_pick_panel_style_integrated">بطاقتان متجاورتان</string>
