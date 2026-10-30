@@ -117,6 +117,8 @@ private fun CapsuleGestureAnimation(
             return@Canvas
         }
 
+        // 按时间入场：启动后的 GESTURE_ENTRY_RAMP_MS 内把进度从 0 拉到当前值，
+        // 让图形"长出来"而不是第一帧就满长（按距离的入场只需十几像素，早就被走完了）。
         val progress = GestureAnimationProgress.progress(
             position = button.position,
             originX = originXAnimVal,
@@ -124,7 +126,7 @@ private fun CapsuleGestureAnimation(
             fingerX = fingerXAnimVal,
             fingerY = fingerYAnimVal,
             swipeDirection = animationState.swipeDirection,
-        )
+        ) * animationState.entryRamp
         if (progress <= 1f) {
             return@Canvas
         }
@@ -285,6 +287,8 @@ private fun BubbleGestureAnimation(
             return@Canvas
         }
 
+        // 按时间入场：启动后的 GESTURE_ENTRY_RAMP_MS 内把进度从 0 拉到当前值，
+        // 让图形"长出来"而不是第一帧就满长（按距离的入场只需十几像素，早就被走完了）。
         val progress = GestureAnimationProgress.progress(
             position = button.position,
             originX = originXAnimVal,
@@ -292,7 +296,7 @@ private fun BubbleGestureAnimation(
             fingerX = fingerXAnimVal,
             fingerY = fingerYAnimVal,
             swipeDirection = animationState.swipeDirection,
-        )
+        ) * animationState.entryRamp
         if (progress <= 1f) {
             return@Canvas
         }

@@ -530,6 +530,10 @@ internal object SettingsPreferenceKeys {
     val MESSAGE_EDGE_CARD_Y_FRACTION = floatPreferencesKey("message_edge_card_y_fraction")
     val MESSAGE_EDGE_CARD_MAX_COUNT = intPreferencesKey("message_edge_card_max_count")
     val MESSAGE_EDGE_CARD_MAX_LINES = intPreferencesKey("message_edge_card_max_lines")
+    val MESSAGE_EDGE_CARD_KEEP_ACROSS_LOCK =
+        booleanPreferencesKey("message_edge_card_keep_across_lock")
+    val MESSAGE_EDGE_CARD_COLLAPSE_WHEN_SCROLL_DONE =
+        booleanPreferencesKey("message_edge_card_collapse_when_scroll_done")
     val MESSAGE_HIDE_IN_LANDSCAPE = booleanPreferencesKey("message_hide_in_landscape")
     val MESSAGE_PORTRAIT_DANMAKU = booleanPreferencesKey("message_portrait_danmaku")
     val MESSAGE_LANDSCAPE_DANMAKU = booleanPreferencesKey("message_landscape_danmaku")
@@ -564,6 +568,12 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_SIZE_DP = floatPreferencesKey("float_ball_size_dp")
     val FLOAT_BALL_PICK_CROSS_ARM_DP = floatPreferencesKey("float_ball_pick_cross_arm_dp")
     val FLOAT_BALL_OPACITY = floatPreferencesKey("float_ball_opacity")
+    /** 闲置隐身：超过闲置判定时间后球按 idle opacity 绘制。 */
+    val FLOAT_BALL_HIDE_WHEN_IDLE = booleanPreferencesKey("float_ball_hide_when_idle")
+    val FLOAT_BALL_IDLE_OPACITY = floatPreferencesKey("float_ball_idle_opacity")
+    /** 闲置时停止 GIF 出帧（定格当前帧，触摸恢复）。 */
+    val FLOAT_BALL_IDLE_FREEZE_GIF = booleanPreferencesKey("float_ball_idle_freeze_gif")
+    val FLOAT_BALL_IDLE_DELAY_MS = intPreferencesKey("float_ball_idle_delay_ms")
     val FLOAT_BALL_VISIBLE_FRACTION = floatPreferencesKey("float_ball_visible_fraction")
     val FLOAT_BALL_POSITION_X_FRACTION = floatPreferencesKey("float_ball_position_x_fraction")
     val FLOAT_BALL_POSITION_Y_FRACTION = floatPreferencesKey("float_ball_position_y_fraction")
@@ -573,6 +583,8 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_POINTER_SPEED_FRACTION = floatPreferencesKey("float_ball_pointer_speed_fraction")
     val FLOAT_BALL_POINTER_SPEED_VERTICAL_FRACTION =
         floatPreferencesKey("float_ball_pointer_speed_vertical_fraction")
+    val FLOAT_BALL_PICK_ACCEL_ZONE_FRACTION =
+        floatPreferencesKey("float_ball_pick_accel_zone_fraction")
     val FLOAT_BALL_POSITION_MODE = stringPreferencesKey("float_ball_position_mode")
     val FLOAT_BALL_ACTIVE_SIDE = stringPreferencesKey("float_ball_active_side")
     val FLOAT_BALL_LINE_HEIGHT_FRACTION = floatPreferencesKey("float_ball_line_height_fraction")
@@ -624,6 +636,9 @@ internal object SettingsPreferenceKeys {
     /** 悬浮球专属手势振动（判定成立 + 松手执行）。 */
     val FLOAT_BALL_GESTURE_HAPTIC_ENABLED =
         booleanPreferencesKey("float_ball_gesture_haptic_enabled")
+    /** 悬浮球手势绑定「返回」时是否额外震动（默认开；系统自带返回震动的机型可关掉避免双震）。 */
+    val FLOAT_BALL_BACK_GESTURE_HAPTIC_ENABLED =
+        booleanPreferencesKey("float_ball_back_gesture_haptic_enabled")
     /** 长按悬浮球呼出圆环时自动选中球下方第一个槽位，松手即启动。 */
     val FLOAT_BALL_LONG_PRESS_AUTO_SELECT_RING_SLOT =
         booleanPreferencesKey("float_ball_long_press_auto_select_ring_slot")

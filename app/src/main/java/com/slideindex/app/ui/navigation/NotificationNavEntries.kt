@@ -327,6 +327,9 @@ fun NavEntryBuilder.notificationNavEntries(ctx: MainNavContext) {
             onEdgeCardAutoCollapseMsChange = viewModel::setMessageEdgeCardAutoCollapseMs,
             onEdgeCardMaxCountChange = viewModel::setMessageEdgeCardMaxCount,
             onEdgeCardMaxLinesChange = viewModel::setMessageEdgeCardMaxLines,
+            onEdgeCardKeepAcrossLockChange = viewModel::setMessageEdgeCardKeepAcrossLock,
+            onEdgeCardCollapseWhenScrollDoneChange =
+                viewModel::setMessageEdgeCardCollapseWhenScrollDone,
             onEdgeCardHorizontalEdgeChange = { edge ->
                 viewModel.setMessageEdgeCardHorizontalEdge(edge.id)
             },

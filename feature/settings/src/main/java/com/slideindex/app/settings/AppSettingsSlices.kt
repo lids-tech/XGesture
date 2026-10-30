@@ -222,6 +222,18 @@ data class FloatBallSettings(
     /** Pick cross arm length from center to tip in dp. */
     val floatBallPickCrossArmDp: Float = 7.5f,
     val floatBallOpacity: Float = 0.88f,
+    /**
+     * 闲置隐身：超过 [floatBallIdleDelayMs] 没有触摸球区后，球改按 [floatBallIdleOpacity] 绘制。
+     *
+     * 只说"看不见"，不影响命中：隐身期间球窗照常接收单击/滑动/长按。
+     */
+    val floatBallHideWhenIdle: Boolean = false,
+    /** 闲置时停止 GIF 出帧（保留当前帧，触摸后恢复播放）。 */
+    val floatBallIdleFreezeGif: Boolean = false,
+    /** 闲置隐身生效时球的不透明度（0–1，0 = 完全看不见）。 */
+    val floatBallIdleOpacity: Float = 0f,
+    /** 距最后一次触摸多久算闲置（ms，0 = 松手后立即隐身）。 */
+    val floatBallIdleDelayMs: Int = 3000,
     /** Fraction of ball width visible on screen when docked to an edge (0.5–1). */
     val floatBallVisibleFraction: Float = 1f,
     /** CUSTOM mode only: ball center X as fraction of screen width. */
@@ -244,6 +256,13 @@ data class FloatBallSettings(
      * Independent from [floatBallPointerSpeedFraction].
      */
     val floatBallPointerSpeedVerticalFraction: Float = 0.35f,
+    /**
+     * 取词光标「起步加速区」宽度（0–1，占屏幕该轴尺寸的比例；0 = 关闭）。
+     *
+     * 区内光标至少按 2 倍速移动（见 `FloatingPointerBounds.PICK_ACCEL_GAIN`）：从边缘起手时先把
+     * 十字甩到前面，低速档也能在一屏行程内够到对侧；区外回到用户自己的倍率做精调。
+     */
+    val floatBallPickAccelZoneFraction: Float = 0.5f,
     val floatBallPositionMode: FloatBallPositionMode = FloatBallPositionMode.RIGHT,
     /** Which side shows the ball when [floatBallPositionMode] is [FloatBallPositionMode.BOTH_EDGES]. */
     val floatBallActiveSide: FloatBallSide = FloatBallSide.RIGHT,
@@ -319,7 +338,7 @@ data class FloatBallSettings(
     /** Bottom pick panel slide-out duration in ms (0 = no animation). */
     val floatBallPickPanelExitAnimationMs: Int = 64,
     /** Finger travel before full-screen pointer mode activates. */
-    val floatBallPointerSlopDp: Float = 4f,
+    val floatBallPointerSlopDp: Float = 3f,
     /** Hover dwell time before cursor locks start position for text pick or screenshot (ms). */
     val floatBallHoverPauseDelayMs: Int = 400,
     /** 悬浮球/侧边条长按手势的触发时长（ms）。 */
@@ -341,6 +360,13 @@ data class FloatBallSettings(
     val floatBallOverlayAnchorAtTouchDown: Boolean = false,
     /** 悬浮球专属手势振动：判定成立与松手执行时振动（仍受首页「震动」总开关约束）。 */
     val floatBallGestureHapticEnabled: Boolean = true,
+    /**
+     * 悬浮球手势绑定「返回」时，是否**额外**由我们震一下。
+     *
+     * 部分机型（如 Flyme）在返回真正生效时系统自己会震一次，这时再震就是"两下"；
+     * 关掉只保留系统那一下。系统不给返回震动的机型保持开启即可（默认开）。
+     */
+    val floatBallBackGestureHapticEnabled: Boolean = true,
     /**
      * 长按悬浮球呼出圆环启动器时，自动选中球正下方的第一个槽位；
      * 松手即启动该槽位，不必先滑过去（默认关，保持「不动松手 = 取消」的旧行为）。

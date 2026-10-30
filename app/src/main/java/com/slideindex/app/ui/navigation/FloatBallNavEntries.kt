@@ -332,6 +332,10 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onBack = { ctx.navigateBackTo(AppNavKey.FloatBall) },
             onSizeChange = viewModel::setFloatBallSizeDp,
             onOpacityChange = viewModel::setFloatBallOpacity,
+            onHideWhenIdleChange = viewModel::setFloatBallHideWhenIdle,
+            onIdleFreezeGifChange = viewModel::setFloatBallIdleFreezeGif,
+            onIdleOpacityChange = viewModel::setFloatBallIdleOpacity,
+            onIdleDelayChange = viewModel::setFloatBallIdleDelayMs,
             onPositionModeChange = viewModel::setFloatBallPositionMode,
             onVisibleFractionChange = viewModel::setFloatBallVisibleFraction,
             onPositionYChange = viewModel::setFloatBallPositionYFraction,
@@ -413,6 +417,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onLongPressMsChange = viewModel::setFloatBallLongPressMs,
             onOverlayAnchorAtTouchDownChange = viewModel::setFloatBallOverlayAnchorAtTouchDown,
             onGestureHapticChange = viewModel::setFloatBallGestureHapticEnabled,
+            onBackGestureHapticChange = viewModel::setFloatBallBackGestureHapticEnabled,
             onRingAutoSelectChange = viewModel::setFloatBallLongPressAutoSelectRingSlot,
         )
     }
@@ -729,6 +734,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onPickBottomTransitionChange = viewModel::setFloatBallPickBottomTransitionFraction,
             onPointerSpeedChange = viewModel::setFloatBallPointerSpeedFraction,
             onPointerSpeedVerticalChange = viewModel::setFloatBallPointerSpeedVerticalFraction,
+            onPickAccelZoneChange = viewModel::setFloatBallPickAccelZoneFraction,
             onPointerSlopChange = viewModel::setFloatBallPointerSlopDp,
             onHoverPauseDelayMsChange = viewModel::setFloatBallHoverPauseDelayMs,
             onRegionalCancelSlopDpChange = viewModel::setFloatBallRegionalCancelSlopDp,

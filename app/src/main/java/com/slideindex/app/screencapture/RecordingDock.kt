@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
  * 录制悬浮 dock：暂停/继续、停止、进入/退出「全局绘制」。
  *
  * 设计约束（与悬浮球那次全屏窗泄漏的教训对齐）：
- * - 只占一块 168×56dp 的小窗，不铺全屏；
+ * - 只占一块 132×44dp 的小窗，不铺全屏；
  * - 静止时没有动画时钟，不产生帧；只有状态变化（暂停/绘制）才 invalidate 一次；
  * - 拖动时只更新窗口位置，不改尺寸。
  */
@@ -299,9 +299,9 @@ internal class RecordingDock(
         }
 
         private fun drawPause(canvas: Canvas, cx: Float, cy: Float) {
-            val barW = 4f * density
-            val barH = 17f * density
-            val gap = 3f * density
+            val barW = 3.2f * density
+            val barH = 13f * density
+            val gap = 2.4f * density
             rect.set(cx - gap - barW, cy - barH / 2f, cx - gap, cy + barH / 2f)
             canvas.drawRoundRect(rect, barW / 2f, barW / 2f, iconPaint)
             rect.set(cx + gap, cy - barH / 2f, cx + gap + barW, cy + barH / 2f)
@@ -310,7 +310,7 @@ internal class RecordingDock(
 
         private fun drawPlay(canvas: Canvas, cx: Float, cy: Float) {
             path.reset()
-            val size = 9f * density
+            val size = 7f * density
             path.moveTo(cx - size * 0.6f, cy - size)
             path.lineTo(cx + size, cy)
             path.lineTo(cx - size * 0.6f, cy + size)
@@ -319,24 +319,24 @@ internal class RecordingDock(
         }
 
         private fun drawStop(canvas: Canvas, cx: Float, cy: Float) {
-            val half = 8f * density
+            val half = 6f * density
             rect.set(cx - half, cy - half, cx + half, cy + half)
-            val r = 3f * density
+            val r = 2.2f * density
             canvas.drawRoundRect(rect, r, r, iconPaint)
         }
 
         private fun drawPen(canvas: Canvas, cx: Float, cy: Float) {
-            iconStrokePaint.strokeWidth = 5f * density
+            iconStrokePaint.strokeWidth = 4f * density
             canvas.save()
             canvas.rotate(-45f, cx, cy)
             // 笔杆
-            rect.set(cx - 3f * density, cy - 12f * density, cx + 3f * density, cy + 4f * density)
-            canvas.drawRoundRect(rect, 2f * density, 2f * density, iconStrokePaint)
+            rect.set(cx - 2.4f * density, cy - 9.5f * density, cx + 2.4f * density, cy + 3.2f * density)
+            canvas.drawRoundRect(rect, 1.6f * density, 1.6f * density, iconStrokePaint)
             // 笔尖
             path.reset()
-            path.moveTo(cx - 3f * density, cy + 4f * density)
-            path.lineTo(cx + 3f * density, cy + 4f * density)
-            path.lineTo(cx, cy + 11f * density)
+            path.moveTo(cx - 2.4f * density, cy + 3.2f * density)
+            path.lineTo(cx + 2.4f * density, cy + 3.2f * density)
+            path.lineTo(cx, cy + 8.8f * density)
             path.close()
             canvas.drawPath(path, iconPaint)
             canvas.restore()
@@ -396,8 +396,8 @@ internal class RecordingDock(
 
     private companion object {
         private const val TAG = "RecordingDock"
-        private const val WIDTH_DP = 168
-        private const val HEIGHT_DP = 56
+        private const val WIDTH_DP = 132
+        private const val HEIGHT_DP = 44
         private const val BLUR_RADIUS_DP = 30
         private const val MAX_BLUR_PX = 80
 

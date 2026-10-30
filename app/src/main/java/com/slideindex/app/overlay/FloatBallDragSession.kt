@@ -4,6 +4,8 @@ import androidx.compose.ui.geometry.Offset
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.settings.FloatBallSide
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 internal class FloatBallDragSession {
@@ -17,6 +19,8 @@ internal class FloatBallDragSession {
   var dragJoystickOffsetY = 0f
   private var pointerTravelWidth = 0f
   private var pointerTravelHeight = 0f
+  private var pickZoneWidth = 0f
+  private var pickZoneHeight = 0f
   private var pickDockSide: FloatBallSide = FloatBallSide.RIGHT
   var pointerModeActive = false
     private set
@@ -32,6 +36,8 @@ internal class FloatBallDragSession {
     dragJoystickOffsetY = 0f
     pointerTravelWidth = 0f
     pointerTravelHeight = 0f
+    pickZoneWidth = 0f
+    pickZoneHeight = 0f
     pickDockSide = FloatBallSide.RIGHT
     pointerModeActive = false
   }
@@ -69,9 +75,18 @@ internal class FloatBallDragSession {
       density = density,
       dockSide = pickDockSide
     )
-    dragPointerAnchorX = pick.x
+    dragPointerAnchorX = pick.x +
+      outsideSign() * FloatingPointerBounds.PICK_ANCHOR_OUTSIDE_DP * density
     dragPointerAnchorY = pick.y
   }
+
+  /**
+   * 锚点向"屏幕外"偏移的方向：右边缘唤醒 → +1（更靠右，出屏），左边缘唤醒 → −1。
+   *
+   * 目的：红十字第一帧落在屏幕外，随后被拖进来，观感是"从边缘滑入"而不是"贴在边上然后跳"。
+   */
+  private fun outsideSign(): Float =
+    if (pickDockSide == FloatBallSide.LEFT) -1f else 1f
 
   fun updateFingerPosition(fingerX: Float, fingerY: Float) {
     dragFingerX = fingerX
@@ -137,38 +152,33 @@ internal class FloatBallDragSession {
       establishPointerTravel(settings, screenWidth, screenHeight)
     }
 
-    val center = clampedBallCenter(
-      ballSize = ballSize,
-      marginPx = marginPx,
-      screenWidth = screenWidth.roundToInt(),
-      screenHeight = screenHeight.roundToInt()
-    )
-    val edgePick = edgeAnchoredPick(
-      settings = settings,
-      ballCenterY = center.y,
-      ballHeightPx = ballSize.heightPx.toFloat(),
-      screenWidth = screenWidth,
-      screenHeight = screenHeight,
-      density = density,
-      dockSide = pickDockSide
-    )
-
-    if (fingerTravelPx() <= 0f) {
-      return edgePick
+    val deltaX = dragFingerX - dragFingerAnchorX
+    val deltaY = dragFingerY - dragFingerAnchorY
+    // 零位移直接返回锚点本身（锚点在屏幕外，所以这一帧红十字不可见，避免"贴边出现"）。
+    if (deltaX == 0f && deltaY == 0f) {
+      return Offset(dragPointerAnchorX, dragPointerAnchorY)
     }
     pointerModeActive = true
 
-    val freePick = FloatingPointerBounds.pointerForFingerDeltaInArea(
-      deltaX = dragFingerX - dragFingerAnchorX,
-      deltaY = dragFingerY - dragFingerAnchorY,
-      travelWidth = pointerTravelWidth,
-      travelHeight = pointerTravelHeight,
-      screenWidth = screenWidth,
-      screenHeight = screenHeight,
-      pointerAnchorX = dragPointerAnchorX,
-      pointerAnchorY = dragPointerAnchorY
+    val movedX = FloatingPointerBounds.pickCursorTravelPx(
+      delta = deltaX,
+      travelPx = pointerTravelWidth,
+      screenPx = screenWidth,
+      zonePx = pickZoneWidth
     )
-    return freePick
+    val movedY = FloatingPointerBounds.pickCursorTravelPx(
+      delta = deltaY,
+      travelPx = pointerTravelHeight,
+      screenPx = screenHeight,
+      zonePx = pickZoneHeight
+    )
+    // 夹取范围必须容纳"屏外锚点"，否则起点会被夹回边上，又变回"贴边出现"。
+    return Offset(
+      x = (dragPointerAnchorX + movedX)
+        .coerceIn(min(0f, dragPointerAnchorX), max(screenWidth, dragPointerAnchorX)),
+      y = (dragPointerAnchorY + movedY)
+        .coerceIn(min(0f, dragPointerAnchorY), max(screenHeight, dragPointerAnchorY))
+    )
   }
 
   fun refreshPointerTravel(settings: AppSettings, screenWidth: Float, screenHeight: Float) {
@@ -215,5 +225,10 @@ internal class FloatBallDragSession {
     )
     pointerTravelWidth = travelWidth
     pointerTravelHeight = travelHeight
+    val zoneFraction = settings.floatBallPickAccelZoneFraction
+    pickZoneWidth = FloatingPointerBounds.pickAccelZonePx(zoneFraction, pointerTravelWidth)
+    // ⚠️ 加速区**只作用于横向**。纵向行程本来就很长（≈0.6 屏高）且手指能走的竖直距离有限，
+    // 若同样加速，上下移动会被明显放大、取词变难；这里固定 0 = 保持原来的线性手感。
+    pickZoneHeight = 0f
   }
 }

@@ -70,6 +70,9 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
 
     private var currentOpacityValue = 1f
 
+    /** 闲置隐身：非 null 时覆盖根 View 的 alpha（null = 跟随设置不透明度）。 */
+    private var alphaOverride: Float? = null
+
     init {
         isClickable = false
         isFocusable = false
@@ -93,7 +96,9 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
         val noCrop = FloatBallLayout.usesOriginalImageGeometry(settings)
         val opacity = settings.floatBallOpacity.coerceIn(0f, 1f)
         currentOpacityValue = opacity
-        alpha = opacity
+        // 有效 alpha：闲置隐身期间用覆盖值。GIF 是 SurfaceView，不吃父级 alpha，必须单独喂给它。
+        val effectiveOpacity = alphaOverride ?: opacity
+        alpha = effectiveOpacity
         boundSettings = settings
 
         val key = buildBindKey(settings, activeSide, styleGeneration, ballSize)
@@ -118,7 +123,7 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
             FloatBallStyleType.ANIMATED_ORBIT,
             -> showBuiltin(settings.floatBallStyleType, opacity)
 
-            FloatBallStyleType.GIF -> showGif(settings, opacity, ballSize.heightPx)
+            FloatBallStyleType.GIF -> showGif(settings, effectiveOpacity, ballSize.heightPx)
 
             FloatBallStyleType.CUSTOM_IMAGE -> {
                 stopSlideshow()
@@ -146,6 +151,31 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
                 showStaticBitmap(FloatBallDragVisualRenderer.render(context, settings), owns = true)
             }
         }
+    }
+
+    /**
+     * 闲置隐身：把球直接渲染成 [value]（0 = 完全看不见），null = 恢复「跟随设置不透明度」。
+     *
+     * 只改根 View 的 alpha，不动命中、也不动子 View 的 alpha（避免和设置不透明度叠两次）。
+     * GIF 例外：它是 SurfaceView，画面在独立图层里，根 View 的 alpha 管不到，
+     * 所以必须把同一个有效 alpha 再喂给 [FloatBallGifView.setFrameAlpha]，否则隐身对 GIF 无效。
+     */
+    fun setAlphaOverride(value: Float?) {
+        alphaOverride = value?.coerceIn(0f, 1f)
+        val effective = alphaOverride ?: currentOpacityValue
+        val wasInvisible = gifView.isFrameInvisible()
+        alpha = effective
+        gifView.setFrameAlpha(effective)
+        // 从“完全透明”恢复：隐藏期间播放器已退化成每秒一次探测，这里立刻叫醒它。
+        if (wasInvisible && !gifView.isFrameInvisible() && contentMode == ContentMode.GIF) {
+            gifPlayer.wake()
+        }
+    }
+
+    /** 闲置定格：停止 GIF 出帧但保留当前画面；false 恢复播放。 */
+    fun setGifFrozen(frozen: Boolean) {
+        if (contentMode != ContentMode.GIF) return
+        gifPlayer.setPaused(frozen)
     }
 
     fun setDragging(dragging: Boolean) {

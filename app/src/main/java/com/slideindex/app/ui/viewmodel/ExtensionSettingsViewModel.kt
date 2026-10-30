@@ -548,6 +548,34 @@ class ExtensionSettingsViewModel @Inject constructor(
         block = { settingsRepository.setFloatBallOpacity(opacity) },
     )
 
+    fun setFloatBallHideWhenIdle(enabled: Boolean) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallHideWhenIdle = enabled))
+        },
+        block = { settingsRepository.setFloatBallHideWhenIdle(enabled) },
+    )
+
+    fun setFloatBallIdleFreezeGif(enabled: Boolean) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallIdleFreezeGif = enabled))
+        },
+        block = { settingsRepository.setFloatBallIdleFreezeGif(enabled) },
+    )
+
+    fun setFloatBallIdleOpacity(opacity: Float) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallIdleOpacity = opacity.coerceIn(0f, 1f)))
+        },
+        block = { settingsRepository.setFloatBallIdleOpacity(opacity) },
+    )
+
+    fun setFloatBallIdleDelayMs(delayMs: Int) = launchOptimisticSettingsWrite(
+        optimisticUpdate = { settings ->
+            settings.copy(floatBall = settings.floatBall.copy(floatBallIdleDelayMs = delayMs.coerceIn(0, 10_000)))
+        },
+        block = { settingsRepository.setFloatBallIdleDelayMs(delayMs) },
+    )
+
     fun setDefaultImageViewerPackage(packageName: String?) = launchSettingsWrite {
         settingsRepository.setDefaultImageViewerPackage(packageName)
     }
@@ -566,6 +594,10 @@ class ExtensionSettingsViewModel @Inject constructor(
 
     fun setFloatBallPointerSpeedVerticalFraction(fraction: Float) = launchSettingsWrite {
         settingsRepository.setFloatBallPointerSpeedVerticalFraction(fraction)
+    }
+
+    fun setFloatBallPickAccelZoneFraction(fraction: Float) = launchSettingsWrite {
+        settingsRepository.setFloatBallPickAccelZoneFraction(fraction)
     }
 
     fun setFloatBallPositionMode(mode: FloatBallPositionMode) = launchSettingsWrite {
@@ -670,6 +702,10 @@ class ExtensionSettingsViewModel @Inject constructor(
 
     fun setFloatBallGestureHapticEnabled(enabled: Boolean) = launchSettingsWrite {
         settingsRepository.setFloatBallGestureHapticEnabled(enabled)
+    }
+
+    fun setFloatBallBackGestureHapticEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setFloatBallBackGestureHapticEnabled(enabled)
     }
 
     fun setFloatBallLongPressAutoSelectRingSlot(enabled: Boolean) = launchSettingsWrite {

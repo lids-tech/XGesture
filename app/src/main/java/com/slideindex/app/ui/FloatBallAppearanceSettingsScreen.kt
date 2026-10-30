@@ -15,6 +15,7 @@ import com.slideindex.app.settings.FloatBallPositionMode
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.SETTINGS_SLIDER_PERCENT_KEY_POINTS_01
 import com.slideindex.app.ui.settings.components.SettingDropdownRow
+import com.slideindex.app.ui.settings.components.SettingExpandableSwitchRow
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
 import com.slideindex.app.ui.settings.components.settingsLazyHint
 import com.slideindex.app.ui.settings.components.settingsLazySmallTitle
@@ -22,6 +23,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private val floatBallOpacityRange = 0f..1f
+private val floatBallIdleDelayRange = 0f..10f
 private val floatBallLineHeightRange = 0.04f..0.4f
 private val floatBallLineWidthRange = 0.01f..0.50f
 private val floatBallVisibleFractionRange =
@@ -35,6 +37,16 @@ private fun fractionPercentSnap(
 
 private fun fractionPercentLabel(value: Float): String = "${(value * 100f).roundToInt()}%"
 
+/** 闲置判定时长的显示值：整秒不带小数，其余保留一位（0.5 秒粒度）。 */
+private fun idleDelaySecondsLabel(seconds: Float): String {
+    val rounded = (seconds.coerceIn(floatBallIdleDelayRange) * 10f).roundToInt() / 10f
+    return if (rounded % 1f == 0f) {
+        rounded.toInt().toString()
+    } else {
+        String.format(Locale.US, "%.1f", rounded)
+    }
+}
+
 private fun lineHeightPercentLabel(value: Float): String =
     String.format(Locale.US, "%.1f%%", value * 100f)
 
@@ -46,6 +58,10 @@ fun FloatBallAppearanceSettingsScreen(
     onBack: () -> Unit,
     onSizeChange: (Float) -> Unit,
     onOpacityChange: (Float) -> Unit,
+    onHideWhenIdleChange: (Boolean) -> Unit,
+    onIdleFreezeGifChange: (Boolean) -> Unit,
+    onIdleOpacityChange: (Float) -> Unit,
+    onIdleDelayChange: (Int) -> Unit,
     onPositionModeChange: (FloatBallPositionMode) -> Unit,
     onVisibleFractionChange: (Float) -> Unit,
     onPositionYChange: (Float) -> Unit,
@@ -74,6 +90,7 @@ fun FloatBallAppearanceSettingsScreen(
     val positionXyHint = stringResource(R.string.float_ball_position_xy_hint)
     val lineSectionTitle = stringResource(R.string.float_ball_section_line)
     val lineWidthPreviewHint = stringResource(R.string.float_ball_line_width_preview_hint)
+    val idleDelayValueFormat = stringResource(R.string.float_ball_idle_delay_value)
 
     val positionMode = settings.floatBallPositionMode
     val positionModeEntries = FloatBallPositionMode.selectable
@@ -154,6 +171,51 @@ fun FloatBallAppearanceSettingsScreen(
                                 onOpacityChange(value)
                             }
                         )
+                    }
+                )
+                add(
+                    settingsCardScopeItem("hide-when-idle") {
+                        SettingExpandableSwitchRow(
+                            title = stringResource(R.string.float_ball_hide_when_idle),
+                            subtitle = stringResource(R.string.float_ball_hide_when_idle_desc),
+                            checked = settings.floatBallHideWhenIdle,
+                            enabled = true,
+                            onCheckedChange = onHideWhenIdleChange
+                        ) {
+                            SettingsSliderRow(
+                                title = stringResource(R.string.float_ball_idle_opacity),
+                                value = settings.floatBallIdleOpacity,
+                                valueRange = floatBallOpacityRange,
+                                enabled = true,
+                                label = fractionPercentLabel(settings.floatBallIdleOpacity),
+                                formatLabel = ::fractionPercentLabel,
+                                keyPoints = SETTINGS_SLIDER_PERCENT_KEY_POINTS_01,
+                                onValueChange = onIdleOpacityChange
+                            )
+                            SettingsSliderRow(
+                                title = stringResource(R.string.float_ball_idle_delay),
+                                value = settings.floatBallIdleDelayMs / 1000f,
+                                valueRange = floatBallIdleDelayRange,
+                                steps = 19,
+                                enabled = true,
+                                label = idleDelayValueFormat.format(
+                                    idleDelaySecondsLabel(settings.floatBallIdleDelayMs / 1000f)
+                                ),
+                                formatLabel = { seconds ->
+                                    idleDelayValueFormat.format(idleDelaySecondsLabel(seconds))
+                                },
+                                onValueChange = { seconds ->
+                                    onIdleDelayChange((seconds * 1000f).roundToInt())
+                                }
+                            )
+                            SettingSwitchRow(
+                                title = stringResource(R.string.float_ball_idle_freeze_gif),
+                                subtitle = stringResource(R.string.float_ball_idle_freeze_gif_desc),
+                                checked = settings.floatBallIdleFreezeGif,
+                                enabled = true,
+                                onCheckedChange = onIdleFreezeGifChange
+                            )
+                        }
                     }
                 )
             }

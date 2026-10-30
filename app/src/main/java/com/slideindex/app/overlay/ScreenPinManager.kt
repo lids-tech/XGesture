@@ -772,9 +772,10 @@ object ScreenPinManager {
         val aspectRatio = currentW.toFloat() / currentH.toFloat()
 
         val minW = (80 * metrics.density).roundToInt().coerceAtLeast(1)
-        val maxW = (metrics.widthPixels * 0.95f).roundToInt().coerceAtLeast(minW)
 
-        val newW = (currentW * zoomFactor).roundToInt().coerceIn(minW, maxW)
+        // 放大不设上限：图片要能放大到看清原始像素的小字。
+        // 代价是窗口可能大于屏幕，拖窗口即可看局部（窗口本身允许出屏）。
+        val newW = (currentW * zoomFactor).roundToInt().coerceAtLeast(minW)
         val newH = (newW / aspectRatio).roundToInt().coerceAtLeast(1)
 
         if (newW == currentW && newH == currentH) return
@@ -791,8 +792,6 @@ object ScreenPinManager {
     private fun togglePinDoubleTapZoom(pinId: String) {
         val instance = pins[pinId] ?: return
         if (instance.uiState.isEdgeDocked.value) return
-        val context = appContext ?: return
-        val metrics = context.resources.displayMetrics
 
         val baseW = if (instance.uiState.initialWidthPx > 0) instance.uiState.initialWidthPx else instance.uiState.expandedWidthPx
         val baseH = if (instance.uiState.initialHeightPx > 0) instance.uiState.initialHeightPx else instance.uiState.expandedHeightPx
@@ -807,9 +806,8 @@ object ScreenPinManager {
             targetW = baseW
             targetH = baseH
         } else {
-            val maxW = (metrics.widthPixels * 0.95f).roundToInt()
             val aspectRatio = baseW.toFloat() / baseH.toFloat()
-            targetW = (baseW * 1.8f).roundToInt().coerceAtMost(maxW)
+            targetW = (baseW * 1.8f).roundToInt()
             targetH = (targetW / aspectRatio).roundToInt().coerceAtLeast(1)
         }
 

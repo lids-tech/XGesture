@@ -293,6 +293,10 @@ data class AppSettings(
     val floatBallSizeDp get() = floatBall.floatBallSizeDp
     val floatBallPickCrossArmDp get() = floatBall.floatBallPickCrossArmDp
     val floatBallOpacity get() = floatBall.floatBallOpacity
+    val floatBallHideWhenIdle get() = floatBall.floatBallHideWhenIdle
+    val floatBallIdleFreezeGif get() = floatBall.floatBallIdleFreezeGif
+    val floatBallIdleOpacity get() = floatBall.floatBallIdleOpacity
+    val floatBallIdleDelayMs get() = floatBall.floatBallIdleDelayMs
     val floatBallVisibleFraction get() = floatBall.floatBallVisibleFraction
     val floatBallCustomCenterXFraction get() = floatBall.floatBallCustomCenterXFraction
     val floatBallPositionYFraction get() = floatBall.floatBallPositionYFraction
@@ -301,6 +305,7 @@ data class AppSettings(
     val ocrDownloadWifiOnly get() = floatBall.ocrDownloadWifiOnly
     val floatBallPointerSpeedFraction get() = floatBall.floatBallPointerSpeedFraction
     val floatBallPointerSpeedVerticalFraction get() = floatBall.floatBallPointerSpeedVerticalFraction
+    val floatBallPickAccelZoneFraction get() = floatBall.floatBallPickAccelZoneFraction
     val floatBallPositionMode get() = floatBall.floatBallPositionMode
     val floatBallActiveSide get() = floatBall.floatBallActiveSide
     val floatBallLineHeightFraction get() = floatBall.floatBallLineHeightFraction
@@ -341,6 +346,7 @@ data class AppSettings(
     val floatBallUpSwipeShortPercent get() = floatBall.floatBallUpSwipeShortPercent
     val floatBallOverlayAnchorAtTouchDown get() = floatBall.floatBallOverlayAnchorAtTouchDown
     val floatBallGestureHapticEnabled get() = floatBall.floatBallGestureHapticEnabled
+    val floatBallBackGestureHapticEnabled get() = floatBall.floatBallBackGestureHapticEnabled
     val floatBallLongPressAutoSelectRingSlot get() = floatBall.floatBallLongPressAutoSelectRingSlot
     val floatBallInstantTranslate get() = floatBall.floatBallInstantTranslate
     val floatBallTranslateEngine get() = floatBall.floatBallTranslateEngine

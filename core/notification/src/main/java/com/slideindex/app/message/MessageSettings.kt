@@ -98,6 +98,10 @@ data class MessageSettings(
     val edgeCardMaxCount: Int = 3,
     /** 正文显示行数（1..3）；每多一行卡片高度 +16dp。 */
     val edgeCardMaxLines: Int = 2,
+    /** 锁屏/灭屏后保留卡片，解锁后补显。 */
+    val edgeCardKeepAcrossLock: Boolean = true,
+    /** 长消息滚动到底后自动收起（不受自动收起时长限制）。 */
+    val edgeCardCollapseWhenScrollDone: Boolean = true,
 ) {
     @Suppress("DEPRECATION")
     val style: MessageStyle get() = MessageStyle.fromId(styleId)

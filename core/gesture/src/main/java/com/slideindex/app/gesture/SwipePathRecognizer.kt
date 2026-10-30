@@ -529,8 +529,15 @@ class SwipePathRecognizer(
         ).toFloat()
     }
 
-    /** 手势提示动画开始跟手的位移门槛（约 12dp），与单击宽松模式无关。 */
-    fun gestureHintStartThresholdPx(): Float = TAP_SLOP_DP * density
+    /**
+     * 手势提示动画开始跟手的位移门槛（约 4dp）。
+     *
+     * ⚠️ 故意**不**复用 [TAP_SLOP_DP]（12dp）：那个是"单击 vs 滑动"的判定阈值，必须够宽，
+     * 否则人手点一下的漂移就被判成滑动、单击/长按全废。动画只是视觉效果，可以更早出现，
+     * 所以单独用一个更小的常量。真正决定"会不会出动画"的还有方向分量（向内 / 沿边 / 滑动距离），
+     * 纯抖动不会触发。
+     */
+    fun gestureHintStartThresholdPx(): Float = HINT_START_SLOP_DP * density
 
     /** 与 classifyOnUp 一致：低于此位移仍可能判为单击。 */
     fun tapDisqualifyMovementPx(options: ClassifyOptions = ClassifyOptions.DEFAULT): Float =
@@ -969,6 +976,8 @@ class SwipePathRecognizer(
         const val LONG_PRESS_MS = 450L
         private const val TAP_SLOP_DP = 12f
         private const val TAP_LENIENT_SLOP_DP = 36f
+        /** 手势提示动画的启动门槛（dp）：只影响"动画何时出现"，不参与任何手势判定。 */
+        private const val HINT_START_SLOP_DP = 3f
         const val TURN_SLOP_DP = 32f
         /** 折返手势的回缩门槛；无悬停时更易误触，对齐悬浮球的 28dp。 */
         const val RETURN_SLOP_DP = 28f

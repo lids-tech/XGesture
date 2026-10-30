@@ -122,12 +122,12 @@ internal fun effectiveSearchGridColumns(
     availableWidth: Dp,
     isLandscape: Boolean,
 ): Int {
-    val base = configuredColumns.coerceIn(3, 7)
+    val base = configuredColumns.coerceIn(3, 8)
     if (!isLandscape) return base
     val minCellWidth = 44.dp
     val horizontalPadding = 24.dp
     val autoFit = ((availableWidth - horizontalPadding) / minCellWidth).toInt()
-    return maxOf(base, autoFit).coerceIn(3, 7)
+    return maxOf(base, autoFit).coerceIn(3, 8)
 }
 
 @OptIn(ExperimentalFoundationApi::class)

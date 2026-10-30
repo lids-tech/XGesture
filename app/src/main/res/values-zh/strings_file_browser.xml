@@ -128,4 +128,16 @@
     <string name="file_browser_share">分享</string>
     <string name="file_browser_add_to_home">添加到桌面</string>
     <string name="file_browser_add_to_home_failed">无法添加快捷方式</string>
+
+    <!-- 操作反馈 / 图片查看器 / 分享：代码里由 UI 层取资源，不再硬编码 -->
+    <string name="file_browser_failed_count">%1$d 项失败</string>
+    <string name="file_browser_skipped_count">已跳过 %1$d 项</string>
+    <string name="file_browser_cancelled">已取消</string>
+    <string name="file_browser_delete_failed">删除失败</string>
+    <string name="file_browser_restore_failed">%1$d 项恢复失败</string>
+    <string name="file_browser_edit">编辑</string>
+    <string name="file_browser_sharing">分享中…</string>
+    <string name="file_browser_share_image">分享图片</string>
+    <string name="file_browser_share_failed">分享失败：%1$s</string>
+    <string name="file_browser_share_files">分享文件</string>
 </resources>

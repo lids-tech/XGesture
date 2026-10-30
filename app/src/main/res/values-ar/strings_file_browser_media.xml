@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文件浏览器媒体模式（独立资源文件，避免改动现有 strings.xml）。 -->
+<resources>
+    <string name="file_browser_media_today">اليوم</string>
+    <string name="file_browser_media_yesterday">أمس</string>
+    <string name="file_browser_media_empty">لا توجد ملفات وسائط.</string>
+    <string name="file_browser_media_permission_title">يلزم الوصول إلى الوسائط</string>
+    <string name="file_browser_media_permission_hint">امنح الوصول إلى الصور ومقاطع الفيديو والصوت، أو فعّل الوصول إلى كل الملفات، لتصفح مكتبة الوسائط.</string>
+    <string name="file_browser_media_grant">منح الوصول إلى الوسائط</string>
+    <string name="file_browser_media_open_failed">تعذّر فتح ملف الوسائط هذا.</string>
+    <string name="file_browser_media_summary">%1$s · %2$d عنصر · %3$s</string>
+    <string name="file_browser_media_count_size">%1$d عنصر · %2$s</string>
+    <string name="file_browser_media_more">تحميل المزيد</string>
+    <string name="file_browser_media_previous">السابق</string>
+    <string name="file_browser_media_next">التالي</string>
+    <string name="file_browser_media_rotate">تدوير</string>
+    <string name="file_browser_media_image_failed">تعذّر فتح هذه الصورة.</string>
+    <string name="file_browser_media_selected">%1$d محدّد</string>
+</resources>

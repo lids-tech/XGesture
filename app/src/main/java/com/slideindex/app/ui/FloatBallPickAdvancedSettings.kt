@@ -15,6 +15,7 @@ fun floatBallPickAdvancedCardItems(
     onPickBottomTransitionChange: (Float) -> Unit,
     onPointerSpeedChange: (Float) -> Unit,
     onPointerSpeedVerticalChange: (Float) -> Unit,
+    onPickAccelZoneChange: (Float) -> Unit,
     onPointerSlopChange: (Float) -> Unit,
     onHoverPauseDelayMsChange: (Int) -> Unit,
     onRegionalCancelSlopDpChange: (Float) -> Unit,
@@ -65,12 +66,32 @@ fun floatBallPickAdvancedCardItems(
             onValueChange = onPointerSpeedVerticalChange,
         )
     },
+    settingsCardScopeItem("pick-accel-zone") {
+        SettingsSliderRow(
+            title = stringResource(R.string.float_ball_pick_accel_zone),
+            value = settings.floatBallPickAccelZoneFraction,
+            valueRange = FloatingPointerBounds.PICK_ACCEL_ZONE_MIN..
+                FloatingPointerBounds.PICK_ACCEL_ZONE_MAX,
+            // 0%–100%，每档 5%。
+            steps = 19,
+            enabled = true,
+            label = stringResource(
+                R.string.floating_pointer_percent_value,
+                (settings.floatBallPickAccelZoneFraction * 100).roundToInt(),
+            ),
+            onValueChange = onPickAccelZoneChange,
+        )
+    },
     settingsCardScopeItem("pointer-slop") {
         SettingsSliderRow(
             title = stringResource(R.string.float_ball_pointer_slop),
             value = settings.floatBallPointerSlopDp,
-            valueRange = 4f..32f,
-            steps = 6,
+            // 下限放到 1dp：默认仍是 4dp，但想把"球跟手前的死区"压到几乎为零时可以调到这里
+            // （0dp 会让按下抖动直接变成拖动，长按/单击都会被吞，所以不放 0）。
+            valueRange = FloatingPointerBounds.PICK_SLOP_MIN_DP..
+                FloatingPointerBounds.PICK_SLOP_MAX_DP,
+            steps = (FloatingPointerBounds.PICK_SLOP_MAX_DP -
+                FloatingPointerBounds.PICK_SLOP_MIN_DP).toInt() - 1,
             enabled = true,
             label = stringResource(R.string.float_ball_size_value, settings.floatBallPointerSlopDp),
             onValueChange = onPointerSlopChange,
@@ -112,6 +133,7 @@ fun LazyListScope.floatBallPickAdvancedSettingsGroup(
     onPickBottomTransitionChange: (Float) -> Unit,
     onPointerSpeedChange: (Float) -> Unit,
     onPointerSpeedVerticalChange: (Float) -> Unit,
+    onPickAccelZoneChange: (Float) -> Unit,
     onPointerSlopChange: (Float) -> Unit,
     onHoverPauseDelayMsChange: (Int) -> Unit,
     onRegionalCancelSlopDpChange: (Float) -> Unit,
@@ -123,6 +145,7 @@ fun LazyListScope.floatBallPickAdvancedSettingsGroup(
             onPickBottomTransitionChange = onPickBottomTransitionChange,
             onPointerSpeedChange = onPointerSpeedChange,
             onPointerSpeedVerticalChange = onPointerSpeedVerticalChange,
+            onPickAccelZoneChange = onPickAccelZoneChange,
             onPointerSlopChange = onPointerSlopChange,
             onHoverPauseDelayMsChange = onHoverPauseDelayMsChange,
             onRegionalCancelSlopDpChange = onRegionalCancelSlopDpChange,

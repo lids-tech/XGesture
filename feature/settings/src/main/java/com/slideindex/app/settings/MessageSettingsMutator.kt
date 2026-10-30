@@ -162,6 +162,16 @@ class MessageSettingsMutator @Inject constructor(
             it[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_MAX_LINES] = lines.coerceIn(1, 3)
         }
 
+    suspend fun setMessageEdgeCardKeepAcrossLock(keep: Boolean) =
+        editor.edit {
+            it[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_KEEP_ACROSS_LOCK] = keep
+        }
+
+    suspend fun setMessageEdgeCardCollapseWhenScrollDone(collapse: Boolean) =
+        editor.edit {
+            it[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_COLLAPSE_WHEN_SCROLL_DONE] = collapse
+        }
+
     suspend fun setMessageEdgeCardYFraction(fraction: Float) =
         editor.edit {
             it[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_Y_FRACTION] =

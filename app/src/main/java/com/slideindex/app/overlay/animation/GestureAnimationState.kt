@@ -55,6 +55,25 @@ class GestureAnimationState(
     internal var redrawTick by mutableIntStateOf(0)
         private set
 
+    /**
+     * 手势动画启动时刻（uptimeMillis；0 = 未启动）。
+     *
+     * 绘制侧用它做**按时间**的入场：启动后 [GESTURE_ENTRY_RAMP_MS] 内，画出来的进度从 0 长到当前值。
+     * 否则图形第一帧就是"当前距离对应的完整长度"——因为按距离算的入场只需十几像素，
+     * 手指早就走过去了，观感就是"啪一下冒出来"。
+     */
+    internal var dragStartedAtMs: Long = 0L
+        private set
+
+    /** 入场时长（ms）：启动后这段时间内，绘制进度从 0 长到当前值（时间驱动，与距离无关）。 */
+    internal val entryRamp: Float
+        get() {
+            val startedAt = dragStartedAtMs
+            if (startedAt <= 0L) return 1f
+            return ((android.os.SystemClock.uptimeMillis() - startedAt) / GESTURE_ENTRY_RAMP_MS)
+                .coerceIn(0f, 1f)
+        }
+
     private var origin = Offset.Unspecified
     private var finger = Offset.Unspecified
 
@@ -162,6 +181,7 @@ class GestureAnimationState(
     fun onDragStart(rawX: Float, rawY: Float) {
         animJob?.cancel()
         isActive = true
+        dragStartedAtMs = android.os.SystemClock.uptimeMillis()
         val position = GestureAnimationPosition.fromPanelSide(side)
         button = GestureAnimationButton(position)
         origin = Offset(rawX, rawY)
@@ -235,6 +255,7 @@ class GestureAnimationState(
     fun cancelSilently() {
         animJob?.cancel()
         isActive = false
+        dragStartedAtMs = 0L
         origin = Offset.Unspecified
         finger = Offset.Unspecified
         triggerDirection = GestureAnimationTriggerDirection.Center2
@@ -256,6 +277,7 @@ class GestureAnimationState(
         if (endInteraction) {
             isActive = false
         }
+        dragStartedAtMs = 0L
         origin = Offset.Unspecified
         finger = Offset.Unspecified
 
@@ -456,3 +478,6 @@ class GestureAnimationState(
         }
     }
 }
+
+/** 手势动画按时间入场的时长（ms）。 */
+internal const val GESTURE_ENTRY_RAMP_MS = 100f

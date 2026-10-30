@@ -30,6 +30,7 @@ fun FloatBallGestureTuningScreen(
     onLongPressMsChange: (Int) -> Unit,
     onOverlayAnchorAtTouchDownChange: (Boolean) -> Unit,
     onGestureHapticChange: (Boolean) -> Unit,
+    onBackGestureHapticChange: (Boolean) -> Unit,
     onRingAutoSelectChange: (Boolean) -> Unit,
 ) {
     // 分组小标题必须在 Lazy 作用域外解析（settingsLazySmallTitle 的 title 是普通 String）。
@@ -167,6 +168,16 @@ fun FloatBallGestureTuningScreen(
                         checked = settings.floatBallGestureHapticEnabled,
                         enabled = true,
                         onCheckedChange = onGestureHapticChange
+                    )
+                },
+                settingsCardScopeItem("gesture-back-haptic") {
+                    SettingSwitchRow(
+                        title = stringResource(R.string.float_ball_gesture_back_haptic),
+                        subtitle = stringResource(R.string.float_ball_gesture_back_haptic_summary),
+                        checked = settings.floatBallBackGestureHapticEnabled,
+                        // 总的手势震动关掉时，这一项没有意义。
+                        enabled = settings.floatBallGestureHapticEnabled,
+                        onCheckedChange = onBackGestureHapticChange
                     )
                 }
             )

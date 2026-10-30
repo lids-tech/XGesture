@@ -219,9 +219,11 @@ internal fun overlaySelectionToolbarPlacement(
     } else {
         fieldCenterSelectionRect(fieldCoordinates)
     } ?: return null
+    // 没有 textLayoutResult 时（搜索面板的 TextField 不暴露文本布局）退回用**整个输入框矩形**
+    // 当"要避开的区域"：否则遮挡检测拿到 null 会直接放行，工具条被夹回框内、正好压住文字。
     val selectionRect = layoutResult?.let {
         selectionBoundsInWindow(it, selection, fieldCoordinates)
-    }
+    } ?: fieldCoordinates.boundsInWindow()
     val viewportRect = viewportCoordinates?.boundsInWindow()
         ?: Rect(
             left = 0f,
@@ -352,7 +354,8 @@ internal fun OverlaySelectionToolbarPopup(
     text: String,
     textLayoutResult: TextLayoutResult?,
     fieldCoordinates: LayoutCoordinates?,
-    viewportCoordinates: LayoutCoordinates?,
+    /** 工具条可活动范围；null = 整个窗口（搜索面板用：不能只限于输入框那一块）。 */
+    viewportCoordinates: LayoutCoordinates? = null,
     actions: OverlaySelectionToolbarActions,
     scrollOffsetYProvider: () -> Int = { 0 },
     viewportHeightPx: Float = Float.MAX_VALUE

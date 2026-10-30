@@ -203,6 +203,14 @@ class MessageSettingsViewModel @Inject constructor(
         settingsRepository.setMessageEdgeCardMaxLines(lines)
     }
 
+    fun setMessageEdgeCardKeepAcrossLock(keep: Boolean) = launchSettingsWrite {
+        settingsRepository.setMessageEdgeCardKeepAcrossLock(keep)
+    }
+
+    fun setMessageEdgeCardCollapseWhenScrollDone(collapse: Boolean) = launchSettingsWrite {
+        settingsRepository.setMessageEdgeCardCollapseWhenScrollDone(collapse)
+    }
+
     fun setMessageDanmakuThemeId(themeId: String) = launchSettingsWrite {
         settingsRepository.setMessageDanmakuThemeId(themeId)
     }

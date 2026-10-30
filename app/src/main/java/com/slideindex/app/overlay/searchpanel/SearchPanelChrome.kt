@@ -60,7 +60,7 @@ internal fun SearchPanelEngineDockHeight(
         showLabels = showLabels,
         columns = columns,
     )
-    val pageSize = columns.coerceIn(3, 7) * rows.coerceIn(1, 4)
+    val pageSize = columns.coerceIn(3, 8) * rows.coerceIn(1, 4)
     val pageCount = if (engineCount <= 0) 0 else (engineCount + pageSize - 1) / pageSize
     val indicatorHeight = if (showPageIndicator && pageCount > 1) {
         SearchPanelPageIndicatorTopPadding +

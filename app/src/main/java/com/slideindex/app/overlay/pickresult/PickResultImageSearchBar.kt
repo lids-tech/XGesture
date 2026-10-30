@@ -325,11 +325,12 @@ fun PickResultImageSearchBar(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             if (toolbarOnRight) {
-                ImageActionIcons()
+                // 「右侧」= 工具图标组在右、分享芯片在左。
                 ShareEngineSlot()
+                ImageActionIcons()
             } else {
-                ShareEngineSlot()
                 ImageActionIcons()
+                ShareEngineSlot()
             }
         }
         return

@@ -872,6 +872,22 @@ class OverlaySettingsMutator @Inject constructor(
         it[SettingsPreferenceKeys.FLOAT_BALL_OPACITY] = value.coerceIn(0f, 1f)
     }
 
+    suspend fun setFloatBallHideWhenIdle(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] = enabled
+    }
+
+    suspend fun setFloatBallIdleFreezeGif(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] = enabled
+    }
+
+    suspend fun setFloatBallIdleOpacity(value: Float) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] = value.coerceIn(0f, 1f)
+    }
+
+    suspend fun setFloatBallIdleDelayMs(value: Int) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_IDLE_DELAY_MS] = value.coerceIn(0, 10_000)
+    }
+
     suspend fun setFloatBallPosition(customCenterXFraction: Float, yFraction: Float) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_POSITION_X_FRACTION] =
             FloatBallPositionFractions.coerceCustomCenterX(customCenterXFraction)
@@ -909,6 +925,11 @@ class OverlaySettingsMutator @Inject constructor(
     suspend fun setFloatBallPointerSpeedVerticalFraction(value: Float) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SPEED_VERTICAL_FRACTION] =
             value.coerceIn(0f, 0.75f)
+    }
+
+    suspend fun setFloatBallPickAccelZoneFraction(value: Float) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_ACCEL_ZONE_FRACTION] =
+            value.coerceIn(0f, 1f)
     }
 
     suspend fun setFloatBallPositionMode(mode: FloatBallPositionMode) = editor.edit {
@@ -1098,6 +1119,10 @@ class OverlaySettingsMutator @Inject constructor(
 
     suspend fun setFloatBallGestureHapticEnabled(enabled: Boolean) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_GESTURE_HAPTIC_ENABLED] = enabled
+    }
+
+    suspend fun setFloatBallBackGestureHapticEnabled(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_BACK_GESTURE_HAPTIC_ENABLED] = enabled
     }
 
     suspend fun setFloatBallLongPressAutoSelectRingSlot(enabled: Boolean) = editor.edit {

@@ -435,6 +435,12 @@ internal object SettingsSnapshotReader {
             floatBallSizeDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_SIZE_DP] ?: 48f,
             floatBallPickCrossArmDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_CROSS_ARM_DP] ?: 7.5f,
             floatBallOpacity = prefs[SettingsPreferenceKeys.FLOAT_BALL_OPACITY] ?: 0.88f,
+            floatBallHideWhenIdle = prefs[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] ?: false,
+            floatBallIdleFreezeGif = prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] ?: false,
+            floatBallIdleOpacity =
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] ?: 0f).coerceIn(0f, 1f),
+            floatBallIdleDelayMs =
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_DELAY_MS] ?: 3000).coerceIn(0, 10_000),
             floatBallVisibleFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_VISIBLE_FRACTION] ?: 1f,
             floatBallCustomCenterXFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_POSITION_X_FRACTION] ?: 0.92f,
             floatBallPositionYFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_POSITION_Y_FRACTION] ?: 0.55f,
@@ -445,6 +451,9 @@ internal object SettingsSnapshotReader {
                 ?: 0.35f,
             floatBallPointerSpeedVerticalFraction =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SPEED_VERTICAL_FRACTION] ?: 0.35f,
+            floatBallPickAccelZoneFraction =
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_ACCEL_ZONE_FRACTION] ?: 0.5f)
+                    .coerceIn(0f, 1f),
             floatBallPositionMode = FloatBallPositionMode.fromStorageKey(
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_POSITION_MODE],
             ),
@@ -526,7 +535,7 @@ internal object SettingsSnapshotReader {
                     prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_PANEL_EXIT_ANIMATION_MS]
                         ?: PickPanelSlideAnimationDefaults.DEFAULT_MS,
                 ),
-            floatBallPointerSlopDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SLOP_DP] ?: 4f,
+            floatBallPointerSlopDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_POINTER_SLOP_DP] ?: 3f,
             floatBallHoverPauseDelayMs =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_HOVER_PAUSE_DELAY_MS]?.coerceIn(200, 1000) ?: 400,
             floatBallLongPressMs =
@@ -543,6 +552,8 @@ internal object SettingsSnapshotReader {
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_OVERLAY_ANCHOR_AT_TOUCH_DOWN] ?: false,
             floatBallGestureHapticEnabled =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_GESTURE_HAPTIC_ENABLED] ?: true,
+            floatBallBackGestureHapticEnabled =
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_BACK_GESTURE_HAPTIC_ENABLED] ?: true,
             floatBallLongPressAutoSelectRingSlot =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_LONG_PRESS_AUTO_SELECT_RING_SLOT] ?: false,
             floatBallInstantTranslate = prefs[SettingsPreferenceKeys.FLOAT_BALL_INSTANT_TRANSLATE] ?: true,
@@ -1164,6 +1175,11 @@ internal object SettingsSnapshotReader {
             ),
             cNoticeYFraction = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_Y_FRACTION]
                 ?: base.cNoticeYFraction,
+            edgeCardKeepAcrossLock = prefs[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_KEEP_ACROSS_LOCK]
+                ?: base.edgeCardKeepAcrossLock,
+            edgeCardCollapseWhenScrollDone =
+                prefs[SettingsPreferenceKeys.MESSAGE_EDGE_CARD_COLLAPSE_WHEN_SCROLL_DONE]
+                    ?: base.edgeCardCollapseWhenScrollDone,
             cNoticeEdgeMarginDp = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_EDGE_MARGIN_DP]
                 ?: base.cNoticeEdgeMarginDp,
             cNoticeDimDelayMs = prefs[SettingsPreferenceKeys.MESSAGE_C_NOTICE_DIM_DELAY_MS]

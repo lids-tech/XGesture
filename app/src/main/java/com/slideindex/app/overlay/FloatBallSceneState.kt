@@ -32,6 +32,9 @@ internal class FloatBallSceneState(initialSettings: AppSettings) {
     val chromeVisible: MutableState<Boolean> = mutableStateOf(true)
     val lineVisible: MutableState<Boolean> = mutableStateOf(false)
     val ballVisible: MutableState<Boolean> = mutableStateOf(true)
+    /** 闲置隐身：true = 球按 [ballIdleOpacity] 绘制（0 = 完全看不见）。 */
+    val ballIdleHidden: MutableState<Boolean> = mutableStateOf(false)
+    val ballIdleOpacity: MutableState<Float> = mutableStateOf(0f)
 
     fun resolvedActiveSide(
         settings: AppSettings = settingsState.value,

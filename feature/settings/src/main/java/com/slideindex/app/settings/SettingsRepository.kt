@@ -577,6 +577,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallSizeDp(value: Float) = overlay.setFloatBallSizeDp(value)
     suspend fun setFloatBallPickCrossArmDp(value: Float) = overlay.setFloatBallPickCrossArmDp(value)
     suspend fun setFloatBallOpacity(value: Float) = overlay.setFloatBallOpacity(value)
+    suspend fun setFloatBallHideWhenIdle(enabled: Boolean) = overlay.setFloatBallHideWhenIdle(enabled)
+    suspend fun setFloatBallIdleFreezeGif(enabled: Boolean) = overlay.setFloatBallIdleFreezeGif(enabled)
+    suspend fun setFloatBallIdleOpacity(value: Float) = overlay.setFloatBallIdleOpacity(value)
+    suspend fun setFloatBallIdleDelayMs(value: Int) = overlay.setFloatBallIdleDelayMs(value)
     suspend fun setFloatBallPosition(customCenterXFraction: Float, yFraction: Float) =
         overlay.setFloatBallPosition(customCenterXFraction, yFraction)
 
@@ -600,6 +604,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setFloatBallPointerSpeedVerticalFraction(value: Float) =
         overlay.setFloatBallPointerSpeedVerticalFraction(value)
+
+    suspend fun setFloatBallPickAccelZoneFraction(value: Float) =
+        overlay.setFloatBallPickAccelZoneFraction(value)
 
     suspend fun setFloatBallPositionMode(mode: FloatBallPositionMode) =
         overlay.setFloatBallPositionMode(mode)
@@ -720,6 +727,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setFloatBallGestureHapticEnabled(enabled: Boolean) =
         overlay.setFloatBallGestureHapticEnabled(enabled)
+
+    suspend fun setFloatBallBackGestureHapticEnabled(enabled: Boolean) =
+        overlay.setFloatBallBackGestureHapticEnabled(enabled)
 
     suspend fun setFloatBallLongPressAutoSelectRingSlot(enabled: Boolean) =
         overlay.setFloatBallLongPressAutoSelectRingSlot(enabled)
@@ -1150,6 +1160,10 @@ class SettingsRepository @Inject constructor(
         message.setMessageEdgeCardAutoCollapseMs(collapseMs)
     suspend fun setMessageEdgeCardHorizontalEdge(edge: String) =
         message.setMessageEdgeCardHorizontalEdge(edge)
+    suspend fun setMessageEdgeCardKeepAcrossLock(keep: Boolean) =
+        message.setMessageEdgeCardKeepAcrossLock(keep)
+    suspend fun setMessageEdgeCardCollapseWhenScrollDone(collapse: Boolean) =
+        message.setMessageEdgeCardCollapseWhenScrollDone(collapse)
     suspend fun setMessageEdgeCardYFraction(fraction: Float) =
         message.setMessageEdgeCardYFraction(fraction)
     suspend fun setMessageEdgeCardMaxCount(count: Int) = message.setMessageEdgeCardMaxCount(count)
