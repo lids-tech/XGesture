@@ -1892,7 +1892,8 @@
     <string name="float_ball_pick_offset">加号间距</string>
     <string name="float_ball_pick_text_size">取词文字大小</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">贴底过渡区</string>
+    <string name="float_ball_pick_bottom_transition">加号贴底过渡区</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = 关闭；开启后加号不进入手指下方，拖到底部时除外。</string>
     <string name="float_ball_pick_panel_style">取词面板样式</string>
     <string name="float_ball_pick_panel_style_desc">选择取词与截图结果的呈现交互风格</string>
     <string name="float_ball_pick_panel_style_integrated">同屏双卡片</string>

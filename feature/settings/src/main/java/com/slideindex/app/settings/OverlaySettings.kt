@@ -127,7 +127,7 @@ data class OverlaySettings(
     val floatBallGifUri: String = "",
     val floatBallPickOffsetDp: Float = 48f,
     val floatBallPickTextSizeSp: Float = 15f,
-    val floatBallPickBottomTransitionFraction: Float = 0.22f,
+    val floatBallPickBottomTransitionFraction: Float = 0f,
     val floatBallPickTextFirstPanel: Boolean = false,
     val floatBallPickPanelStyle: PickResultPanelStyle = PickResultPanelStyle.TAB_PAGED,
     val floatBallPickPanelPlacement: PickResultPanelPlacement = PickResultPanelPlacement.BOTTOM_DOCKED,

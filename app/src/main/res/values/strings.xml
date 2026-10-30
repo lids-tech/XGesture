@@ -1019,7 +1019,8 @@
     <string name="float_ball_pick_offset">Plus spacing</string>
     <string name="float_ball_pick_text_size">Pick text size</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">Bottom transition zone</string>
+    <string name="float_ball_pick_bottom_transition">Plus bottom transition zone</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = off. When on, the plus never goes below your finger, except when you drag to the bottom of the screen.</string>
     <string name="float_ball_pick_panel_style">Pick panel style</string>
     <string name="float_ball_pick_panel_style_desc">Choose the presentation layout for pick &amp; screenshot results</string>
     <string name="float_ball_pick_panel_style_integrated">Twin Cards</string>

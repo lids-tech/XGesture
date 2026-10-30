@@ -604,6 +604,12 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_PICK_TEXT_SIZE_SP = floatPreferencesKey("float_ball_pick_text_size_sp")
     val FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION =
         floatPreferencesKey("float_ball_pick_bottom_transition_fraction")
+    /**
+     * v2：语义从「十字翻折位置」改成「红十字允许低于手指的放开区」，0 = 关闭。
+     * 换新 key 等于让所有老值自动失效、回到默认 0，不需要额外迁移代码。
+     */
+    val FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION_V2 =
+        floatPreferencesKey("float_ball_pick_bottom_transition_fraction_v2")
     val FLOAT_BALL_PICK_TEXT_FIRST_PANEL = booleanPreferencesKey("float_ball_pick_text_first_panel")
     val FLOAT_BALL_PICK_PANEL_STYLE = stringPreferencesKey("float_ball_pick_panel_style")
     /** 取词面板落位方式：贴底 / 屏幕中间。 */

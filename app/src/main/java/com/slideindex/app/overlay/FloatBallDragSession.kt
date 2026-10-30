@@ -21,6 +21,12 @@ internal class FloatBallDragSession {
   private var pointerTravelHeight = 0f
   private var pickZoneWidth = 0f
   private var pickZoneHeight = 0f
+
+  /** 本次拖动里手指是否已经进过「贴底过渡区」并解除过上限（单向锁，松手重置）。 */
+  private var pickReleased = false
+
+  /** 解除上限那一刻「实际位置 − 按倍率算的位置」的补偿量：保证位置连续、速度立刻回到设置值。 */
+  private var pickReleaseCorrection = 0f
   private var pickDockSide: FloatBallSide = FloatBallSide.RIGHT
   var pointerModeActive = false
     private set
@@ -38,6 +44,8 @@ internal class FloatBallDragSession {
     pointerTravelHeight = 0f
     pickZoneWidth = 0f
     pickZoneHeight = 0f
+    pickReleased = false
+    pickReleaseCorrection = 0f
     pickDockSide = FloatBallSide.RIGHT
     pointerModeActive = false
   }
@@ -57,6 +65,8 @@ internal class FloatBallDragSession {
     pickDockSide: FloatBallSide
   ) {
     this.pickDockSide = pickDockSide
+    pickReleased = false
+    pickReleaseCorrection = 0f
     dragFingerX = fingerX
     dragFingerY = fingerY
     dragFingerAnchorX = fingerX
@@ -172,11 +182,52 @@ internal class FloatBallDragSession {
       screenPx = screenHeight,
       zonePx = pickZoneHeight
     )
+    // 「贴底过渡区」：红十字的下限（不能低于手指）。
+    //
+    // - 带子外：上限 = 手指上方一个余量 ⇒ 纵向倍率再大也追不过手指，不会"手指还在屏幕中间、
+    //   红十字已经掉到手指下面"；
+    // - 手指一进到底部带子：**一次性解除上限**，并把"当前实际位置"作为新基准
+    //   （`pickReleaseCorrection`），此后完全按用户的倍率走。这样：
+    //     · 位置连续（不会因为取消限制而跳一下）；
+    //     · 速度立刻恢复成设置值（不再被限制线拖着"刹车"）。
+    //   单向放开（本次拖内不再收回），避免来回进出带子时反复跳。
+    val fingerRefY = dragFingerY.coerceIn(0f, screenHeight)
+    val rawY = dragPointerAnchorY + movedY
+    // 0 = 关闭：不做上限、也不进入"放开"逻辑（保持旧手感：红十字可以低于手指）。
+    val bottomTransition = settings.floatBallPickBottomTransitionFraction
+      .coerceIn(0f, FloatingPointerBounds.PICK_BOTTOM_TRANSITION_MAX)
+    val bandPx = (bottomTransition * screenHeight).coerceAtLeast(1f)
+    val bandTopY = (screenHeight - bandPx).coerceAtLeast(0f)
+    if (bottomTransition > 0f && !pickReleased && fingerRefY >= bandTopY) {
+      val floorY = FloatingPointerBounds.pickCursorFloorY(
+        fingerY = fingerRefY,
+        screenHeight = screenHeight,
+        bandFraction = settings.floatBallPickBottomTransitionFraction,
+        marginPx = FloatingPointerBounds.PICK_FINGER_MARGIN_DP * density,
+      )
+      pickReleaseCorrection = min(rawY, floorY) - rawY
+      pickReleased = true
+    }
+    val cursorY = if (bottomTransition <= 0f) {
+      rawY
+    } else if (pickReleased) {
+      rawY + pickReleaseCorrection
+    } else {
+      min(
+        rawY,
+        FloatingPointerBounds.pickCursorFloorY(
+          fingerY = fingerRefY,
+          screenHeight = screenHeight,
+          bandFraction = settings.floatBallPickBottomTransitionFraction,
+          marginPx = FloatingPointerBounds.PICK_FINGER_MARGIN_DP * density,
+        ),
+      )
+    }
     // 夹取范围必须容纳"屏外锚点"，否则起点会被夹回边上，又变回"贴边出现"。
     return Offset(
       x = (dragPointerAnchorX + movedX)
         .coerceIn(min(0f, dragPointerAnchorX), max(screenWidth, dragPointerAnchorX)),
-      y = (dragPointerAnchorY + movedY)
+      y = cursorY
         .coerceIn(min(0f, dragPointerAnchorY), max(screenHeight, dragPointerAnchorY))
     )
   }

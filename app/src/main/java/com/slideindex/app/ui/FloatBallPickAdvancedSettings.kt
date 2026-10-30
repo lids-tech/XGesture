@@ -20,20 +20,6 @@ fun floatBallPickAdvancedCardItems(
     onHoverPauseDelayMsChange: (Int) -> Unit,
     onRegionalCancelSlopDpChange: (Float) -> Unit,
 ): List<CardItem> = listOf(
-    settingsCardScopeItem("bottom-transition") {
-        SettingsSliderRow(
-            title = stringResource(R.string.float_ball_pick_bottom_transition),
-            value = settings.floatBallPickBottomTransitionFraction,
-            valueRange = 0.05f..0.22f,
-            steps = 8,
-            enabled = true,
-            label = stringResource(
-                R.string.floating_pointer_percent_value,
-                (settings.floatBallPickBottomTransitionFraction * 100).roundToInt(),
-            ),
-            onValueChange = onPickBottomTransitionChange,
-        )
-    },
     settingsCardScopeItem("pointer-speed") {
         SettingsSliderRow(
             title = stringResource(R.string.float_ball_pointer_speed),
@@ -80,6 +66,23 @@ fun floatBallPickAdvancedCardItems(
                 (settings.floatBallPickAccelZoneFraction * 100).roundToInt(),
             ),
             onValueChange = onPickAccelZoneChange,
+        )
+    },
+    settingsCardScopeItem("bottom-transition") {
+        SettingsSliderRow(
+            title = stringResource(R.string.float_ball_pick_bottom_transition),
+            summary = stringResource(R.string.float_ball_pick_bottom_transition_desc),
+            value = settings.floatBallPickBottomTransitionFraction,
+            // 0% = 关闭：红十字允许低于手指（旧手感）；>0 时手指进入屏幕底部这段距离才放开。
+            valueRange = 0f..FloatingPointerBounds.PICK_BOTTOM_TRANSITION_MAX,
+            // 0%–22%，每档 1%。
+            steps = (FloatingPointerBounds.PICK_BOTTOM_TRANSITION_MAX * 100f).roundToInt() - 1,
+            enabled = true,
+            label = stringResource(
+                R.string.floating_pointer_percent_value,
+                (settings.floatBallPickBottomTransitionFraction * 100).roundToInt(),
+            ),
+            onValueChange = onPickBottomTransitionChange,
         )
     },
     settingsCardScopeItem("pointer-slop") {
