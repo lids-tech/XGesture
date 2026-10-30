@@ -16,4 +16,19 @@
     <string name="file_browser_media_rotate">Rotate</string>
     <string name="file_browser_media_image_failed">Cannot open this image.</string>
     <string name="file_browser_media_selected">%1$d selected</string>
+    <string name="file_browser_media_edit">Edit</string>
+    <string name="file_browser_media_pin">Pin</string>
+    <string name="file_browser_media_ocr">Extract text</string>
+    <string name="file_browser_media_search">Search</string>
+    <string name="file_browser_media_continuous">Continuous</string>
+    <string name="file_browser_media_single">Single</string>
+    <string name="file_browser_media_details">Details</string>
+    <string name="file_browser_media_fit">Fit</string>
+    <string name="file_browser_media_actual_size">1:1</string>
+    <string name="file_browser_media_ocr_empty">No text found.</string>
+    <string name="file_browser_media_ocr_failed">Text recognition failed.</string>
+    <string name="file_browser_media_details_name">Name</string>
+    <string name="file_browser_media_details_path">Path</string>
+    <string name="file_browser_media_details_mime">Type</string>
+    <string name="file_browser_media_details_size">Size</string>
 </resources>

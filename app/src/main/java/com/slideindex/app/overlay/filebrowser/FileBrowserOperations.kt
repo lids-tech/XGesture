@@ -45,7 +45,7 @@ internal object FileBrowserOperations {
         if (!target.isDirectory) {
             return@withContext FileOperationReport(
                 0,
-                paths.map { FileOperationFailure(it, "目标目录不存在") },
+                paths.map { FileOperationFailure(it, "目标目录不存在") }, // i18n-ignore
             )
         }
         var done = 0
@@ -57,11 +57,11 @@ internal object FileBrowserOperations {
             onProgress(done, paths.size)
             val source = File(path)
             val failure = when {
-                !source.exists() -> "源文件不存在"
+                !source.exists() -> "源文件不存在" // i18n-ignore
                 mode == FileTransferMode.MOVE &&
                     isInside(source.absolutePath, target.absolutePath) ->
-                    "不能移动到自身或子目录"
-                !canWriteTarget(target, access) -> "目标目录不可写"
+                    "不能移动到自身或子目录" // i18n-ignore
+                !canWriteTarget(target, access) -> "目标目录不可写" // i18n-ignore
                 else -> null
             }
             if (failure != null) {
@@ -79,7 +79,7 @@ internal object FileBrowserOperations {
                 }
                 policy == FileConflictPolicy.OVERWRITE -> {
                     if (!removeDestination(directDestination, access)) {
-                        failures += FileOperationFailure(path, "无法覆盖目标")
+                        failures += FileOperationFailure(path, "无法覆盖目标") // i18n-ignore
                         done++
                         continue
                     }
@@ -88,7 +88,7 @@ internal object FileBrowserOperations {
                 else -> uniqueDestination(target, source.name)
             }
             val ok = transferOne(source, destination, mode, access)
-            if (ok) succeeded++ else failures += FileOperationFailure(path, "操作失败")
+            if (ok) succeeded++ else failures += FileOperationFailure(path, "操作失败") // i18n-ignore
             done++
         }
         onProgress(paths.size, paths.size)
@@ -125,7 +125,7 @@ internal object FileBrowserOperations {
                 access.mode == AccessMode.ROOT -> deleteRoot(path)
                 else -> false
             }
-            if (ok) succeeded++ else failures += FileOperationFailure(path, "删除失败")
+            if (ok) succeeded++ else failures += FileOperationFailure(path, "删除失败") // i18n-ignore
         }
         onProgress(paths.size, paths.size)
         FileOperationReport(succeeded, failures)

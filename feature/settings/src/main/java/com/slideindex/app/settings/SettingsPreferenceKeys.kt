@@ -604,6 +604,12 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_PICK_TEXT_SIZE_SP = floatPreferencesKey("float_ball_pick_text_size_sp")
     val FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION =
         floatPreferencesKey("float_ball_pick_bottom_transition_fraction")
+    /**
+     * v2：语义从「十字翻折位置」改成「红十字允许低于手指的放开区」，0 = 关闭。
+     * 换新 key 等于让所有老值自动失效、回到默认 0，不需要额外迁移代码。
+     */
+    val FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION_V2 =
+        floatPreferencesKey("float_ball_pick_bottom_transition_fraction_v2")
     val FLOAT_BALL_PICK_TEXT_FIRST_PANEL = booleanPreferencesKey("float_ball_pick_text_first_panel")
     val FLOAT_BALL_PICK_PANEL_STYLE = stringPreferencesKey("float_ball_pick_panel_style")
     /** 取词面板落位方式：贴底 / 屏幕中间。 */
@@ -636,6 +642,9 @@ internal object SettingsPreferenceKeys {
     /** 悬浮球专属手势振动（判定成立 + 松手执行）。 */
     val FLOAT_BALL_GESTURE_HAPTIC_ENABLED =
         booleanPreferencesKey("float_ball_gesture_haptic_enabled")
+    /** 悬浮球手势绑定「返回」时是否额外震动（默认开；系统自带返回震动的机型可关掉避免双震）。 */
+    val FLOAT_BALL_BACK_GESTURE_HAPTIC_ENABLED =
+        booleanPreferencesKey("float_ball_back_gesture_haptic_enabled")
     /** 长按悬浮球呼出圆环时自动选中球下方第一个槽位，松手即启动。 */
     val FLOAT_BALL_LONG_PRESS_AUTO_SELECT_RING_SLOT =
         booleanPreferencesKey("float_ball_long_press_auto_select_ring_slot")

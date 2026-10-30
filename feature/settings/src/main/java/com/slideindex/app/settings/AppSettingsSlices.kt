@@ -300,7 +300,7 @@ data class FloatBallSettings(
     /** Body text size for pick-result panel in sp. */
     val floatBallPickTextSizeSp: Float = 15f,
     /** Screen-height fraction for smooth above→below pick transition near bottom. */
-    val floatBallPickBottomTransitionFraction: Float = 0.22f,
+    val floatBallPickBottomTransitionFraction: Float = 0f,
     /** Pick panel: show text + search by default; image section stays collapsed until the image row is tapped. */
     val floatBallPickTextFirstPanel: Boolean = false,
     /** Pick panel presentation style: INTEGRATED_SCROLL vs TAB_PAGED. */
@@ -360,6 +360,13 @@ data class FloatBallSettings(
     val floatBallOverlayAnchorAtTouchDown: Boolean = false,
     /** 悬浮球专属手势振动：判定成立与松手执行时振动（仍受首页「震动」总开关约束）。 */
     val floatBallGestureHapticEnabled: Boolean = true,
+    /**
+     * 悬浮球手势绑定「返回」时，是否**额外**由我们震一下。
+     *
+     * 部分机型（如 Flyme）在返回真正生效时系统自己会震一次，这时再震就是"两下"；
+     * 关掉只保留系统那一下。系统不给返回震动的机型保持开启即可（默认开）。
+     */
+    val floatBallBackGestureHapticEnabled: Boolean = true,
     /**
      * 长按悬浮球呼出圆环启动器时，自动选中球正下方的第一个槽位；
      * 松手即启动该槽位，不必先滑过去（默认关，保持「不动松手 = 取消」的旧行为）。

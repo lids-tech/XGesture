@@ -132,6 +132,7 @@ fun SettingsCardScope.SettingsSliderRow(
     startLabel: String? = null,
     endLabel: String? = null,
     keyPoints: List<Float>? = null,
+    summary: String? = null,
     triggersLayoutPreview: Boolean = false,
     onLayoutPreviewStart: () -> Unit = {},
     onLayoutPreviewStop: () -> Unit = {},
@@ -154,6 +155,7 @@ fun SettingsCardScope.SettingsSliderRow(
         MiuixSliderRow(
             modifier = Modifier.settingsGroupedRowBackground(position.index, position.count),
             title = title,
+            summary = summary,
             value = snap(value).coerceIn(valueRange.start, valueRange.endInclusive),
             valueRange = valueRange,
             enabled = enabled,

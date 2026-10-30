@@ -487,9 +487,11 @@ internal object SettingsSnapshotReader {
             floatBallPickOffsetDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_OFFSET_DP] ?: 48f,
             floatBallPickTextSizeSp =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_SIZE_SP]?.coerceIn(12f, 22f) ?: 15f,
+            // v2：0 = 关闭（旧 key 不再读取，老值自动失效）。
             floatBallPickBottomTransitionFraction =
-                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION]?.coerceIn(0.04f, 0.25f)
-                    ?: 0.22f,
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_BOTTOM_TRANSITION_FRACTION_V2]
+                    ?.coerceIn(0f, 0.4f)
+                    ?: 0f,
             floatBallPickTextFirstPanel =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_FIRST_PANEL] ?: false,
             floatBallPickPanelStyle =
@@ -552,6 +554,8 @@ internal object SettingsSnapshotReader {
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_OVERLAY_ANCHOR_AT_TOUCH_DOWN] ?: false,
             floatBallGestureHapticEnabled =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_GESTURE_HAPTIC_ENABLED] ?: true,
+            floatBallBackGestureHapticEnabled =
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_BACK_GESTURE_HAPTIC_ENABLED] ?: true,
             floatBallLongPressAutoSelectRingSlot =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_LONG_PRESS_AUTO_SELECT_RING_SLOT] ?: false,
             floatBallInstantTranslate = prefs[SettingsPreferenceKeys.FLOAT_BALL_INSTANT_TRANSLATE] ?: true,

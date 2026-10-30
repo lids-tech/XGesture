@@ -1801,7 +1801,8 @@
     <string name="float_ball_pick_offset">تباعد علامة الجمع</string>
     <string name="float_ball_pick_text_size">حجم نص الالتقاط</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">منطقة الانتقال السفلية</string>
+    <string name="float_ball_pick_bottom_transition">منطقة الانتقال السفلية لعلامة الجمع</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = إيقاف. عند التفعيل لا تنزل علامة الجمع تحت إصبعك، باستثناء السحب إلى أسفل الشاشة.</string>
     <string name="float_ball_pick_panel_style">نمط لوحة الالتقاط</string>
     <string name="float_ball_pick_panel_style_desc">اختر تخطيط عرض نتائج الالتقاط ولقطة الشاشة</string>
     <string name="float_ball_pick_panel_style_integrated">بطاقتان متجاورتان</string>
@@ -1852,7 +1853,9 @@
     <string name="float_ball_regional_cancel_slop">تسامح إلغاء نقطة بداية لقطة الشاشة</string>
     <string name="float_ball_text_copied">تم نسخ النص إلى الحافظة</string>
     <string name="float_ball_image_copied">تم نسخ الصورة إلى الحافظة</string>
-    <string name="share_image_ocr_target_label">التقاط نص OCR عبر XGesture</string>
+    <string name="share_image_ocr_target_label">التقاط نص OCR</string>
+    <string name="share_image_search_target_label">بحث بالصورة</string>
+    <string name="share_image_edit_target_label">محرر الصور</string>
     <string name="share_image_ocr_service_required">يرجى تفعيل خدمة إمكانية الوصول في XGesture أولاً</string>
     <string name="share_image_ocr_model_required">يرجى تنزيل واختيار نموذج OCR أولاً في إعدادات التقاط النص</string>
     <string name="share_image_ocr_image_load_failed">لا يمكن قراءة الصورة المشتركة</string>
@@ -2091,6 +2094,8 @@
     <string name="float_ball_gesture_feedback_section">استجابة الإيماءات</string>
     <string name="float_ball_gesture_haptic">اهتزاز إيماءات الكرة العائمة</string>
     <string name="float_ball_gesture_haptic_summary">اهتزاز عند تحقق إيماءة الكرة العائمة وعند تنفيذ الإجراء عند الإفلات. لا يزال خاضعًا لمفتاح «الاهتزاز» الرئيسي.</string>
+    <string name="float_ball_gesture_back_haptic">الاهتزاز عند إيماءة الرجوع</string>
+    <string name="float_ball_gesture_back_haptic_summary">بعض الأجهزة تهتز تلقائيًا عند الرجوع، لذا قد تشعر باهتزازين عند التفعيل. أبقِه مفعّلًا إذا كان جهازك لا يهتز.</string>
     <string name="float_ball_gesture_tuning_section">معطيات الإيماءات</string>
     <string name="float_ball_gesture_tuning_title">التعرّف والموضع</string>
     <string name="float_ball_gesture_tuning_summary">مسافات السحب ومدة الضغط المطول وموضع ظهور المشغّل السريع — المعطيات الأساسية للتعرف على الإيماءات.</string>

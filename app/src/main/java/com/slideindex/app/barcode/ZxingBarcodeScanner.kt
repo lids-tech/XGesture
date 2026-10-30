@@ -3,6 +3,7 @@ package com.slideindex.app.barcode
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.os.SystemClock
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import com.google.zxing.BarcodeFormat
@@ -26,6 +27,18 @@ object ZxingBarcodeScanner {
     private const val MAX_SCAN_DIMENSION = 2000
     private const val PICK_UPSCALE_MIN_DIMENSION = 960
     private const val PICK_UPSCALE_FACTOR = 2f
+
+    /**
+     * 超过这个边长的图不再补白边。整屏截图四周本来就有网页/窗口留出的空隙，
+     * 再补 12% 白边只会把 1080×2340 撑到 1340×2902，逼出更狠的缩放、白占内存。
+     */
+    private const val PAD_MAX_DIMENSION = 1200
+
+    /**
+     * 取词面板后台自动识码的预算。第一遍 2D 在整屏图上大约 0.2~1 秒（命中就返回），
+     * 这里留足余量；预算主要用来砍掉"图里根本没码"时最后那遍全码制（一维条码 / PDF417）。
+     */
+    const val PANEL_SCAN_BUDGET_MS = 2_500L
 
     private val allFormatHints = mapOf(
         DecodeHintType.TRY_HARDER to true,
@@ -62,16 +75,65 @@ object ZxingBarcodeScanner {
         )
     )
 
-    fun scanBitmap(bitmap: Bitmap, pickFastPath: Boolean = false): List<BarcodeScanResult> {
+    /**
+     * 定格图（截图 / 分享图 / 取词裁剪块）的识码入口。
+     *
+     * [pickFastPath] 的取词路径先跑一遍 2D（TRY_HARDER），命中立刻返回；
+     * 取词之外的入口（分享图片等）仍只跑一遍全码制——那些链路是**先识码再出面板**，
+     * 多跑一遍只会把面板拖晚。
+     *
+     * @param pickFastPath 取词裁剪块：补白边（仅小图）+ 小图放大，弥补用户框得太紧、码太小的场景；
+     *   并启用"2D 优先"的短路顺序。
+     * @param budgetMs 整次扫描的时间预算，[Long.MAX_VALUE] 表示不限。超预算立刻停，
+     *   省得后台识码在低端机上拖住 CPU、和 OCR 抢核。
+     * @param shouldCancel 每个解码尝试前询问一次；面板已经关掉时调用方可以直接放弃。
+     */
+    fun scanBitmap(
+        bitmap: Bitmap,
+        pickFastPath: Boolean = false,
+        budgetMs: Long = Long.MAX_VALUE,
+        shouldCancel: (() -> Boolean)? = null,
+    ): List<BarcodeScanResult> {
         if (bitmap.width <= 0 || bitmap.height <= 0) return emptyList()
+        val startedAt = SystemClock.elapsedRealtime()
         val prepared = prepareScanBitmap(bitmap, pickFastPath)
         val shouldRecyclePrepared = prepared !== bitmap
         return try {
-            if (pickFastPath) {
-                decodeWithStrategies(prepared, qrHints)?.let { return it }
-                decodeWithStrategies(prepared, qrTryHarderHints)?.let { return it }
+            val width = prepared.width
+            val height = prepared.height
+            val pixels = IntArray(width * height)
+            prepared.getPixels(pixels, 0, width, 0, 0, width, height)
+            // 4 种亮度变体按需生成：整屏图每份就有 2~4MB，没必要一开始全建出来。
+            var standard: ByteArray? = null
+            var contrast: ByteArray? = null
+
+            fun scanWith(hints: Map<DecodeHintType, Any>): List<BarcodeScanResult>? {
+                for (variant in 0 until 4) {
+                    if (scanShouldStop(startedAt, budgetMs, shouldCancel)) return null
+                    val luminance = when (variant) {
+                        0 -> rgbLuminance(pixels).also { standard = it }
+                        1 -> invertLuminance(standard ?: rgbLuminance(pixels).also { standard = it })
+                        2 -> contrastStretchedLuminance(pixels).also { contrast = it }
+                        else -> invertLuminance(contrast ?: contrastStretchedLuminance(pixels).also { contrast = it })
+                    }
+                    val source = ByteArrayLuminanceSource(width, height, luminance)
+                    for (binarizer in BinarizerStrategy.entries) {
+                        if (scanShouldStop(startedAt, budgetMs, shouldCancel)) return null
+                        tryDecode(source, hints, binarizer, width, height)
+                            .takeIf { it.isNotEmpty() }
+                            ?.let { return it }
+                    }
+                }
+                return null
             }
-            decodeWithStrategies(prepared, allFormatHints).orEmpty()
+
+            if (pickFastPath) {
+                // 直接上 TRY_HARDER：实测非 TRY_HARDER 那一遍在整屏图上很容易"抽行跳过"定位图案，
+                // 白跑一遍还要多花几百毫秒，不如把这一遍省掉。
+                scanWith(qrTryHarderHints)?.let { return it }
+                if (scanShouldStop(startedAt, budgetMs, shouldCancel)) return emptyList()
+            }
+            scanWith(allFormatHints).orEmpty()
         } finally {
             if (shouldRecyclePrepared) {
                 prepared.recycle()
@@ -98,6 +160,8 @@ object ZxingBarcodeScanner {
     /** Simulates screen-space quiet-zone expand for pick crops without changing the UI bitmap. */
     private fun padQuietZone(bitmap: Bitmap, fraction: Float): Bitmap {
         if (fraction <= 0f) return bitmap
+        // 大图（整屏截图）不补：本身四周就有留白，补了只会把图撑大、压缩更狠。
+        if (max(bitmap.width, bitmap.height) > PAD_MAX_DIMENSION) return bitmap
         val padX = (bitmap.width * fraction).roundToInt()
         val padY = (bitmap.height * fraction).roundToInt()
         if (padX <= 0 && padY <= 0) return bitmap
@@ -112,32 +176,15 @@ object ZxingBarcodeScanner {
         return padded
     }
 
-    private fun decodeWithStrategies(
-        bitmap: Bitmap,
-        hints: Map<DecodeHintType, Any>
-    ): List<BarcodeScanResult>? {
-        val width = bitmap.width
-        val height = bitmap.height
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-        for (luminance in luminanceVariants(pixels, width, height)) {
-            val source = ByteArrayLuminanceSource(width, height, luminance)
-            for (binarizer in BinarizerStrategy.entries) {
-                tryDecode(source, hints, binarizer, width, height).takeIf { it.isNotEmpty() }?.let { return it }
-            }
-        }
-        return null
-    }
-
-    private fun luminanceVariants(pixels: IntArray, width: Int, height: Int): List<ByteArray> {
-        val standard = rgbLuminance(pixels)
-        val contrast = contrastStretchedLuminance(pixels)
-        return listOf(
-            standard,
-            invertLuminance(standard),
-            contrast,
-            invertLuminance(contrast)
-        )
+    /** 预算到点或调用方要求取消：下一个解码尝试前就会停。 */
+    private fun scanShouldStop(
+        startedAt: Long,
+        budgetMs: Long,
+        shouldCancel: (() -> Boolean)?,
+    ): Boolean {
+        if (shouldCancel?.invoke() == true) return true
+        return budgetMs != Long.MAX_VALUE &&
+            SystemClock.elapsedRealtime() - startedAt >= budgetMs
     }
 
     /**
@@ -259,7 +306,11 @@ object ZxingBarcodeScanner {
             MultiFormatReader().apply { setHints(hints) }
         )
         return try {
-            reader.decodeMultiple(binaryBitmap)
+            // hints 必须一路传进去。单参 decodeMultiple(bitmap) 内部是 decode(bitmap, null)，
+            // MultiFormatReader 会拿这 null 重新 setHints，把 TRY_HARDER / POSSIBLE_FORMATS 全清掉：
+            // 大图退化成"隔十几行采一次"（FinderPatternFinder 的 iSkip 随图高变大），
+            // 定位图案正好被跳过，整屏图就会漏掉明明很清楚的二维码；限定码制也会失效、冒出一维码误报。
+            reader.decodeMultiple(binaryBitmap, hints)
                 .mapNotNull { toScanResult(it, width, height) }
                 .distinctBy { "${it.format}:${it.text}" }
         } catch (_: NotFoundException) {

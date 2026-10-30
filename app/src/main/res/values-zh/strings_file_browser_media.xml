@@ -16,4 +16,19 @@
     <string name="file_browser_media_rotate">旋转</string>
     <string name="file_browser_media_image_failed">无法打开这张图片。</string>
     <string name="file_browser_media_selected">已选 %1$d 项</string>
+    <string name="file_browser_media_edit">编辑</string>
+    <string name="file_browser_media_pin">钉图</string>
+    <string name="file_browser_media_ocr">取词</string>
+    <string name="file_browser_media_search">搜索</string>
+    <string name="file_browser_media_continuous">连看模式</string>
+    <string name="file_browser_media_single">单图模式</string>
+    <string name="file_browser_media_details">详情</string>
+    <string name="file_browser_media_fit">适应</string>
+    <string name="file_browser_media_actual_size">1:1</string>
+    <string name="file_browser_media_ocr_empty">没有识别到文字。</string>
+    <string name="file_browser_media_ocr_failed">文字识别失败。</string>
+    <string name="file_browser_media_details_name">名称</string>
+    <string name="file_browser_media_details_path">路径</string>
+    <string name="file_browser_media_details_mime">类型</string>
+    <string name="file_browser_media_details_size">大小</string>
 </resources>

@@ -728,6 +728,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallGestureHapticEnabled(enabled: Boolean) =
         overlay.setFloatBallGestureHapticEnabled(enabled)
 
+    suspend fun setFloatBallBackGestureHapticEnabled(enabled: Boolean) =
+        overlay.setFloatBallBackGestureHapticEnabled(enabled)
+
     suspend fun setFloatBallLongPressAutoSelectRingSlot(enabled: Boolean) =
         overlay.setFloatBallLongPressAutoSelectRingSlot(enabled)
 

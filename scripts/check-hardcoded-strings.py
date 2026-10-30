@@ -99,10 +99,12 @@ def strip_line_comment(line: str) -> str:
     return line
 
 
-def clean_lines(path: Path) -> list[str]:
-    """Comment-free source lines; index 0 holds line 1."""
+def clean_lines(path: Path) -> tuple[list[str], list[str]]:
+    """(comment-free lines, raw lines); index 0 holds line 1. Both lists have equal length."""
     text = path.read_text(encoding="utf-8", errors="replace")
-    return [strip_line_comment(line) for line in strip_block_comments(text).splitlines()]
+    raw_lines = text.splitlines()
+    cleaned = [strip_line_comment(line) for line in strip_block_comments(text).splitlines()]
+    return cleaned, raw_lines
 
 
 def file_ignored(path: Path) -> bool:
@@ -115,7 +117,7 @@ def collect_hits(path: Path, line_numbers: list[int] | None = None) -> list[tupl
     if file_ignored(path):
         return []
     try:
-        lines = clean_lines(path)
+        lines, raw_lines = clean_lines(path)
     except OSError as exc:
         print(f"WARNING: cannot read {path}: {exc}", file=sys.stderr)
         return []
@@ -126,7 +128,10 @@ def collect_hits(path: Path, line_numbers: list[int] | None = None) -> list[tupl
         if index < 0 or index >= len(lines):
             continue
         line = lines[index]
-        if IGNORE_LINE in line or LOG_CALL_RE.search(line):
+        # `// i18n-ignore` is a line comment, and strip_line_comment() removes it, so it has to be
+        # read from the raw line. Checking the cleaned line meant the documented exemption could
+        # never match: `x = "中文" // i18n-ignore` was still reported.
+        if IGNORE_LINE in raw_lines[index] or LOG_CALL_RE.search(line):
             continue
         for match in LITERAL_RE.finditer(line):
             if CJK_RE.search(match.group(0)):
@@ -213,6 +218,13 @@ def report(root: Path, per_file: dict[Path, list[tuple[int, str, str]]]) -> int:
 
 
 def main() -> int:
+    # Windows 控制台默认按 GBK 输出，而本仓库的 Kotlin 注释里大量使用 ⚠（U+26A0）；命中后
+    # report() 会把源码行原样打印出来，编不出的字符会让 Python 抛 UnicodeEncodeError 中断。
+    # 只放宽错误处理、不动编码：中文照常显示，个别符号退化成 '?'，扫描本身不受影响。
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(
         description="Flag Chinese string literals in Kotlin sources that never became resources.",
     )

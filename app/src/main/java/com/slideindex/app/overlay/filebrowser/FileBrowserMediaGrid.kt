@@ -253,6 +253,8 @@ private fun FileBrowserMediaTile(
         )
     }
     val isVideo = item.mimeType?.startsWith("video/") == true
+    val isGif = item.mimeType.equals("image/gif", ignoreCase = true) ||
+        item.name.endsWith(".gif", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -295,6 +297,19 @@ private fun FileBrowserMediaTile(
                         .clip(RoundedCornerShape(50))
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.82f))
                         .padding(3.dp),
+                )
+            }
+            if (isGif) {
+                Text(
+                    text = "GIF",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.86f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
                 )
             }
             if (selected) {

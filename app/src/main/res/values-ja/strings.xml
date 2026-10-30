@@ -1814,7 +1814,8 @@
     <string name="float_ball_pick_offset">プラス間隔</string>
     <string name="float_ball_pick_text_size">選択テキストサイズ</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">下部遷移ゾーン</string>
+    <string name="float_ball_pick_bottom_transition">プラス下部遷移ゾーン</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = オフ。オンにするとプラス記号は指より下に行きません（画面下部までドラッグした場合を除く）。</string>
     <string name="float_ball_pick_panel_style">選択パネルスタイル</string>
     <string name="float_ball_pick_panel_style_desc">テキスト選択とスクリーンショット結果の表示スタイルを選択します</string>
     <string name="float_ball_pick_panel_style_integrated">同画面デュアルカード</string>
@@ -1859,7 +1860,9 @@
     <string name="float_ball_regional_cancel_slop">スクリーンショットキャンセル閾値</string>
     <string name="float_ball_text_copied">テキストをクリップボードにコピーしました</string>
     <string name="float_ball_image_copied">画像をクリップボードにコピーしました</string>
-    <string name="share_image_ocr_target_label">XGesture OCR 選択</string>
+    <string name="share_image_ocr_target_label">OCR テキスト</string>
+    <string name="share_image_search_target_label">画像検索</string>
+    <string name="share_image_edit_target_label">画像編集</string>
     <string name="share_image_ocr_service_required">先に XGesture アクセシビリティサービスを有効にしてください</string>
     <string name="share_image_ocr_model_required">先に取詞設定で OCR モデルをダウンロードして選択してください</string>
     <string name="share_image_ocr_image_load_failed">共有された画像を読み取れませんでした</string>
@@ -2098,6 +2101,8 @@
     <string name="float_ball_gesture_feedback_section">ジェスチャーのフィードバック</string>
     <string name="float_ball_gesture_haptic">フローティングボールのジェスチャー振動</string>
     <string name="float_ball_gesture_haptic_summary">フローティングボールのジェスチャー成立時と、離して動作を実行するときに振動します。ホームの「振動」スイッチの影響も受けます。</string>
+    <string name="float_ball_gesture_back_haptic">戻るジェスチャーでも振動</string>
+    <string name="float_ball_gesture_back_haptic_summary">端末によっては戻る操作時に独自に振動するため、オンだと二回に感じることがあります。端末が振動しない場合はオンのままにしてください。</string>
     <string name="float_ball_gesture_tuning_section">ジェスチャーパラメータ</string>
     <string name="float_ball_gesture_tuning_title">認識と配置</string>
     <string name="float_ball_gesture_tuning_summary">スワイプ距離、長押し時間、クイックランチャーの表示位置。ジェスチャー認識の基本パラメータです。</string>

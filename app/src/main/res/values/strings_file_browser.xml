@@ -126,4 +126,18 @@
     <string name="file_browser_restore_shortcuts">Restore built-in shortcuts</string>
     <string name="file_browser_image_open">Open</string>
     <string name="file_browser_share">Share</string>
+    <string name="file_browser_add_to_home">Add to home screen</string>
+    <string name="file_browser_add_to_home_failed">Unable to add shortcut</string>
+
+    <!-- 操作反馈 / 图片查看器 / 分享：代码里由 UI 层取资源，不再硬编码 -->
+    <string name="file_browser_failed_count">%1$d item(s) failed</string>
+    <string name="file_browser_skipped_count">%1$d item(s) skipped</string>
+    <string name="file_browser_cancelled">Cancelled</string>
+    <string name="file_browser_delete_failed">Delete failed</string>
+    <string name="file_browser_restore_failed">%1$d item(s) failed to restore</string>
+    <string name="file_browser_edit">Edit</string>
+    <string name="file_browser_sharing">Sharing…</string>
+    <string name="file_browser_share_image">Share image</string>
+    <string name="file_browser_share_failed">Share failed: %1$s</string>
+    <string name="file_browser_share_files">Share files</string>
 </resources>

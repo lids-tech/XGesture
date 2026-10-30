@@ -104,9 +104,13 @@ object InspireCoordinator {
                     ocrReady = ocrReady
                 )
                 PickPerf.mark("pick_onResult_post")
-                withContext(Dispatchers.Main.immediate) { onResult(result) }
+                // 取词面板一显示就记下这次展示的令牌：识码是异步的，回来时要确认面板还是这一次。
+                val panelToken = withContext(Dispatchers.Main.immediate) {
+                    onResult(result)
+                    FloatBallPickResultPanel.showToken
+                }
                 PickPerf.mark("pick_onResult_done")
-                launchDeferredBarcodeScan(result)
+                launchDeferredBarcodeScan(result, panelToken)
                 if (deferOcr) {
                     launchDeferredOcr(
                         context = context,
@@ -170,9 +174,13 @@ object InspireCoordinator {
                     ocrReady = ocrReady
                 )
                 PickPerf.mark("pick_onResult_post")
-                withContext(Dispatchers.Main.immediate) { onResult(result) }
+                // 取词面板一显示就记下这次展示的令牌：识码是异步的，回来时要确认面板还是这一次。
+                val panelToken = withContext(Dispatchers.Main.immediate) {
+                    onResult(result)
+                    FloatBallPickResultPanel.showToken
+                }
                 PickPerf.mark("pick_onResult_done")
-                launchDeferredBarcodeScan(result)
+                launchDeferredBarcodeScan(result, panelToken)
                 if (deferOcr) {
                     launchDeferredOcr(
                         context = context,
@@ -382,10 +390,10 @@ object InspireCoordinator {
     }
 
     fun scheduleDeferredBarcodeScan(result: FloatBallPickResult) {
-        launchDeferredBarcodeScan(result)
+        launchDeferredBarcodeScan(result, FloatBallPickResultPanel.showToken)
     }
 
-    private fun launchDeferredBarcodeScan(result: FloatBallPickResult) {
+    private fun launchDeferredBarcodeScan(result: FloatBallPickResult, panelToken: Int) {
         val bitmap = result.screenshot
         if (bitmap == null || bitmap.isRecycled) return
         val scanCopy = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, false) ?: return
@@ -393,7 +401,13 @@ object InspireCoordinator {
             try {
                 val scanStart = SystemClock.elapsedRealtime()
                 PickPerf.mark("barcode_async_start")
-                val barcodeResults = ZxingBarcodeScanner.scanBitmap(scanCopy, pickFastPath = true)
+                // 预算 + 取消：面板关了就停，低端机上也不至于把 CPU 拖几秒。
+                val barcodeResults = ZxingBarcodeScanner.scanBitmap(
+                    scanCopy,
+                    pickFastPath = true,
+                    budgetMs = ZxingBarcodeScanner.PANEL_SCAN_BUDGET_MS,
+                    shouldCancel = { !FloatBallPickResultPanel.isStillShowing(panelToken) },
+                )
                 PickPerf.markStepDuration(
                     "barcode_async_end",
                     scanStart,
@@ -401,7 +415,7 @@ object InspireCoordinator {
                 )
                 if (barcodeResults.isEmpty()) return@launch
                 withContext(Dispatchers.Main.immediate) {
-                    FloatBallPickResultPanel.updateBarcodeResults(barcodeResults)
+                    FloatBallPickResultPanel.updateBarcodeResults(barcodeResults, panelToken)
                 }
             } finally {
                 if (!scanCopy.isRecycled) {
@@ -562,12 +576,13 @@ object InspireCoordinator {
             }
             val screenshot = crop.bitmap
             val layoutMeta = crop.layoutMeta
-            withContext(Dispatchers.Main.immediate) {
+            val panelToken = withContext(Dispatchers.Main.immediate) {
                 FloatBallPickResultPanel.updatePickScreenshot(
                     screenshot,
                     Rect(dragSelectRect),
                     layoutMeta
                 )
+                FloatBallPickResultPanel.showToken
             }
             PickPerf.mark("screenshot_deferred_delivered", "bitmap=true")
             val enriched = FloatBallPickResult(
@@ -580,7 +595,7 @@ object InspireCoordinator {
                 ocrPending = deferOcr && resolvedOcrReady,
                 ownsImages = false
             )
-            launchDeferredBarcodeScan(enriched)
+            launchDeferredBarcodeScan(enriched, panelToken)
             if (deferOcr) {
                 launchDeferredOcr(
                     context = context,

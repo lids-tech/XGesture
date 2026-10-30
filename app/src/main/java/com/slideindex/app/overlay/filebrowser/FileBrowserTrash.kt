@@ -32,7 +32,7 @@ internal object FileBrowserTrash {
         if (!batch.mkdirs() && !batch.isDirectory) {
             return@withContext TrashReport(
                 emptyList(),
-                paths.map { FileOperationFailure(it, "无法创建回收站") },
+                paths.map { FileOperationFailure(it, "无法创建回收站") }, // i18n-ignore
             )
         }
         val trashed = mutableListOf<TrashedItem>()
@@ -40,14 +40,14 @@ internal object FileBrowserTrash {
         for (path in paths) {
             val source = File(path)
             if (!source.exists()) {
-                failures += FileOperationFailure(path, "源文件不存在")
+                failures += FileOperationFailure(path, "源文件不存在") // i18n-ignore
                 continue
             }
             val destination = FileBrowserOperations.uniqueDestination(batch, source.name)
             if (move(source, destination, access)) {
                 trashed += TrashedItem(source.absolutePath, destination.absolutePath)
             } else {
-                failures += FileOperationFailure(path, "删除失败")
+                failures += FileOperationFailure(path, "删除失败") // i18n-ignore
             }
         }
         TrashReport(trashed, failures)
@@ -62,15 +62,15 @@ internal object FileBrowserTrash {
             val source = File(item.trashPath)
             val destination = File(item.originalPath)
             if (!source.exists()) {
-                failures += FileOperationFailure(item.originalPath, "回收站文件不存在")
+                failures += FileOperationFailure(item.originalPath, "回收站文件不存在") // i18n-ignore
                 continue
             }
             if (destination.exists()) {
-                failures += FileOperationFailure(item.originalPath, "原位置已有同名文件")
+                failures += FileOperationFailure(item.originalPath, "原位置已有同名文件") // i18n-ignore
                 continue
             }
             if (!move(source, destination, access)) {
-                failures += FileOperationFailure(item.originalPath, "恢复失败")
+                failures += FileOperationFailure(item.originalPath, "恢复失败") // i18n-ignore
             }
         }
         failures

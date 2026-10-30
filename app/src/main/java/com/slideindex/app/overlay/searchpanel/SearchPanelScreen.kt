@@ -243,6 +243,8 @@ fun SearchPanelScreen(
     val dimPercent = settings.searchPanelDimPercent
     val overlayBlurEnabled = settings.overlayBlurEnabled
 
+    // 外部带图进来（拖拽动作 / 系统分享）：面板窗口保活、组合不重建，只能观察状态，不能用 remember 初值。
+    val pendingImage by SearchPanelSessionState.pendingImage
     var mode by remember { mutableStateOf(SearchMode.TEXT) }
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(SearchPanelSessionState.lastTextQuery))
@@ -261,6 +263,14 @@ fun SearchPanelScreen(
     var debouncedQuery by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var imageBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(pendingImage) {
+        val bitmap = pendingImage ?: return@LaunchedEffect
+        SearchPanelSessionState.consumePendingImage()
+        imageUri = null
+        imageBitmap = bitmap
+        mode = SearchMode.IMAGE
+    }
     val appsForSearch by (appRepository?.appsForSearch ?: kotlinx.coroutines.flow.flowOf(emptyList()))
         .collectAsState(initial = appRepository?.getCachedAppsForSearch().orEmpty())
     val appsForSearchRevision by (appRepository?.appsForSearchRevision ?: kotlinx.coroutines.flow.flowOf(0L))

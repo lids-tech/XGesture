@@ -24,6 +24,39 @@ internal object FloatBallPickAnchor {
     dockSide: FloatBallSide
   ): Offset {
     val gapPx = settings.floatBallPickOffsetDp.coerceIn(4f, 48f) * density
+    val offsetY = verticalOffsetPx(
+      settings = settings,
+      ballCenterY = ballCenterY,
+      ballHeightPx = ballHeightPx,
+      screenHeight = screenHeight,
+      density = density,
+    )
+    val offsetX = horizontalOffsetPx(gapPx, dockSide)
+
+    return clampToScreen(
+      x = ballCenterX + offsetX,
+      y = ballCenterY + offsetY,
+      screenWidth = screenWidth,
+      screenHeight = screenHeight,
+      density = density,
+      dockSide = dockSide
+    )
+  }
+
+  /**
+   * 取词十字相对球心的**垂直**偏移（px）：常态在球上方，进入底部过渡带后平滑翻到下方。
+   *
+   * 单独抽出来是为了让拖动过程中能**逐帧重算**（`FloatBallDragSession` 用它的变化量做补偿），
+   * 从而让「贴底过渡区」真正在拖动中生效，而不是只在按下那一刻算一次。
+   */
+  fun verticalOffsetPx(
+    settings: AppSettings,
+    ballCenterY: Float,
+    ballHeightPx: Float,
+    screenHeight: Float,
+    density: Float
+  ): Float {
+    val gapPx = settings.floatBallPickOffsetDp.coerceIn(4f, 48f) * density
     // 取词十字在球的**上方/下方**，所以用球高而不是球宽：不处理模式下球可能很宽但高度不变。
     val aboveOffsetY = -(ballHeightPx / 2f + gapPx)
     val belowOffsetY = ballHeightPx / 2f + gapPx
@@ -35,17 +68,7 @@ internal object FloatBallPickAnchor {
       transitionBandPx = bottomTransitionBandPx(settings, screenHeight),
       edgeInsetPx = BOTTOM_EDGE_INSET_DP * density
     )
-    val offsetY = aboveOffsetY + (belowOffsetY - aboveOffsetY) * blend
-    val offsetX = horizontalOffsetPx(gapPx, dockSide)
-
-    return clampToScreen(
-      x = ballCenterX + offsetX,
-      y = ballCenterY + offsetY,
-      screenWidth = screenWidth,
-      screenHeight = screenHeight,
-      density = density,
-      dockSide = dockSide
-    )
+    return aboveOffsetY + (belowOffsetY - aboveOffsetY) * blend
   }
 
   fun pickPointForFinger(

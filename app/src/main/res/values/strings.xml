@@ -948,6 +948,8 @@
     <string name="float_ball_gesture_feedback_section">Gesture feedback</string>
     <string name="float_ball_gesture_haptic">Float-ball gesture vibration</string>
     <string name="float_ball_gesture_haptic_summary">Vibrate when a float-ball gesture fires and when its action runs on release. Still governed by the main “Vibration” switch.</string>
+    <string name="float_ball_gesture_back_haptic">Vibrate on back gesture</string>
+    <string name="float_ball_gesture_back_haptic_summary">Some devices already vibrate when going back, so enabling this may feel like two vibrations. Keep it on if your device does not.</string>
     <string name="float_ball_gesture_tuning_section">Gesture parameters</string>
     <string name="float_ball_gesture_tuning_title">Recognition &amp; placement</string>
     <string name="float_ball_gesture_tuning_summary">Swipe distances, long-press duration, and where quick launchers appear — the base parameters for gesture recognition.</string>
@@ -1017,7 +1019,8 @@
     <string name="float_ball_pick_offset">Plus spacing</string>
     <string name="float_ball_pick_text_size">Pick text size</string>
     <string name="float_ball_text_size_value">%1$.0f sp</string>
-    <string name="float_ball_pick_bottom_transition">Bottom transition zone</string>
+    <string name="float_ball_pick_bottom_transition">Plus bottom transition zone</string>
+<string name="float_ball_pick_bottom_transition_desc">0 = off. When on, the plus never goes below your finger, except when you drag to the bottom of the screen.</string>
     <string name="float_ball_pick_panel_style">Pick panel style</string>
     <string name="float_ball_pick_panel_style_desc">Choose the presentation layout for pick &amp; screenshot results</string>
     <string name="float_ball_pick_panel_style_integrated">Twin Cards</string>
@@ -1074,7 +1077,9 @@
     <string name="float_ball_regional_cancel_slop">Screenshot cancel threshold</string>
     <string name="float_ball_text_copied">Text copied to clipboard</string>
     <string name="float_ball_image_copied">Image copied to clipboard</string>
-    <string name="share_image_ocr_target_label">XGesture OCR Pick</string>
+    <string name="share_image_ocr_target_label">OCR text</string>
+    <string name="share_image_search_target_label">Image search</string>
+    <string name="share_image_edit_target_label">Image editor</string>
     <string name="share_image_ocr_service_required">Enable the XGesture accessibility service first</string>
     <string name="share_image_ocr_model_required">Download and select an OCR model in Pick settings first</string>
     <string name="share_image_ocr_image_load_failed">Could not read the shared image</string>

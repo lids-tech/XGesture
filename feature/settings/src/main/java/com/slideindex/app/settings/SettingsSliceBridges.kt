@@ -236,6 +236,7 @@ fun OverlaySettings.toMinimalAppSettings(): AppSettings = AppSettings(
         floatBallUpSwipeShortPercent = floatBallUpSwipeShortPercent,
         floatBallOverlayAnchorAtTouchDown = floatBallOverlayAnchorAtTouchDown,
         floatBallGestureHapticEnabled = floatBallGestureHapticEnabled,
+        floatBallBackGestureHapticEnabled = floatBallBackGestureHapticEnabled,
         floatBallLongPressAutoSelectRingSlot = floatBallLongPressAutoSelectRingSlot,
         floatBallInstantTranslate = floatBallInstantTranslate,
         floatBallTranslateEngine = floatBallTranslateEngine,

@@ -704,6 +704,10 @@ class ExtensionSettingsViewModel @Inject constructor(
         settingsRepository.setFloatBallGestureHapticEnabled(enabled)
     }
 
+    fun setFloatBallBackGestureHapticEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setFloatBallBackGestureHapticEnabled(enabled)
+    }
+
     fun setFloatBallLongPressAutoSelectRingSlot(enabled: Boolean) = launchSettingsWrite {
         settingsRepository.setFloatBallLongPressAutoSelectRingSlot(enabled)
     }
