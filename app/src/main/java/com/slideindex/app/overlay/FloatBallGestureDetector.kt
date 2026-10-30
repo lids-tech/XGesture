@@ -132,6 +132,7 @@ internal class FloatBallGestureDetector(
     private var onGestureHint: ((FloatBallGestureType?) -> Unit)? = null
     private var onLauncherCaptureMove: ((rawX: Float, rawY: Float) -> Unit)? = null
     private var onLauncherCaptureUp: ((rawX: Float, rawY: Float) -> Unit)? = null
+    private var onLauncherCaptureCancel: (() -> Unit)? = null
     private var launcherCaptureMode = false
 
     /**
@@ -200,6 +201,7 @@ internal class FloatBallGestureDetector(
         onPickPreviewCancel: () -> Unit = {},
         onLauncherCaptureMove: (rawX: Float, rawY: Float) -> Unit = { _, _ -> },
         onLauncherCaptureUp: (rawX: Float, rawY: Float) -> Unit = { _, _ -> },
+        onLauncherCaptureCancel: () -> Unit = {},
         onCustomGestureResolve: (path: FloatArray, rawX: Float, rawY: Float, touchDownX: Float, touchDownY: Float) -> Boolean = { _, _, _, _, _ -> false },
         inwardSignProvider: () -> Float = { 1f }
     ) {
@@ -222,6 +224,7 @@ internal class FloatBallGestureDetector(
         this.onPickPreviewCancel = onPickPreviewCancel
         this.onLauncherCaptureMove = onLauncherCaptureMove
         this.onLauncherCaptureUp = onLauncherCaptureUp
+        this.onLauncherCaptureCancel = onLauncherCaptureCancel
         this.onCustomGestureResolve = onCustomGestureResolve
         this.inwardSignProvider = inwardSignProvider
     }
@@ -377,7 +380,10 @@ internal class FloatBallGestureDetector(
                 cancelDeferredCallbacks()
                 cancelPendingSingleTap()
                 if (launcherCaptureMode) {
-                    onLauncherCaptureUp?.invoke(lastX, lastY)
+                    // CANCEL 不是"松手"：弹出圆环时我们会主动 cancelGesture 并隐藏触摸窗，
+                    // 若把它当成 UP 就会立刻确认并执行第一个槽位（用户还没松手）。
+                    launcherCaptureMode = false
+                    onLauncherCaptureCancel?.invoke()
                 } else if (pickActive) {
                     pickActive = false
                     if (pickDragStarted) {

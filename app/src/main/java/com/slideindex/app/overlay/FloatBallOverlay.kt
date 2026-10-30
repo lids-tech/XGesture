@@ -130,6 +130,9 @@ object FloatBallOverlay {
     private var lineWindowLeft: FloatBallLineWindow? = null
     private var lineWindowRight: FloatBallLineWindow? = null
 
+    /** 落在"触发区条带窗"里的那条线：条带窗自己画线 + 自己收触摸，省掉独立触摸窗。 */
+    private var stripLineView: FloatBallLineView? = null
+
     /** 诊断：本次拖动已打印的球心日志条数。 */
     private var dragCenterLogCount = 0
 
@@ -1145,6 +1148,7 @@ object FloatBallOverlay {
         cancelPauseTimer()
         cancelPendingChromeRaise()
         val wm = windowManager
+        stripLineView = null
         lineWindowLeft?.dispose()
         lineWindowLeft = null
         lineWindowRight?.dispose()
@@ -1587,7 +1591,8 @@ object FloatBallOverlay {
                     dragCallbacks.onPreviewMove(touchDownX, touchDownY, fingerX, fingerY, fromLineStrip = false)
                 },
                 onPickPreviewCancel = dragCallbacks::onPreviewCancel,
-                onLauncherCaptureMove = { x, y ->
+                onLauncherCaptureCancel = {},
+            onLauncherCaptureMove = { x, y ->
                     handleFloatBallLauncherCaptureMove(x, y)
                 },
                 onLauncherCaptureUp = { x, y ->
@@ -1666,7 +1671,8 @@ object FloatBallOverlay {
                     dragCallbacks.onPreviewMove(touchDownX, touchDownY, fingerX, fingerY, fromLineStrip = true)
                 },
                 onPickPreviewCancel = dragCallbacks::onPreviewCancel,
-                onLauncherCaptureMove = { x, y ->
+                onLauncherCaptureCancel = {},
+            onLauncherCaptureMove = { x, y ->
                     handleFloatBallLauncherCaptureMove(x, y)
                 },
                 onLauncherCaptureUp = { x, y ->
@@ -1716,10 +1722,7 @@ object FloatBallOverlay {
         displayHost.lineChromeComposeView.visibility = View.GONE
 
         // 【单窗】球图标直接挂进触摸窗：窗口既画球又是命中区，不再有第二个"球窗"要同步位置。
-        ballIcon.layoutParams = android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-        )
+        ballIcon.layoutParams = android.widget.FrameLayout.LayoutParams(1, 1)
         touchLayout.addView(ballIcon)
 
         val touchAdded = runCatching { wm.addView(touchLayout, touchLp) }
@@ -1733,6 +1736,18 @@ object FloatBallOverlay {
             displayDialogOwner.destroy()
             return
         }
+
+        // 【P2】触发区条带窗自己画线：线窗不再需要为这条边单独开一个窗。
+        val stripLine = FloatBallLineView(hostContext).also { line ->
+            lineTouchLayout.addView(
+                line,
+                android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+        stripLineView = stripLine
 
         val lineTouchAdded = runCatching { wm.addView(lineTouchLayout, lineTouchLp) }
             .onFailure { Log.e(TAG, "failed to add line touch overlay", it) }
@@ -1793,6 +1808,9 @@ object FloatBallOverlay {
 
     /** 空闲态：从全屏捕获缩回触钮区，并同步 WM 几何（z-order 重挂前必须调用）。 */
     private fun recoverIdleTouchCaptureLayouts(settings: AppSettings) {
+        // 启动器接管手势期间不能复位/隐藏触摸窗：窗口一缩一藏，系统就会给正在拖动的窗口
+        // 发 ACTION_CANCEL，表现为"线侧长按后不松手选不中槽位"。
+        if (isLauncherCaptureActive()) return
         if (isDragging) return
         collapseBallTouchHostFromFullscreen()
         collapseLineTouchHostFromFullscreen()
@@ -2098,6 +2116,7 @@ object FloatBallOverlay {
 
     /** 空闲态：线条触摸窗仅覆盖线条触发区。 */
     private fun syncLineTouchWindowLayout(settings: AppSettings) {
+        if (isLauncherCaptureActive()) return
         if (isDragging) {
             if (!dragOriginatedFromLine) {
                 setLineTouchHostEnabled(false)
@@ -2310,6 +2329,9 @@ object FloatBallOverlay {
         }
     )
 
+
+
+
     private fun handleFloatBallLauncherCaptureMove(rawX: Float, rawY: Float) {
         RingLauncherOverlayWindow.updatePointer(rawX, rawY)
         HoneycombAppPickerOverlayWindow.updatePointer(rawX, rawY)
@@ -2355,7 +2377,9 @@ object FloatBallOverlay {
         }
     }
 
+
     private fun releaseFloatBallLauncherCapture(fromLineStrip: Boolean) {
+        settingsState?.value?.let { syncDisplayBallLayout(it, layoutOnly = true) }
         if (fromLineStrip) {
             lineTouchHost?.cancelLauncherCaptureMode()
         } else {
@@ -2378,6 +2402,9 @@ object FloatBallOverlay {
      */
     private fun suppressTouchHostsForLauncherOverlay() {
         if (!RingLauncherOverlayWindow.isShowing && !HoneycombAppPickerOverlayWindow.isShowing) return
+        // 正在用"长按 → 不松手拖到槽位"的接管手势时不能隐藏/取消触摸窗：
+        // 那会直接 CANCEL 掉正在进行的拖动，导致松手前无法选择槽位。
+        if (isLauncherCaptureActive()) return
         clearLauncherAssociatedDragState()
         touchHost?.forceEndGestureCapture()
         lineTouchHost?.cancelGesture()
@@ -2438,6 +2465,8 @@ object FloatBallOverlay {
                 lineTouchHost?.beginLauncherCaptureMode()
             } else {
                 expandBallTouchCapture()
+                // 窗口即将扩成全屏：球图标在窗内是 (0,0)，不藏起来会跑到屏幕左上角。
+                ballIconView?.visibility = View.GONE
                 touchHost?.beginLauncherCaptureMode()
             }
         }
@@ -2867,8 +2896,10 @@ object FloatBallOverlay {
         val (left, top) = state.ballWindowTopLeft(settings, metrics, activeSide, center, screenHeightPx)
         val ballSize = FloatBallLayout.ballSize(settings, metrics.density)
         moveBallTouchWindow(left, top, ballSize.widthPx, ballSize.heightPx)
-        ballIconView?.visibility =
-            if (state.ballVisible.value) View.VISIBLE else View.GONE
+        // 「圆环接管手势」期间球一律不显示：窗口此时是全屏的，球图标在窗内 (0,0)，
+        // 一显示就会闪到屏幕左上角。写进每帧布局里判断，就不用依赖"藏一次"的时序。
+        val showBall = state.ballVisible.value && !isLauncherCaptureActive()
+        ballIconView?.visibility = if (showBall) View.VISIBLE else View.GONE
         if (!layoutOnly) {
             ballIconView?.bind(
                 settings = settings,
@@ -2910,8 +2941,19 @@ object FloatBallOverlay {
         val previewing = sceneState?.stripZonePreview?.value == true
         // 触发区预览带只在设置预览时出现，透明度取线条色的 28%（和原 Compose 预览一致）。
         val previewAlpha = if (previewing) (alpha * 0.28f).coerceIn(0.08f, 0.45f) else 0f
-        val showLeft = visible && (bothLines || activeSide == FloatBallSide.RIGHT)
-        val showRight = visible && (bothLines || activeSide == FloatBallSide.LEFT)
+        val stripSide = FloatBallSide.opposite(activeSide)
+        stripLineView?.let { line ->
+            line.alignRight = stripSide == FloatBallSide.RIGHT
+            line.lineWidthPx = lineWidthPx
+            line.lineColor = color
+            line.lineStartPx = 0f
+            line.lineLengthPx = 0f
+            line.previewAlpha = previewAlpha
+            line.visibility = if (visible) View.VISIBLE else View.GONE
+        }
+        // 单线模式：线由条带窗画；线窗只在双线模式下画"球所在那一侧"。
+        val showLeft = visible && bothLines && activeSide == FloatBallSide.RIGHT
+        val showRight = visible && bothLines && activeSide == FloatBallSide.LEFT
         val leftStrip = FloatBallLayout.lineStripBounds(
             settings, metrics, FloatBallSide.LEFT, screenW, screenH,
         )
@@ -4110,6 +4152,13 @@ object FloatBallOverlay {
         params.y = top
         params.width = w
         params.height = h
+        // 球图标保持"球大小"：启动器接管时窗口会扩成全屏，MATCH_PARENT 会让球铺满屏幕。
+        val iconLp = ballIconView?.layoutParams
+        if (iconLp != null && (iconLp.width != w || iconLp.height != h)) {
+            iconLp.width = w
+            iconLp.height = h
+            ballIconView?.layoutParams = iconLp
+        }
         runCatching { wm.updateViewLayout(view, params) }
     }
 

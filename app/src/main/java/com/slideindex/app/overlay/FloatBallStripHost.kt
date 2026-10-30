@@ -79,6 +79,7 @@ internal class FloatBallStripHost(
     private var onPickPreviewCancel: (() -> Unit)? = null
     private var onLauncherCaptureMove: ((rawX: Float, rawY: Float) -> Unit)? = null
     private var onLauncherCaptureUp: ((rawX: Float, rawY: Float) -> Unit)? = null
+    private var onLauncherCaptureCancel: (() -> Unit)? = null
     /** FV「自定义手势」：返回 true 表示本次抬手已被自定义手势消费（不再走原生方向手势）。 */
     private var onCustomGestureResolve: ((path: FloatArray, rawX: Float, rawY: Float, touchDownX: Float, touchDownY: Float) -> Boolean)? = null
 
@@ -106,6 +107,7 @@ internal class FloatBallStripHost(
             onPickPreviewCancel = { onPickPreviewCancel?.invoke() },
             onLauncherCaptureMove = { x, y -> onLauncherCaptureMove?.invoke(x, y) },
             onLauncherCaptureUp = { x, y -> onLauncherCaptureUp?.invoke(x, y) },
+            onLauncherCaptureCancel = { onLauncherCaptureCancel?.invoke() },
             onCustomGestureResolve = { path, rawX, rawY, touchDownX, touchDownY ->
                 onCustomGestureResolve?.invoke(path, rawX, rawY, touchDownX, touchDownY) ?: false
             },
@@ -131,6 +133,7 @@ internal class FloatBallStripHost(
         onPickPreviewCancel: () -> Unit = {},
         onLauncherCaptureMove: (rawX: Float, rawY: Float) -> Unit = { _, _ -> },
         onLauncherCaptureUp: (rawX: Float, rawY: Float) -> Unit = { _, _ -> },
+        onLauncherCaptureCancel: () -> Unit = {},
         onCustomGestureResolve: (path: FloatArray, rawX: Float, rawY: Float, touchDownX: Float, touchDownY: Float) -> Boolean = { _, _, _, _, _ -> false }
     ) {
         this.onDragStart = onDragStart
@@ -144,6 +147,7 @@ internal class FloatBallStripHost(
         this.onPickPreviewMove = onPickPreviewMove
         this.onPickPreviewCancel = onPickPreviewCancel
         this.onLauncherCaptureMove = onLauncherCaptureMove
+        this.onLauncherCaptureCancel = onLauncherCaptureCancel
         this.onLauncherCaptureUp = onLauncherCaptureUp
         this.onCustomGestureResolve = onCustomGestureResolve
         settingsProvider().let { updateSettings(it) }
@@ -222,6 +226,7 @@ internal class FloatBallStripHost(
     }
 
     @SuppressLint("ClickableViewAccessibility")
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!gestureActive && !gestureDetector.isLauncherCaptureMode() && !stripTouchable) return false
         when (event.actionMasked) {
