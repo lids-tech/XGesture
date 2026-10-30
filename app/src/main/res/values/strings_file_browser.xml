@@ -126,4 +126,6 @@
     <string name="file_browser_restore_shortcuts">Restore built-in shortcuts</string>
     <string name="file_browser_image_open">Open</string>
     <string name="file_browser_share">Share</string>
+    <string name="file_browser_add_to_home">Add to home screen</string>
+    <string name="file_browser_add_to_home_failed">Unable to add shortcut</string>
 </resources>

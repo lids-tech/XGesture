@@ -553,18 +553,6 @@
             </intent-filter>
         </activity>
 
-        <activity-alias
-            android:name=".service.FileBrowserShortcutAlias"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/file_browser_title"
-            android:targetActivity=".service.FileBrowserTrampolineActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
         <activity
             android:name=".service.SearchPanelTrampolineActivity"
             android:excludeFromRecents="true"

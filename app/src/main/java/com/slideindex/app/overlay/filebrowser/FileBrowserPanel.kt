@@ -763,6 +763,12 @@ internal fun FileBrowserPanel(
                                 showMenu = false
                                 showFavorites = true
                             },
+                            onAddToHome = {
+                                showMenu = false
+                                if (!FileBrowserLauncherHelper.requestPinShortcut(context)) {
+                                    FileBrowserLauncherHelper.showPinFailedToast(context)
+                                }
+                            },
                             onTogglePin = {
                                 FileBrowserPreferences.togglePin(state.path)
                                 showMenu = false
@@ -928,6 +934,7 @@ private fun FileBrowserMenuOverlay(
     onNewFolder: () -> Unit,
     onRecursiveSearch: () -> Unit,
     onFavorites: () -> Unit,
+    onAddToHome: () -> Unit,
     onTogglePin: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1024,6 +1031,9 @@ private fun FileBrowserMenuOverlay(
                 }
                 TextButton(onClick = onFavorites, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.file_browser_favorites))
+                }
+                TextButton(onClick = onAddToHome, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.file_browser_add_to_home))
                 }
                 TextButton(onClick = onTogglePin, modifier = Modifier.fillMaxWidth()) {
                     Text(

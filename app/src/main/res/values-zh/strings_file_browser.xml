@@ -126,4 +126,6 @@
     <string name="file_browser_restore_shortcuts">恢复内置快捷项</string>
     <string name="file_browser_image_open">打开</string>
     <string name="file_browser_share">分享</string>
+    <string name="file_browser_add_to_home">添加到桌面</string>
+    <string name="file_browser_add_to_home_failed">无法添加快捷方式</string>
 </resources>
