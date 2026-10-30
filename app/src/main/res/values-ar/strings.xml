@@ -2091,6 +2091,8 @@
     <string name="float_ball_gesture_feedback_section">استجابة الإيماءات</string>
     <string name="float_ball_gesture_haptic">اهتزاز إيماءات الكرة العائمة</string>
     <string name="float_ball_gesture_haptic_summary">اهتزاز عند تحقق إيماءة الكرة العائمة وعند تنفيذ الإجراء عند الإفلات. لا يزال خاضعًا لمفتاح «الاهتزاز» الرئيسي.</string>
+    <string name="float_ball_gesture_back_haptic">الاهتزاز عند إيماءة الرجوع</string>
+    <string name="float_ball_gesture_back_haptic_summary">بعض الأجهزة تهتز تلقائيًا عند الرجوع، لذا قد تشعر باهتزازين عند التفعيل. أبقِه مفعّلًا إذا كان جهازك لا يهتز.</string>
     <string name="float_ball_gesture_tuning_section">معطيات الإيماءات</string>
     <string name="float_ball_gesture_tuning_title">التعرّف والموضع</string>
     <string name="float_ball_gesture_tuning_summary">مسافات السحب ومدة الضغط المطول وموضع ظهور المشغّل السريع — المعطيات الأساسية للتعرف على الإيماءات.</string>

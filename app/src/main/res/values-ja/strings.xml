@@ -2098,6 +2098,8 @@
     <string name="float_ball_gesture_feedback_section">ジェスチャーのフィードバック</string>
     <string name="float_ball_gesture_haptic">フローティングボールのジェスチャー振動</string>
     <string name="float_ball_gesture_haptic_summary">フローティングボールのジェスチャー成立時と、離して動作を実行するときに振動します。ホームの「振動」スイッチの影響も受けます。</string>
+    <string name="float_ball_gesture_back_haptic">戻るジェスチャーでも振動</string>
+    <string name="float_ball_gesture_back_haptic_summary">端末によっては戻る操作時に独自に振動するため、オンだと二回に感じることがあります。端末が振動しない場合はオンのままにしてください。</string>
     <string name="float_ball_gesture_tuning_section">ジェスチャーパラメータ</string>
     <string name="float_ball_gesture_tuning_title">認識と配置</string>
     <string name="float_ball_gesture_tuning_summary">スワイプ距離、長押し時間、クイックランチャーの表示位置。ジェスチャー認識の基本パラメータです。</string>

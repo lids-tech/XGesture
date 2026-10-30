@@ -636,6 +636,9 @@ internal object SettingsPreferenceKeys {
     /** 悬浮球专属手势振动（判定成立 + 松手执行）。 */
     val FLOAT_BALL_GESTURE_HAPTIC_ENABLED =
         booleanPreferencesKey("float_ball_gesture_haptic_enabled")
+    /** 悬浮球手势绑定「返回」时是否额外震动（默认开；系统自带返回震动的机型可关掉避免双震）。 */
+    val FLOAT_BALL_BACK_GESTURE_HAPTIC_ENABLED =
+        booleanPreferencesKey("float_ball_back_gesture_haptic_enabled")
     /** 长按悬浮球呼出圆环时自动选中球下方第一个槽位，松手即启动。 */
     val FLOAT_BALL_LONG_PRESS_AUTO_SELECT_RING_SLOT =
         booleanPreferencesKey("float_ball_long_press_auto_select_ring_slot")

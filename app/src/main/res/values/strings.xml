@@ -948,6 +948,8 @@
     <string name="float_ball_gesture_feedback_section">Gesture feedback</string>
     <string name="float_ball_gesture_haptic">Float-ball gesture vibration</string>
     <string name="float_ball_gesture_haptic_summary">Vibrate when a float-ball gesture fires and when its action runs on release. Still governed by the main “Vibration” switch.</string>
+    <string name="float_ball_gesture_back_haptic">Vibrate on back gesture</string>
+    <string name="float_ball_gesture_back_haptic_summary">Some devices already vibrate when going back, so enabling this may feel like two vibrations. Keep it on if your device does not.</string>
     <string name="float_ball_gesture_tuning_section">Gesture parameters</string>
     <string name="float_ball_gesture_tuning_title">Recognition &amp; placement</string>
     <string name="float_ball_gesture_tuning_summary">Swipe distances, long-press duration, and where quick launchers appear — the base parameters for gesture recognition.</string>

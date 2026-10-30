@@ -2444,12 +2444,13 @@ object FloatBallOverlay {
     ) {
         val action = settings.floatBallGestureActions[gestureType] ?: GestureAction.None
         if (action is GestureAction.None) return
-        // 返回/桌面/最近任务由系统自己给触摸反馈，我们再振一下就会变成"两下"；
-        // 与触钮同一规则（Back/Home/Recents 不发确认振动）。
-        val systemNavigation = action == GestureAction.Back ||
-            action == GestureAction.Home ||
-            action == GestureAction.Recents
-        if (!systemNavigation) {
+        // 手势成立就震一下（触钮的 hapticGestureStart 同理，按阈值触发、与动作无关）。
+        // 例外：绑定「返回」时，部分机型（如 Flyme）在返回真正生效时系统自己会震一次，
+        // 再叠加我们的就是"两下"，所以返回单独给了开关（默认开）。
+        // 主页 / 最近任务系统不震，一律由我们播。
+        val skipBackHaptic = action == GestureAction.Back &&
+            !settings.floatBallBackGestureHapticEnabled
+        if (!skipBackHaptic) {
             displayView?.let { HapticHelper.floatBallGestureStart(it, settings) }
         }
         executeFloatBallAction(

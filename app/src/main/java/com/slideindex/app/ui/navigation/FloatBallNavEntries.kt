@@ -417,6 +417,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onLongPressMsChange = viewModel::setFloatBallLongPressMs,
             onOverlayAnchorAtTouchDownChange = viewModel::setFloatBallOverlayAnchorAtTouchDown,
             onGestureHapticChange = viewModel::setFloatBallGestureHapticEnabled,
+            onBackGestureHapticChange = viewModel::setFloatBallBackGestureHapticEnabled,
             onRingAutoSelectChange = viewModel::setFloatBallLongPressAutoSelectRingSlot,
         )
     }

@@ -2198,6 +2198,8 @@
     <string name="float_ball_gesture_feedback_section">手势反馈</string>
     <string name="float_ball_gesture_haptic">悬浮球手势震动</string>
     <string name="float_ball_gesture_haptic_summary">悬浮球手势判定成立、以及松手执行动作时振动。仍受首页「震动」总开关约束。</string>
+    <string name="float_ball_gesture_back_haptic">返回手势也震动</string>
+    <string name="float_ball_gesture_back_haptic_summary">部分机型系统自带返回震动，开启后可能感觉震动两次；系统不震的机型保持开启。</string>
     <string name="float_ball_gesture_tuning_section">手势参数</string>
     <string name="float_ball_gesture_tuning_title">识别与定位</string>
     <string name="float_ball_gesture_tuning_summary">滑动距离、长按触发时长，以及快速启动器出现在哪里——手势识别的基础参数。</string>
