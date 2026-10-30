@@ -113,7 +113,9 @@ object QuickWheelIconResolver {
     /** 解析位图类图标；[QuickWheelIconSource.ICON_LIBRARY] 与 [QuickWheelIconSource.NONE] 返回 null。 */
     fun bitmapFor(context: Context, slot: QuickWheelSlot, targetSizePx: Int): ImageBitmap? {
         if (slot.iconValue.isBlank()) return null
-        val key = "${slot.iconSource.name}:${slot.iconValue}:$targetSizePx"
+        // revision 进 key：在图标库里改完应用图标，轮盘不会继续用旧图
+        val key = "${slot.iconSource.name}:${slot.iconValue}:$targetSizePx:" +
+            com.slideindex.app.ui.GlobalIconStore.revision
         if (bitmapCache.containsKey(key)) return bitmapCache[key]
         val bitmap = when (slot.iconSource) {
             QuickWheelIconSource.APP_ICON -> loadAppIcon(context, slot.iconValue, targetSizePx)
@@ -208,8 +210,12 @@ object QuickWheelIconResolver {
     fun clearBitmapCache() = bitmapCache.clear()
 
     private fun loadAppIcon(context: Context, packageName: String, sizePx: Int): ImageBitmap? {
-        val repository = OverlayDependencyAccess.overlayDependencies(context)?.appRepository ?: return null
         val target = sizePx.coerceIn(MIN_APP_ICON_PX, MAX_APP_ICON_PX)
+        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+        com.slideindex.app.ui.AppIconOverride
+            .bitmap(context, packageName, target)
+            ?.let { return it.asImageBitmap() }
+        val repository = OverlayDependencyAccess.overlayDependencies(context)?.appRepository ?: return null
         return runCatching { repository.launchIconBitmap(packageName, target).asImageBitmap() }.getOrNull()
     }
 

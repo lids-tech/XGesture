@@ -84,8 +84,12 @@ internal object HoneycombIconLoader {
     ): Drawable? {
         val item = target.item
         return when (item.type) {
-            QuickLauncherItemType.APP ->
-                appRepository.launchIconDrawable(item.appTarget?.packageName ?: item.payload)
+            QuickLauncherItemType.APP -> {
+                val packageName = item.appTarget?.packageName ?: item.payload
+                // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                com.slideindex.app.ui.AppIconOverride.drawable(context, packageName, 128)
+                    ?: appRepository.launchIconDrawable(packageName)
+            }
             QuickLauncherItemType.SHORTCUT, QuickLauncherItemType.ACTION ->
                 QuickLauncherIconResolver.iconDrawable(
                     item,

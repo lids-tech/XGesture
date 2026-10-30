@@ -40,6 +40,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.slideindex.app.R
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureActionType
+import com.slideindex.app.iconpack.IconPackProvenanceStore
+import com.slideindex.app.iconpack.IconPackTarget
+import com.slideindex.app.iconpack.IconThemeStore
+import com.slideindex.app.service.IconPackPickerTrampolineActivity
 import com.slideindex.app.ui.miuix.MiuixTabRowWithContourInCard
 import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.viewmodel.GlobalIconLibraryViewModel
@@ -173,6 +177,7 @@ fun GlobalIconLibraryScreen(
                         loadIcon = { viewModel.requestIcon(app.packageName) },
                         onPick = { key -> GlobalIconStore.setAppIcon(context, app.packageName, key) },
                         resetKey = "global:app:${app.packageName}",
+                        appPackageName = app.packageName,
                     )
                 }
             }
@@ -200,11 +205,55 @@ private fun GlobalIconRow(
     iconBitmap: ImageBitmap? = null,
     /** 应用图标未命中缓存时提交一次后台加载。 */
     loadIcon: (() -> Unit)? = null,
+    /** 应用行才有：允许从已装图标包挑图标（动作类型行没有「对应的应用」，传 null）。 */
+    appPackageName: String? = null,
 ) {
     val context = LocalContext.current
     var key by remember(label) { mutableStateOf(currentKey) }
     var textDialogOpen by remember { mutableStateOf(false) }
     var appDialogOpen by remember { mutableStateOf(false) }
+    var provenance by remember(key) {
+        mutableStateOf(
+            appPackageName?.let { IconPackProvenanceStore.get(context, resetKey) },
+        )
+    }
+    // 换成任何别的来源时，之前「来自 XX 图标包」的记录必须一起清掉
+    val clearPackSource: () -> Unit = {
+        IconPackProvenanceStore.clear(context, resetKey)
+        provenance = null
+    }
+
+    // 全局图标包：没设例外的应用会显示「来自主题」
+    val themePack = remember(IconThemeStore.revision) { IconThemeStore.pack(context) }
+    val themeLabel = remember(themePack) { IconThemeStore.label(context) }
+    val themeCovered by produceState(initialValue = false, appPackageName, themePack, IconThemeStore.revision) {
+        value = if (appPackageName != null && themePack != null) {
+            withContext(Dispatchers.IO) {
+                val filter = com.slideindex.app.iconpack.IconPackRepository.filter(context, themePack)
+                val activity = com.slideindex.app.iconpack.IconPackRepository
+                    .launchActivityName(context, appPackageName)
+                filter?.covers(appPackageName, activity) == true
+            }
+        } else {
+            false
+        }
+    }
+
+    val iconPackLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val path = result.data?.getStringExtra(
+                IconPackPickerTrampolineActivity.EXTRA_PICKED_PATH,
+            )
+            if (!path.isNullOrBlank()) {
+                val newKey = ActionIconKeyCodec.file(path)
+                key = newKey
+                provenance = IconPackProvenanceStore.get(context, resetKey)
+                onPick(newKey)
+            }
+        }
+    }
 
     val libraryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
@@ -214,6 +263,7 @@ private fun GlobalIconRow(
                 com.slideindex.app.service.IconLibraryPickerTrampolineActivity.EXTRA_PICKED_KEY,
             )
             if (!picked.isNullOrBlank()) {
+                clearPackSource()
                 key = picked
                 onPick(picked)
             }
@@ -227,6 +277,7 @@ private fun GlobalIconRow(
             val saved = ActionIconStorage.saveFromUriForGlobalKey(context, resetKey, uri)
             if (saved != null) {
                 val newKey = ActionIconKeyCodec.file(saved)
+                clearPackSource()
                 key = newKey
                 onPick(newKey)
             }
@@ -275,6 +326,27 @@ private fun GlobalIconRow(
                     onClick = { appDialogOpen = true },
                 ),
             )
+            // 只有应用行有「对应的应用」，动作类型行不显示这一项
+            if (appPackageName != null) {
+                add(
+                    top.yukonga.miuix.kmp.basic.DropdownItem(
+                        text = stringResource(R.string.action_icon_from_icon_pack),
+                        onClick = {
+                            iconPackLauncher.launch(
+                                IconPackPickerTrampolineActivity.createIntent(
+                                    context = context,
+                                    target = IconPackTarget(
+                                        packageName = appPackageName,
+                                        activityName = null,
+                                        label = label,
+                                    ),
+                                    storageKey = resetKey,
+                                ),
+                            )
+                        },
+                    ),
+                )
+            }
             add(
                 top.yukonga.miuix.kmp.basic.DropdownItem(
                     text = stringResource(R.string.action_icon_from_gallery),
@@ -293,6 +365,7 @@ private fun GlobalIconRow(
                         text = stringResource(R.string.action_detail_icon_reset),
                         onClick = {
                             ActionIconStorage.deleteForGlobalKey(context, resetKey)
+                            clearPackSource()
                             key = null
                             onPick(null)
                         },
@@ -380,10 +453,22 @@ private fun GlobalIconRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (key.isNullOrBlank()) {
-                        stringResource(R.string.global_icon_default)
-                    } else {
-                        stringResource(R.string.global_icon_custom)
+                    text = run {
+                        val customKey = key
+                        when {
+                            customKey.isNullOrBlank() && themePack != null && themeCovered ->
+                                stringResource(
+                                    R.string.global_icon_from_theme_pack,
+                                    themeLabel ?: themePack,
+                                )
+                            customKey.isNullOrBlank() ->
+                                stringResource(R.string.global_icon_default)
+                            provenance != null -> stringResource(
+                                R.string.global_icon_from_pack,
+                                provenance!!.packLabel,
+                            )
+                            else -> stringResource(R.string.global_icon_custom)
+                        }
                     },
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -410,6 +495,7 @@ private fun GlobalIconRow(
             initial = key,
             onPick = { picked ->
                 textDialogOpen = false
+                clearPackSource()
                 key = picked
                 onPick(picked)
             },
@@ -423,6 +509,7 @@ private fun GlobalIconRow(
             storageKey = resetKey,
             onPick = { picked ->
                 appDialogOpen = false
+                clearPackSource()
                 key = picked
                 onPick(picked)
             },

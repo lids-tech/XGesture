@@ -259,10 +259,12 @@ private fun PresetEngineItemRow(
                     }
                 }.getOrNull()
             } else if (targetPkg != null) {
-                runCatching {
-                    val drawable = context.packageManager.getApplicationIcon(targetPkg)
-                    drawable.toBitmap(128, 128)
-                }.getOrNull()
+                // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                com.slideindex.app.ui.AppIconOverride.bitmap(context, targetPkg, 128)
+                    ?: runCatching {
+                        val drawable = context.packageManager.getApplicationIcon(targetPkg)
+                        drawable.toBitmap(128, 128)
+                    }.getOrNull()
             } else {
                 null
             }

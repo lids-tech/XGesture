@@ -19,6 +19,39 @@ object GlobalIconStore {
     var revision by androidx.compose.runtime.mutableIntStateOf(0)
         private set
 
+    private val listeners = mutableListOf<() -> Unit>()
+
+    /**
+     * 图标变更回调（悬浮窗 / Canvas 渲染刷新用）。
+     *
+     * `revision` 只对 Compose 有效；面板是 `View` + `Canvas`，没有人观察它，
+     * 所以改完图标必须主动通知它们重绘，否则要退出再进才看得到。
+     */
+    fun addIconChangeListener(listener: () -> Unit) {
+        listeners += listener
+    }
+
+    fun removeIconChangeListener(listener: () -> Unit) {
+        listeners -= listener
+    }
+
+    private fun notifyIconChanged() {
+        AppIconOverride.clear()
+        // 各渲染器的 LruCache 虽然 key 里带了 revision，但这里顺手清掉避免白占内存
+        runCatching { com.slideindex.app.util.QuickLauncherIconResolver.clear() }
+        runCatching { com.slideindex.app.overlay.ringlauncher.RingLauncherSlotIconBitmap.clear() }
+        runCatching { com.slideindex.app.overlay.corner.CornerSlotIconBitmap.clear() }
+        runCatching { com.slideindex.app.overlay.quickwheel.QuickWheelIconResolver.clearBitmapCache() }
+        listeners.toList().forEach { runCatching(it) }
+    }
+
+    /**
+     * 外部改了图标来源（例如切换全局图标包）时，主动通知所有渲染方清缓存 + 重绘。
+     *
+     * 与 [setAppIcon] / [setActionIcon] 走同一条通知链，只是不写覆盖表。
+     */
+    fun notifyIconSourceChanged() = notifyIconChanged()
+
     private const val PREFS = "global_icon_overrides"
     private const val ACTION_PREFIX = "action:"
     private const val APP_PREFIX = "app:"
@@ -35,6 +68,7 @@ object GlobalIconStore {
         else editor.putString(ACTION_PREFIX + typeId, iconKey)
         editor.apply()
         revision++
+        notifyIconChanged()
     }
 
     fun appIcon(context: Context, packageName: String): String? =
@@ -46,6 +80,7 @@ object GlobalIconStore {
         else editor.putString(APP_PREFIX + packageName, iconKey)
         editor.apply()
         revision++
+        notifyIconChanged()
     }
 
     fun allActionIcons(context: Context): Map<String, String> =

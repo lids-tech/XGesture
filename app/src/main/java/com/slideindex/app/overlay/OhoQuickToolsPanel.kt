@@ -331,14 +331,16 @@ private fun MediaAppButton(
 ) {
     val context = LocalContext.current
     var iconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(packageName) {
+    // revision 进 key：在图标库里改完图标，这里立刻重取
+    LaunchedEffect(packageName, com.slideindex.app.ui.GlobalIconStore.revision) {
         iconBitmap = if (packageName.isNullOrBlank()) {
             null
         } else {
             withContext(Dispatchers.IO) {
-                runCatching {
-                    context.packageManager.getApplicationIcon(packageName).toBitmap(128, 128)
-                }.getOrNull()
+                com.slideindex.app.ui.AppIconOverride.bitmap(context, packageName, 128)
+                    ?: runCatching {
+                        context.packageManager.getApplicationIcon(packageName).toBitmap(128, 128)
+                    }.getOrNull()
             }
         }
     }

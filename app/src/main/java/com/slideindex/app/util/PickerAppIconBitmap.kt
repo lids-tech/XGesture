@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,7 +19,15 @@ object PickerAppIconBitmap {
         (Runtime.getRuntime().maxMemory() / 1024 / 16).toInt().coerceIn(48, 256),
     ) {}
 
-    fun peek(packageName: String): ImageBitmap? = cache.get(packageName)
+    /**
+     * 缓存 key 带上图标修订号：在图标库里改完应用图标，这里不会再吐旧图。
+     *
+     * [com.slideindex.app.ui.GlobalIconStore.revision] 是进程级状态，同步读没有副作用。
+     */
+    private fun cacheKey(packageName: String): String =
+        "$packageName@${com.slideindex.app.ui.GlobalIconStore.revision}"
+
+    fun peek(packageName: String): ImageBitmap? = cache.get(cacheKey(packageName))
 
     fun peekActivity(packageName: String, className: String): ImageBitmap? =
         cache.get(activityCacheKey(packageName, className))
@@ -31,7 +40,16 @@ object PickerAppIconBitmap {
 
     suspend fun load(context: Context, packageName: String): ImageBitmap? =
         withContext(Dispatchers.IO) {
-            cache.get(packageName)?.let { return@withContext it }
+            cache.get(cacheKey(packageName))?.let { return@withContext it }
+            // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）。
+            // 冰箱 / 宏 / 搜索面板的结果卡片都走这里，所以在这一层接一次就全覆盖。
+            com.slideindex.app.ui.AppIconOverride
+                .bitmap(context, packageName, ICON_SIZE_PX)
+                ?.let { override ->
+                    val imageBitmap = override.asImageBitmap()
+                    cache.put(cacheKey(packageName), imageBitmap)
+                    return@withContext imageBitmap
+                }
             val pm = context.applicationContext.packageManager
             val drawable = try {
                 pm.getApplicationIcon(packageName)
@@ -39,7 +57,7 @@ object PickerAppIconBitmap {
                 return@withContext null
             }
             val bitmap = drawable.toSafeImageBitmap(ICON_SIZE_PX)
-            cache.put(packageName, bitmap)
+            cache.put(cacheKey(packageName), bitmap)
             bitmap
         }
 
