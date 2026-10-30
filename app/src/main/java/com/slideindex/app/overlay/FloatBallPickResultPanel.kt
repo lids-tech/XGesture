@@ -130,6 +130,17 @@ object FloatBallPickResultPanel {
 
     val isShowing: Boolean get() = pickPanelVisible
 
+    /**
+     * 当前展示会话的令牌：每次 [showResult] 自增。
+     * 后台识码等异步任务用 [isStillShowing] 判断结果是否还属于发起它的那次展示，
+     * 避免"上一次的结果落到下一次面板上"。
+     */
+    val showToken: Int get() = panelShowTokenState?.intValue ?: 0
+
+    /** 面板还开着，且仍是发起异步任务的那一次展示。 */
+    fun isStillShowing(showToken: Int): Boolean =
+        pickPanelVisible && showToken == (panelShowTokenState?.intValue ?: -1)
+
     private fun readPanelSettings(context: Context): AppSettings =
         OverlayDependencyAccess.overlayDependencies(context)
             ?.settingsRepository
@@ -546,12 +557,17 @@ object FloatBallPickResultPanel {
         PickPerf.mark("panel_ocr_updated", "len=${ocrText.length}")
     }
 
-    fun updateBarcodeResults(barcodeResults: List<BarcodeScanResult>) {
+    fun updateBarcodeResults(
+        barcodeResults: List<BarcodeScanResult>,
+        panelShowToken: Int? = null,
+    ) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post { updateBarcodeResults(barcodeResults) }
+            mainHandler.post { updateBarcodeResults(barcodeResults, panelShowToken) }
             return
         }
         if (!isShowing || barcodeResults.isEmpty()) return
+        // 扫描是异步的：结果回来时面板可能已经被关掉、或换成了下一次取词，直接丢弃。
+        if (panelShowToken != null && !isStillShowing(panelShowToken)) return
         barcodeResultsState?.value = barcodeResults
         PickPerf.mark("panel_barcode_updated", "count=${barcodeResults.size}")
     }

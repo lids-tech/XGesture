@@ -67,11 +67,21 @@ object SmartScreenshotOcr {
         )
 
         scope.launch(Dispatchers.IO) {
+            // 令牌在主线程取：showResult 若被非主线程调用会先 post，这里能排到它后面。
+            val panelToken = withContext(Dispatchers.Main.immediate) {
+                FloatBallPickResultPanel.showToken
+            }
             val barcodeResults = runCatching {
-                ZxingBarcodeScanner.scanBitmap(panelScreenshot)
+                ZxingBarcodeScanner.scanBitmap(
+                    panelScreenshot,
+                    // 与浮球取词同一条取词链路：先扫 2D、命中即停；小图还会补白边/放大。
+                    pickFastPath = true,
+                    budgetMs = ZxingBarcodeScanner.PANEL_SCAN_BUDGET_MS,
+                    shouldCancel = { !FloatBallPickResultPanel.isStillShowing(panelToken) },
+                )
             }.getOrDefault(emptyList())
             if (barcodeResults.isNotEmpty()) {
-                FloatBallPickResultPanel.updateBarcodeResults(barcodeResults)
+                FloatBallPickResultPanel.updateBarcodeResults(barcodeResults, panelToken)
             }
 
             val ocrResult = runCatching {
