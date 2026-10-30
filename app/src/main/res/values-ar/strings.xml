@@ -4736,6 +4736,7 @@
     <string name="global_icon_default">الافتراضي</string>
     <string name="global_icon_custom">مخصص</string>
     <string name="global_icon_from_pack">من %1$s</string>
+    <string name="global_icon_from_theme_pack">من السمة: %1$s</string>
     <string name="action_icon_from_icon_pack">اختيار من حزمة أيقونات على الجهاز</string>
     <string name="icon_pack_picker_title">حزم الأيقونات</string>
     <string name="icon_pack_picker_subtitle">اختر حزمة أيقونات لـ %1$s</string>
@@ -4753,6 +4754,14 @@
     <string name="icon_pack_cannot_parse">تعذّر تحليل حزمة الأيقونات</string>
     <string name="icon_pack_load_failed">تعذّر تحميل هذه الأيقونة</string>
     <string name="icon_pack_use">استخدام</string>
+    <string name="extension_icon_theme_title">حزمة الأيقونات</string>
+    <string name="extension_icon_theme_subtitle">اختر حزمة أيقونات لاستبدال أيقونات التطبيقات</string>
+    <string name="icon_theme_title">حزمة الأيقونات</string>
+    <string name="icon_theme_subtitle">تُطبَّق على التطبيقات التي لم تُضبط لها أيقونة خاصة</string>
+    <string name="icon_theme_none">بدون حزمة أيقونات</string>
+    <string name="icon_theme_none_desc">الاحتفاظ بأيقونات النظام</string>
+    <string name="icon_theme_active">قيد الاستخدام</string>
+    <string name="icon_theme_empty">لا توجد حزم أيقونات مثبتة</string>
     <string name="extension_icon_library_title">مكتبة الأيقونات</string>
     <string name="extension_icon_library_subtitle">تعيين أيقونات أنواع الإجراءات والتطبيقات عالميًا</string>
     <string name="icon_plate_mode_section">لوحة الأيقونة</string>

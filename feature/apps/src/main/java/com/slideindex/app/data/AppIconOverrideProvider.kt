@@ -27,4 +27,11 @@ interface AppIconOverrideProvider {
 
     /** 只读缓存的 Drawable 版本，主线程安全。 */
     fun peekDrawable(context: Context, packageName: String, sizePx: Int): Drawable?
+
+    /**
+     * 预热一批应用图标（IO 线程调用）。
+     *
+     * 主题层的图不落盘、每次从图标包取 drawable，不预热的话面板首帧会在主线程解码。
+     */
+    fun preload(context: Context, packageNames: Collection<String>, sizePx: Int)
 }

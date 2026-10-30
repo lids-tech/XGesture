@@ -45,6 +45,13 @@ object GlobalIconStore {
         listeners.toList().forEach { runCatching(it) }
     }
 
+    /**
+     * 外部改了图标来源（例如切换全局图标包）时，主动通知所有渲染方清缓存 + 重绘。
+     *
+     * 与 [setAppIcon] / [setActionIcon] 走同一条通知链，只是不写覆盖表。
+     */
+    fun notifyIconSourceChanged() = notifyIconChanged()
+
     private const val PREFS = "global_icon_overrides"
     private const val ACTION_PREFIX = "action:"
     private const val APP_PREFIX = "app:"

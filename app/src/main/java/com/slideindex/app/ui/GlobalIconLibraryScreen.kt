@@ -42,6 +42,7 @@ import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.iconpack.IconPackProvenanceStore
 import com.slideindex.app.iconpack.IconPackTarget
+import com.slideindex.app.iconpack.IconThemeStore
 import com.slideindex.app.service.IconPackPickerTrampolineActivity
 import com.slideindex.app.ui.miuix.MiuixTabRowWithContourInCard
 import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
@@ -220,6 +221,22 @@ private fun GlobalIconRow(
     val clearPackSource: () -> Unit = {
         IconPackProvenanceStore.clear(context, resetKey)
         provenance = null
+    }
+
+    // 全局图标包：没设例外的应用会显示「来自主题」
+    val themePack = remember(IconThemeStore.revision) { IconThemeStore.pack(context) }
+    val themeLabel = remember(themePack) { IconThemeStore.label(context) }
+    val themeCovered by produceState(initialValue = false, appPackageName, themePack, IconThemeStore.revision) {
+        value = if (appPackageName != null && themePack != null) {
+            withContext(Dispatchers.IO) {
+                val filter = com.slideindex.app.iconpack.IconPackRepository.filter(context, themePack)
+                val activity = com.slideindex.app.iconpack.IconPackRepository
+                    .launchActivityName(context, appPackageName)
+                filter?.covers(appPackageName, activity) == true
+            }
+        } else {
+            false
+        }
     }
 
     val iconPackLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -436,13 +453,22 @@ private fun GlobalIconRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = when {
-                        key.isNullOrBlank() -> stringResource(R.string.global_icon_default)
-                        provenance != null -> stringResource(
-                            R.string.global_icon_from_pack,
-                            provenance!!.packLabel,
-                        )
-                        else -> stringResource(R.string.global_icon_custom)
+                    text = run {
+                        val customKey = key
+                        when {
+                            customKey.isNullOrBlank() && themePack != null && themeCovered ->
+                                stringResource(
+                                    R.string.global_icon_from_theme_pack,
+                                    themeLabel ?: themePack,
+                                )
+                            customKey.isNullOrBlank() ->
+                                stringResource(R.string.global_icon_default)
+                            provenance != null -> stringResource(
+                                R.string.global_icon_from_pack,
+                                provenance!!.packLabel,
+                            )
+                            else -> stringResource(R.string.global_icon_custom)
+                        }
                     },
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,

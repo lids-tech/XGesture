@@ -4732,6 +4732,7 @@
     <string name="global_icon_default">デフォルト</string>
     <string name="global_icon_custom">カスタム</string>
     <string name="global_icon_from_pack">%1$s から</string>
+    <string name="global_icon_from_theme_pack">テーマから: %1$s</string>
     <string name="action_icon_from_icon_pack">端末のアイコンパックから選択</string>
     <string name="icon_pack_picker_title">アイコンパックを選択</string>
     <string name="icon_pack_picker_subtitle">「%1$s」のアイコンパックを選択</string>
@@ -4749,6 +4750,14 @@
     <string name="icon_pack_cannot_parse">このアイコンパックは解析できません</string>
     <string name="icon_pack_load_failed">このアイコンを読み込めませんでした</string>
     <string name="icon_pack_use">使用</string>
+    <string name="extension_icon_theme_title">アイコンパック</string>
+    <string name="extension_icon_theme_subtitle">アイコンパックを選んでアプリアイコンを一括置換</string>
+    <string name="icon_theme_title">アイコンパック</string>
+    <string name="icon_theme_subtitle">個別にアイコンを設定していないアプリに適用されます</string>
+    <string name="icon_theme_none">アイコンパックを使用しない</string>
+    <string name="icon_theme_none_desc">アプリアイコンはシステムのまま</string>
+    <string name="icon_theme_active">使用中</string>
+    <string name="icon_theme_empty">インストール済みのアイコンパックがありません</string>
     <string name="extension_icon_library_title">アイコンライブラリ</string>
     <string name="extension_icon_library_subtitle">アクションの種類とアプリのアイコンを一括設定</string>
     <string name="icon_plate_mode_section">アイコンプレート</string>

@@ -50,6 +50,7 @@ fun ExtensionHubScreen(
     onOpenStashClipboard: () -> Unit,
     onOpenDragDropFlow: () -> Unit = {},
     onOpenIconLibrary: () -> Unit = {},
+    onOpenIconTheme: () -> Unit = {},
     onOpenFreezer: () -> Unit = {},
     onOpenMacro: () -> Unit = {},
     onOpenPageScroll: () -> Unit = {},
@@ -241,6 +242,16 @@ fun ExtensionHubScreen(
         groupedCardItems(
             keyPrefix = "extension_maintenance",
             items = buildList {
+                add(
+                    settingsCardScopeItem("icon-theme") {
+                        SettingNavigationRow(
+                            icon = { label -> Icon(ThinActionIcons.Apps, contentDescription = label) },
+                            title = stringResource(R.string.extension_icon_theme_title),
+                            subtitle = stringResource(R.string.extension_icon_theme_subtitle),
+                            onClick = onOpenIconTheme
+                        )
+                    }
+                )
                 add(
                     settingsCardScopeItem("icon-library") {
                         SettingNavigationRow(

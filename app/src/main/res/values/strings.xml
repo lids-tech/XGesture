@@ -2920,6 +2920,7 @@
     <string name="global_icon_default">Default</string>
     <string name="global_icon_custom">Custom</string>
     <string name="global_icon_from_pack">From %1$s</string>
+    <string name="global_icon_from_theme_pack">From theme: %1$s</string>
     <string name="action_icon_from_icon_pack">Pick from an icon pack</string>
     <string name="icon_pack_picker_title">Icon packs</string>
     <string name="icon_pack_picker_subtitle">Choose an icon pack for %1$s</string>
@@ -2937,6 +2938,14 @@
     <string name="icon_pack_cannot_parse">This icon pack can’t be parsed</string>
     <string name="icon_pack_load_failed">Couldn’t load this icon</string>
     <string name="icon_pack_use">Use</string>
+    <string name="extension_icon_theme_title">Icon pack</string>
+    <string name="extension_icon_theme_subtitle">Apply one icon pack to all app icons</string>
+    <string name="icon_theme_title">Icon pack</string>
+    <string name="icon_theme_subtitle">Applies to apps without a custom icon</string>
+    <string name="icon_theme_none">No icon pack</string>
+    <string name="icon_theme_none_desc">Keep system icons</string>
+    <string name="icon_theme_active">In use</string>
+    <string name="icon_theme_empty">No icon packs installed</string>
     <string name="extension_icon_library_title">Icon library</string>
     <string name="extension_icon_library_subtitle">Set icons for action types and apps globally</string>
     <string name="icon_plate_mode_section">Icon plate</string>

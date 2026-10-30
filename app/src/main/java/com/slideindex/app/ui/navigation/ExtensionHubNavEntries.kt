@@ -73,6 +73,7 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
             onOpenNativeEnginePacks = { ctx.navigate(AppNavKey.NativeEnginePacks) },
             onOpenDiagnosticLogs = { ctx.navigate(AppNavKey.ExtensionDiagnosticLogs) },
             onOpenIconLibrary = { ctx.navigate(AppNavKey.GlobalIconLibrary) },
+            onOpenIconTheme = { ctx.navigate(AppNavKey.IconThemeSettings) },
             onOpenAbout = { ctx.navigate(AppNavKey.ExtensionAbout) },
         )
     }
@@ -117,6 +118,12 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
 
     hiltEntry<AppNavKey.GlobalIconLibrary> {
         com.slideindex.app.ui.GlobalIconLibraryScreen(
+            onBack = { ctx.navigateBackTo(AppNavKey.ExtensionHub) },
+        )
+    }
+
+    hiltEntry<AppNavKey.IconThemeSettings> {
+        com.slideindex.app.ui.IconThemeSettingsScreen(
             onBack = { ctx.navigateBackTo(AppNavKey.ExtensionHub) },
         )
     }

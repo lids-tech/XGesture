@@ -310,6 +310,11 @@ class AppRepository @Inject constructor(
 
     fun warmLaunchIconBitmapsAsync(packageNames: Collection<String>, sizePx: Int) {
         launchIconCache.warmBitmapsAsync(packageNames, sizePx)
+        // 主题层不落盘，必须提前把 drawable 解好，否则面板首帧会在主线程解码
+        val names = packageNames.toList()
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching { appIconOverride.preload(context, names, sizePx) }
+        }
     }
 
     /** 后台补一个图标，完成后回主线程通知重绘（浮层绘制路径专用，替代同步 [launchIconBitmap]）。 */

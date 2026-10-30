@@ -36,6 +36,11 @@ class AppRepositoryTest {
                 override fun peekBitmap(context: Context, packageName: String, sizePx: Int) = null
                 override fun drawable(context: Context, packageName: String, sizePx: Int) = null
                 override fun peekDrawable(context: Context, packageName: String, sizePx: Int) = null
+                override fun preload(
+                    context: Context,
+                    packageNames: Collection<String>,
+                    sizePx: Int,
+                ) = Unit
             },
             applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )

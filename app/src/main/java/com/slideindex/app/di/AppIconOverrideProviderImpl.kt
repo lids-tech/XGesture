@@ -28,4 +28,7 @@ class AppIconOverrideProviderImpl @Inject constructor() : AppIconOverrideProvide
 
     override fun peekDrawable(context: Context, packageName: String, sizePx: Int): Drawable? =
         AppIconOverride.peekDrawable(context, packageName, sizePx)
+
+    override fun preload(context: Context, packageNames: Collection<String>, sizePx: Int) =
+        AppIconOverride.preload(context, packageNames, sizePx)
 }
