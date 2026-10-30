@@ -9,6 +9,9 @@ import com.slideindex.app.settings.QuickWheelCodec
 import com.slideindex.app.ui.theme.SlideIndexTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import androidx.lifecycle.lifecycleScope
+import com.slideindex.app.settings.updateSlot
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class QuickWheelSlotEditorActivity : ComponentActivity() {
@@ -35,13 +38,15 @@ class QuickWheelSlotEditorActivity : ComponentActivity() {
                     onExit = { finish() },
                     onSave = { slot ->
                         lifecycleScope.launch {
-                            deps.settingsRepository.edit { prefs ->
-                                val wheels = QuickWheelCodec.decode(prefs)
-                                val next = wheels.map { w ->
+                            val wheels = deps.settingsRepository
+                                .readSnapshot()
+                                .launcher
+                                .quickWheels
+                            deps.settingsRepository.setQuickWheels(
+                                wheels.map { w ->
                                     if (w.id != wheelId) w else w.updateSlot(path) { slot }
-                                }
-                                QuickWheelCodec.writeToPreferences(next, prefs)
-                            }
+                                },
+                            )
                             finish()
                         }
                     },

@@ -51,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.slideindex.app.settings.QuickWheelCodec
 import com.slideindex.app.ui.QuickWheelEditorOverlay
 import kotlinx.coroutines.launch
 import androidx.compose.material3.MaterialTheme
@@ -595,16 +594,17 @@ object QuickWheelOverlayWindow {
 /**
  * 把编辑后的轮盘写回设置。
  *
- * 复用仓库既有的两个入口：`SettingsRepository.edit`（DataStore 事务）+ `QuickWheelCodec.writeToPreferences`
- * （轮盘自己的扁平编解码），不另造一套存储格式。
+ * 走仓库既有的类型化写入入口 `SettingsRepository.setQuickWheels`（与设置页「轮盘列表」
+ * 保存用的是同一个方法），再按 id 把这一张轮盘替换进列表。
  */
 private fun persistWheel(context: Context, wheel: QuickWheel) {
     val repo = OverlayDependencyAccess.overlayDependencies(context)?.settingsRepository ?: return
     kotlinx.coroutines.MainScope().launch {
-        repo.edit { prefs ->
-            val wheels = QuickWheelCodec.decode(prefs)
-            val next = wheels.map { if (it.id == wheel.id) wheel else it }
-            QuickWheelCodec.writeToPreferences(next, prefs)
+        runCatching {
+            val wheels = repo.readSnapshot().launcher.quickWheels
+            repo.setQuickWheels(wheels.map { if (it.id == wheel.id) wheel else it })
+        }.onFailure {
+            Log.w(TAG, "persistWheel 失败", it)
         }
     }
 }
