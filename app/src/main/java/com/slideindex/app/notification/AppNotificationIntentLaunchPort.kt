@@ -74,6 +74,13 @@ class AppNotificationIntentLaunchPort @Inject constructor(
             EdgeDiag.log("小窗阅读", "小窗已开但无 contentIntent，停在应用页 mode=$mode pkg=${data.packageName}")
             return true
         }
+        if (mode == FreeWindowMode.ORIGINOS) {
+            // vivo：小窗靠系统「小窗分享」开出，分享面板是交互的（用户还要点一下接收方才真正启动），
+            // 这时补发通知点击只会在应用还没进小窗之前就把它全屏拉起来，反而破坏小窗。
+            // 宁可停在小窗的应用首页，让用户自己点通知。
+            EdgeDiag.log("小窗阅读", "vivo 分享链路不补发通知点击，停在小窗应用页 pkg=${data.packageName}")
+            return true
+        }
 
         EdgeDiag.log("小窗阅读", "先开小窗（厂商分支可能回落），${NAVIGATE_DELAY_MS}ms 后补发通知点击 mode=$mode pkg=${data.packageName}")
         mainHandler.postDelayed({
@@ -177,9 +184,11 @@ class AppNotificationIntentLaunchPort @Inject constructor(
 /**
  * 「小窗阅读」是否要先走 [FreeWindowLauncher.launchPackageInFreeWindow] 再补通知点击。
  *
- * 只有米窗与努比亚：它们开窗的关键动作不在 ActivityOptions 里（分别是米窗广播和
- * `_WindowReply` 标识），通知链路重放 PendingIntent 时带不上，必然退化成系统自由窗口。
+ * 米窗 / 努比亚 / vivo：它们开窗的关键动作不在 ActivityOptions 里（分别是米窗广播、
+ * `_WindowReply` 标识、系统分享目标），通知链路重放 PendingIntent 时带不上，必然退化成系统自由窗口。
  * 其余模式继续走原来的「通知点击 + 窗口参数」，行为不变。
  */
 private fun FreeWindowMode.usesLauncherFirstForSmallWindow(): Boolean =
-    this == FreeWindowMode.SUNSHINE || this == FreeWindowMode.NUBIA
+    this == FreeWindowMode.SUNSHINE ||
+        this == FreeWindowMode.NUBIA ||
+        this == FreeWindowMode.ORIGINOS

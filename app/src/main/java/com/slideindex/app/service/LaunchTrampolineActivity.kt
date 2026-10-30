@@ -13,6 +13,7 @@ import android.util.Log
 import android.widget.Toast
 import com.slideindex.app.R
 import com.slideindex.app.notification.NotificationHistoryIntentCapture
+import com.slideindex.app.util.FreeWindowLauncher
 import com.slideindex.app.util.TaskManagerUtil
 
 /**
@@ -34,12 +35,18 @@ class LaunchTrampolineActivity : Activity() {
                     sendStoredPendingIntent(pendingIntentEncoded, fallbackIntent)
                 }
                 launchIntent != null -> {
-                    val launchOptions = readLaunchOptions()
                     val started = runCatching {
-                        if (launchOptions != null) {
-                            startActivity(launchIntent, launchOptions)
+                        // vivo / OriginOS：小窗必须由"分享目标"这条链路拉开，ActivityOptions 在这里无效。
+                        // 这里已经有前台上下文，正好是从壳里发起分享的位置（见 FreeWindowLauncher）。
+                        if (intent.getBooleanExtra(EXTRA_SHARE_PROXY, false)) {
+                            startActivity(FreeWindowLauncher.buildOriginOsShareChooser(this, launchIntent))
                         } else {
-                            startActivity(launchIntent)
+                            val launchOptions = readLaunchOptions()
+                            if (launchOptions != null) {
+                                startActivity(launchIntent, launchOptions)
+                            } else {
+                                startActivity(launchIntent)
+                            }
                         }
                     }.onFailure { error ->
                         Log.w(TAG, "startActivity from trampoline failed", error)
@@ -202,6 +209,7 @@ class LaunchTrampolineActivity : Activity() {
         private const val EXTRA_PENDING_INTENT_B64 = "pending_intent_b64"
         private const val EXTRA_FALLBACK_INTENT = "fallback_intent"
         private const val EXTRA_FALLBACK_INTENT_B64 = "fallback_intent_b64"
+        private const val EXTRA_SHARE_PROXY = "share_proxy"
         private const val EXTRA_SHORTCUT_PACKAGE = "shortcut_package"
         private const val EXTRA_SHORTCUT_ID = "shortcut_id"
 
@@ -220,7 +228,12 @@ class LaunchTrampolineActivity : Activity() {
                 }
             }
 
-        fun createIntent(context: Context, launchIntent: Intent, launchOptions: Bundle? = null): Intent =
+        fun createIntent(
+            context: Context,
+            launchIntent: Intent,
+            launchOptions: Bundle? = null,
+            shareProxy: Boolean = false,
+        ): Intent =
             Intent(context, LaunchTrampolineActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 val prepared = launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -232,6 +245,7 @@ class LaunchTrampolineActivity : Activity() {
                         putExtra(EXTRA_LAUNCH_OPTIONS_B64, encoded)
                     } ?: putExtra(EXTRA_LAUNCH_OPTIONS, options)
                 }
+                if (shareProxy) putExtra(EXTRA_SHARE_PROXY, true)
             }
 
         fun createShortcutIntent(
