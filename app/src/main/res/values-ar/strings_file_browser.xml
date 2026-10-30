@@ -126,6 +126,8 @@
     <string name="file_browser_restore_shortcuts">استعادة الاختصارات المدمجة</string>
     <string name="file_browser_image_open">فتح</string>
     <string name="file_browser_share">مشاركة</string>
+    <string name="file_browser_add_to_home">إضافة إلى الشاشة الرئيسية</string>
+    <string name="file_browser_add_to_home_failed">تعذّرت إضافة الاختصار</string>
 
     <!-- 操作反馈 / 图片查看器 / 分享：代码里由 UI 层取资源，不再硬编码 -->
     <string name="file_browser_failed_count">فشل %1$d عنصر</string>

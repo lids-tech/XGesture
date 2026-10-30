@@ -1854,6 +1854,8 @@
     <string name="float_ball_text_copied">تم نسخ النص إلى الحافظة</string>
     <string name="float_ball_image_copied">تم نسخ الصورة إلى الحافظة</string>
     <string name="share_image_ocr_target_label">التقاط نص OCR</string>
+    <string name="share_image_search_target_label">بحث بالصورة</string>
+    <string name="share_image_edit_target_label">محرر الصور</string>
     <string name="share_image_ocr_service_required">يرجى تفعيل خدمة إمكانية الوصول في XGesture أولاً</string>
     <string name="share_image_ocr_model_required">يرجى تنزيل واختيار نموذج OCR أولاً في إعدادات التقاط النص</string>
     <string name="share_image_ocr_image_load_failed">لا يمكن قراءة الصورة المشتركة</string>

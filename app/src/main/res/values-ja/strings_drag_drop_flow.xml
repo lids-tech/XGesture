@@ -37,6 +37,12 @@
     <string name="drag_drop_flow_cancel">キャンセル</string>
     <string name="drag_drop_flow_release_to_send">離して送信</string>
 
+    <!-- 操作枢纽 -->
+    <string name="drag_drop_flow_hub">操作</string>
+    <string name="drag_drop_flow_action_segment">単語分割</string>
+    <string name="drag_drop_flow_action_search">検索</string>
+    <string name="drag_drop_flow_action_pin">画面に固定</string>
+
     <!-- 流转目标 -->
     <string name="drag_drop_flow_target_image_search">画像で検索</string>
     <string name="drag_drop_flow_target_copy_image">画像をコピー</string>
@@ -55,4 +61,7 @@
     <string name="drag_drop_flow_toast_target_missing">このターゲットはフローバーにありません</string>
     <string name="drag_drop_flow_toast_text_copied">テキストをクリップボードにコピーしました</string>
     <string name="drag_drop_flow_toast_share_failed">共有に失敗しました</string>
+    <string name="drag_drop_flow_toast_pinned">画面に固定しました</string>
+    <string name="drag_drop_flow_toast_no_text">画像からテキストを認識できませんでした</string>
+    <string name="drag_drop_flow_toast_ocr_unavailable">利用できる OCR エンジンがありません</string>
 </resources>

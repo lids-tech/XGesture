@@ -37,6 +37,12 @@
     <string name="drag_drop_flow_cancel">إلغاء</string>
     <string name="drag_drop_flow_release_to_send">أفلت للإرسال</string>
 
+    <!-- 操作枢纽 -->
+    <string name="drag_drop_flow_hub">إجراءات</string>
+    <string name="drag_drop_flow_action_segment">تقسيم الكلمات</string>
+    <string name="drag_drop_flow_action_search">بحث</string>
+    <string name="drag_drop_flow_action_pin">تثبيت على الشاشة</string>
+
     <!-- 流转目标 -->
     <string name="drag_drop_flow_target_image_search">البحث بالصورة</string>
     <string name="drag_drop_flow_target_copy_image">نسخ الصورة</string>
@@ -55,4 +61,7 @@
     <string name="drag_drop_flow_toast_target_missing">هذا الهدف لم يعد موجودًا في شريط التدفق</string>
     <string name="drag_drop_flow_toast_text_copied">تم نسخ النص إلى الحافظة</string>
     <string name="drag_drop_flow_toast_share_failed">فشلت المشاركة</string>
+    <string name="drag_drop_flow_toast_pinned">تم التثبيت على الشاشة</string>
+    <string name="drag_drop_flow_toast_no_text">لم يتم التعرف على نص في الصورة</string>
+    <string name="drag_drop_flow_toast_ocr_unavailable">لا يتوفر محرك OCR</string>
 </resources>

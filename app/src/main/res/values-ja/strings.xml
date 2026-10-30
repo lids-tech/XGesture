@@ -1861,6 +1861,8 @@
     <string name="float_ball_text_copied">テキストをクリップボードにコピーしました</string>
     <string name="float_ball_image_copied">画像をクリップボードにコピーしました</string>
     <string name="share_image_ocr_target_label">OCR テキスト</string>
+    <string name="share_image_search_target_label">画像検索</string>
+    <string name="share_image_edit_target_label">画像編集</string>
     <string name="share_image_ocr_service_required">先に XGesture アクセシビリティサービスを有効にしてください</string>
     <string name="share_image_ocr_model_required">先に取詞設定で OCR モデルをダウンロードして選択してください</string>
     <string name="share_image_ocr_image_load_failed">共有された画像を読み取れませんでした</string>

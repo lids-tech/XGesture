@@ -126,6 +126,8 @@
     <string name="file_browser_restore_shortcuts">組み込みショートカットを復元</string>
     <string name="file_browser_image_open">開く</string>
     <string name="file_browser_share">共有</string>
+    <string name="file_browser_add_to_home">ホーム画面に追加</string>
+    <string name="file_browser_add_to_home_failed">ショートカットを追加できませんでした</string>
 
     <!-- 操作反馈 / 图片查看器 / 分享：代码里由 UI 层取资源，不再硬编码 -->
     <string name="file_browser_failed_count">%1$d 件失敗しました</string>
