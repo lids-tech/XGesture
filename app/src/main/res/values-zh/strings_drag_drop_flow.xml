@@ -37,6 +37,12 @@
     <string name="drag_drop_flow_cancel">取消</string>
     <string name="drag_drop_flow_release_to_send">松手分发</string>
 
+    <!-- 操作枢纽 -->
+    <string name="drag_drop_flow_hub">操作</string>
+    <string name="drag_drop_flow_action_segment">分词</string>
+    <string name="drag_drop_flow_action_search">搜索</string>
+    <string name="drag_drop_flow_action_pin">钉住</string>
+
     <!-- 流转目标 -->
     <string name="drag_drop_flow_target_image_search">以图搜图</string>
     <string name="drag_drop_flow_target_copy_image">复制图片</string>
@@ -55,4 +61,7 @@
     <string name="drag_drop_flow_toast_target_missing">这个目标已不在流转栏里</string>
     <string name="drag_drop_flow_toast_text_copied">已复制文字到剪贴板</string>
     <string name="drag_drop_flow_toast_share_failed">分享失败</string>
+    <string name="drag_drop_flow_toast_pinned">已钉到屏幕上</string>
+    <string name="drag_drop_flow_toast_no_text">图片里没有识别到文字</string>
+    <string name="drag_drop_flow_toast_ocr_unavailable">没有可用的 OCR 引擎</string>
 </resources>

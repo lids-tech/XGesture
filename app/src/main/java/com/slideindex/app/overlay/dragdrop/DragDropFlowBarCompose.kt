@@ -4,7 +4,9 @@ import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -103,6 +106,14 @@ data class DragDropFlowItem(
 )
 
 /**
+ * 「操作」枢纽项的固定 id：它是收起态列表的第一项，按住它会展开动作菜单。
+ */
+const val DRAG_DROP_FLOW_HUB_ID = "hub"
+
+/** 逐项入场的错峰间隔。6 项也只要 170ms 左右，再长就显得拖沓。 */
+private const val STAGGER_MS = 28L
+
+/**
  * 全局拖拽流转 Compose 界面总入口。
  */
 @Composable
@@ -112,12 +123,16 @@ fun DragDropFlowBarLayout(
     items: List<DragDropFlowItem>,
     dragPosition: Offset?,
     hapticEnabled: Boolean,
+    hubExpanded: Boolean,
     onHoverChanged: (String?) -> Unit,
+    onHubHoverChanged: (Boolean) -> Unit,
+    onLeavePanel: () -> Unit,
     onCancel: () -> Unit,
     onRestore: () -> Unit,
     onSelectTarget: (String) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
     val itemBounds = remember { mutableStateMapOf<String, Rect>() }
     var cancelBounds by remember { mutableStateOf<Rect?>(null) }
     var restoreBounds by remember { mutableStateOf<Rect?>(null) }
@@ -125,6 +140,9 @@ fun DragDropFlowBarLayout(
     var ringGeometry by remember { mutableStateOf<RingGeometry?>(null) }
     var hoveredId by remember { mutableStateOf<String?>(null) }
     var lastVibratedTarget by remember { mutableStateOf<String?>(null) }
+
+    // 当前这一列真实存在的 id。动画期间新旧两列会同时在组合里，热区判定只能用这份集合过滤。
+    val currentIds = remember(items) { items.map { it.id }.toSet() }
 
     // 当可见性关闭或 items 列表变更时及时清理幽灵热区
     LaunchedEffect(visible, items) {
@@ -137,6 +155,7 @@ fun DragDropFlowBarLayout(
             hoveredId = null
             lastVibratedTarget = null
             onHoverChanged(null)
+            onHubHoverChanged(false)
         } else {
             val validIds = items.map { it.id }.toSet()
             itemBounds.keys.retainAll(validIds)
@@ -180,9 +199,10 @@ fun DragDropFlowBarLayout(
                 )?.let { index -> items.getOrNull(index)?.id }
             }
             curBar?.contains(pos) == true -> {
-                // 仅在当前 Dock 视口内部查找，且确保项中心未被移出视口
-                itemBounds.entries.firstOrNull { (_, rect) ->
-                    rect.contains(pos) && curBar.contains(rect.center)
+                // 仅在当前 Dock 视口内部查找，且确保项中心未被移出视口。
+                // 必须过滤掉不在当前 items 里的旧格子：整列切换的动画期间，淡出的那列还会继续上报矩形。
+                itemBounds.entries.firstOrNull { (id, rect) ->
+                    id in currentIds && rect.contains(pos) && curBar.contains(rect.center)
                 }?.key
             }
             else -> null
@@ -195,6 +215,44 @@ fun DragDropFlowBarLayout(
                 lastVibratedTarget = targetId
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
+        }
+    }
+
+    // 「操作」枢纽的进出场：收起态靠手指压住它开始计时；展开态只要手指还在流转栏上就保持。
+    // 判据必须是整条栏，不能用每一格的图标热区——图标之间有标签和间距，手指一扫过去就会掉进空地。
+    LaunchedEffect(dragPosition, hubExpanded, barBounds, ringGeometry, itemBounds.size, position) {
+        val pos = dragPosition
+        if (pos == null) {
+            onHubHoverChanged(false)
+            return@LaunchedEffect
+        }
+        val currentHub = itemBounds[DRAG_DROP_FLOW_HUB_ID]?.takeIf { DRAG_DROP_FLOW_HUB_ID in currentIds }
+        if (!hubExpanded) {
+            onHubHoverChanged(currentHub?.contains(pos) == true)
+            return@LaunchedEffect
+        }
+        val slop = with(density) { 16.dp.toPx() }
+        val stillInside = if (position == DragDropFlowPosition.RING) {
+            val ring = ringGeometry
+            if (ring == null) {
+                true
+            } else {
+                kotlin.math.hypot(pos.x - ring.center.x, pos.y - ring.center.y) <=
+                    ring.bandOuterPx + slop
+            }
+        } else {
+            // 条状栏就用整条栏的矩形，栏内任何位置都算"还在里面"。
+            barBounds?.let { it.inflate(slop).contains(pos) } ?: true
+        }
+        if (!stillInside) {
+            onLeavePanel()
+        }
+    }
+
+    // 展开的那一下给一次触觉反馈，否则用户只能靠画面察觉“菜单出来了”。
+    LaunchedEffect(hubExpanded) {
+        if (hubExpanded && hapticEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
 
@@ -250,6 +308,7 @@ fun DragDropFlowBarLayout(
                     RingFlowContent(
                         items = items,
                         hoveredId = hoveredId,
+                        itemBounds = itemBounds,
                         onGeometryChanged = { ringGeometry = it },
                         onCancelPositioned = { cancelBounds = it },
                         onRestorePositioned = { restoreBounds = it },
@@ -277,8 +336,18 @@ private fun BottomFlowContent(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    // 整列被换掉（收起态 ↔ 动作菜单）时必须回到顶部，否则会停在上一次的滚动位置。
+    LaunchedEffect(items) {
+        if (items.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
+
     val density = LocalDensity.current
     val edgeZonePx = with(density) { 54.dp.toPx() }
+
+    // 入场时从枢纽那一端滑进来：底栏横向、侧栏纵向。
+    val slideInPx = with(density) { 16.dp.toPx() }
 
     // 边缘自适应自动滚动：当手指拖动至底栏左端或右端时，持续平滑滚动
     LaunchedEffect(dragPosition, barBounds) {
@@ -349,13 +418,40 @@ private fun BottomFlowContent(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     items(items, key = { it.id }) { item ->
-                        FlowItemCard(
-                            item = item,
-                            isHovered = hoveredId == item.id,
-                            isVertical = false,
-                            onPositioned = { rect -> itemBounds[item.id] = rect },
-                            onDisposed = { itemBounds.remove(item.id) },
-                        )
+                        val index = items.indexOfFirst { it.id == item.id }
+                        val appear = remember(item.id) { Animatable(0f) }
+                        LaunchedEffect(items, item.id) {
+                            appear.snapTo(0f)
+                            delay(index.coerceAtLeast(0).coerceAtMost(8) * STAGGER_MS)
+                            appear.animateTo(
+                                1f,
+                                spring(
+                                    dampingRatio = 0.72f,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                // 淡出交给列表自己做（旧格子会立刻消失），淡入由下面这层弹簧负责。
+                                .animateItem(fadeInSpec = null, fadeOutSpec = tween(90))
+                                .graphicsLayer {
+                                    val p = appear.value
+                                    alpha = p
+                                    val s = 0.55f + 0.45f * p
+                                    scaleX = s
+                                    scaleY = s
+                                    translationX = -(1f - p) * slideInPx
+                                },
+                        ) {
+                            FlowItemCard(
+                                item = item,
+                                isHovered = hoveredId == item.id,
+                                isVertical = false,
+                                onPositioned = { rect -> itemBounds[item.id] = rect },
+                                onDisposed = { itemBounds.remove(item.id) },
+                            )
+                        }
                     }
                 }
             }
@@ -380,8 +476,18 @@ private fun SideFlowContent(
 ) {
     val listState = rememberLazyListState()
 
+    // 整列被换掉（收起态 ↔ 动作菜单）时必须回到顶部，否则会停在上一次的滚动位置。
+    LaunchedEffect(items) {
+        if (items.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
+
     val density = LocalDensity.current
     val edgeZonePx = with(density) { 54.dp.toPx() }
+
+    // 入场时从枢纽那一端滑进来：底栏横向、侧栏纵向。
+    val slideInPx = with(density) { 16.dp.toPx() }
 
     // 边缘自适应自动滚动：当手指拖动至侧栏上端或下端时，持续平滑滚动
     LaunchedEffect(dragPosition, barBounds) {
@@ -440,13 +546,39 @@ private fun SideFlowContent(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(items, key = { it.id }) { item ->
-                            FlowItemCard(
-                                item = item,
-                                isHovered = hoveredId == item.id,
-                                isVertical = true,
-                                onPositioned = { rect -> itemBounds[item.id] = rect },
-                                onDisposed = { itemBounds.remove(item.id) },
-                            )
+                            val index = items.indexOfFirst { it.id == item.id }
+                            val appear = remember(item.id) { Animatable(0f) }
+                            LaunchedEffect(items, item.id) {
+                                appear.snapTo(0f)
+                                delay(index.coerceAtLeast(0).coerceAtMost(8) * STAGGER_MS)
+                                appear.animateTo(
+                                    1f,
+                                    spring(
+                                        dampingRatio = 0.72f,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .animateItem(fadeInSpec = null, fadeOutSpec = tween(90))
+                                    .graphicsLayer {
+                                        val p = appear.value
+                                        alpha = p
+                                        val s = 0.55f + 0.45f * p
+                                        scaleX = s
+                                        scaleY = s
+                                        translationY = -(1f - p) * slideInPx
+                                    },
+                            ) {
+                                FlowItemCard(
+                                    item = item,
+                                    isHovered = hoveredId == item.id,
+                                    isVertical = true,
+                                    onPositioned = { rect -> itemBounds[item.id] = rect },
+                                    onDisposed = { itemBounds.remove(item.id) },
+                                )
+                            }
                         }
                     }
                 }
@@ -495,6 +627,7 @@ private data class RingGeometry(
 private fun RingFlowContent(
     items: List<DragDropFlowItem>,
     hoveredId: String?,
+    itemBounds: MutableMap<String, Rect>,
     onGeometryChanged: (RingGeometry) -> Unit,
     onCancelPositioned: (Rect) -> Unit,
     onRestorePositioned: (Rect) -> Unit,
@@ -536,10 +669,26 @@ private fun RingFlowContent(
         val plateShape = RoundedCornerShape(18.dp)
         items.forEachIndexed { index, item ->
             val (dx, dy) = RingFlowGeometry.offsetFor(index, items.size, radiusPx)
+            val appear = remember(item.id) { Animatable(0f) }
+            LaunchedEffect(items, item.id) {
+                appear.snapTo(0f)
+                delay(index.coerceAtMost(8) * STAGGER_MS)
+                appear.animateTo(
+                    1f,
+                    spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+                )
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .offset { IntOffset(dx.roundToInt(), dy.roundToInt()) },
+                    .offset { IntOffset(dx.roundToInt(), dy.roundToInt()) }
+                    .graphicsLayer {
+                        val p = appear.value
+                        alpha = p
+                        val s = 0.6f + 0.4f * p
+                        scaleX = s
+                        scaleY = s
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 // 每个目标一块独立底板：模糊只落在这块板子里，圆心保持透明。
@@ -562,8 +711,8 @@ private fun RingFlowContent(
                     item = item,
                     isHovered = hoveredId == item.id,
                     isVertical = false,
-                    onPositioned = {},
-                    onDisposed = {},
+                    onPositioned = { rect -> itemBounds[item.id] = rect },
+                    onDisposed = { itemBounds.remove(item.id) },
                 )
             }
         }

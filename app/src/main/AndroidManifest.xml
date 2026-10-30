@@ -602,6 +602,50 @@
             </intent-filter>
         </activity>
 
+        <!-- 分享图片到搜索面板：图片进面板后由面板决定用哪个图搜引擎 -->
+        <activity
+            android:name=".service.ShareImageSearchTrampolineActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/share_image_search_target_label"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SlideIndex.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- 分享图片到内置图片编辑器 -->
+        <activity
+            android:name=".service.ShareImageEditTrampolineActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/share_image_edit_target_label"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SlideIndex.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.GestureToggleTileService"
             android:exported="true"
