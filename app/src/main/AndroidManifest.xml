@@ -114,11 +114,6 @@
         </intent>
     </queries>
 
-            <activity
-            android:name=".ui.QuickWheelSlotEditorActivity"
-            android:exported="false"
-            android:theme="@style/Theme.SlideIndex" />
-
     <application
         android:name=".SlideIndexApp"
         tools:targetApi="33"
@@ -134,6 +129,11 @@
         android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.SlideIndex">
 
+        <activity
+            android:name=".ui.QuickWheelSlotEditorActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SlideIndex" />
+            
         <activity
             android:name=".MainActivity"
             android:exported="true"
