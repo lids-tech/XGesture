@@ -268,8 +268,13 @@ data class FloatBallSettings(
     val floatBallActiveSide: FloatBallSide = FloatBallSide.RIGHT,
     /** Edge line / capture strip height as fraction of screen height. */
     val floatBallLineHeightFraction: Float = 0.08f,
-    /** Edge line / capture strip width as fraction of screen width (1%–50%). */
-    val floatBallLineWidthFraction: Float = 0.04f,
+    /**
+     * 边缘线触发带宽度（dp）。
+     *
+     * 以前是「屏宽百分比」（1%–50%），横屏 / 折叠展开时窗口一宽，触发带就成倍变宽，
+     * 与球体的 dp 尺寸对不上。改成 dp 后同一设置在竖屏、横屏、展开态下保持同一物理宽度。
+     */
+    val floatBallLineWidthDp: Float = DEFAULT_LINE_WIDTH_DP,
     val floatBallLineOpacity: Float = 0.9f,
     /** 悬浮球手势 → 动作绑定。 */
     val floatBallGestureActions: Map<FloatBallGestureType, GestureAction> =
@@ -393,6 +398,33 @@ data class FloatBallSettings(
          */
         const val IMAGE_ASPECT_MIN = 0.05f
         const val IMAGE_ASPECT_MAX = 20f
+
+        /** 触发带宽度的默认值：与旧默认 4%（在 1080px / density 3 的竖屏上被 24dp 下限顶住）一致。 */
+        const val DEFAULT_LINE_WIDTH_DP = 24f
+        /** 下限 0 = 该侧线条只显示、不接收触摸。 */
+        const val MIN_LINE_WIDTH_DP = 0f
+        const val MAX_LINE_WIDTH_DP = 96f
+
+        /**
+         * 旧「屏宽百分比」→ dp 的迁移基准（dp）。
+         *
+         * 用固定常量而不是当前窗口宽度：迁移结果必须与横竖屏 / 折叠展开无关，
+         * 否则同一个旧值在展开态会被放大。取普通手机竖屏的典型宽度，保留用户原来的观感。
+         */
+        const val LEGACY_LINE_WIDTH_REFERENCE_WIDTH_DP = 400f
+
+        /**
+         * 老数据迁移下限。
+         *
+         * 旧实现里 4% 屏宽在普通竖屏上会被 24dp 下限顶住，迁移时沿用这条下限，
+         * 避免默认用户升级后触发带反而变窄；新设置允许用户自己调到 0。
+         */
+        private const val LEGACY_MIN_LINE_WIDTH_DP = DEFAULT_LINE_WIDTH_DP
+
+        /** 把旧的屏宽百分比换算成 dp（带范围夹取），只用于迁移老数据。 */
+        fun legacyLineWidthDp(fraction: Float): Float =
+            (fraction * LEGACY_LINE_WIDTH_REFERENCE_WIDTH_DP)
+                .coerceIn(LEGACY_MIN_LINE_WIDTH_DP, MAX_LINE_WIDTH_DP)
     }
 }
 

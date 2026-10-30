@@ -1794,6 +1794,7 @@
     <string name="float_ball_position_xy_hint">パーセンテージは、ドック時にボールのどれだけが画面内に残るかを示します</string>
     <string name="float_ball_line_height">ラインの高さ</string>
     <string name="float_ball_line_width">トリガー幅</string>
+    <string name="float_ball_line_width_value">%1$.0f dp</string>
     <string name="float_ball_line_width_preview_hint">トリガー幅スライダーをドラッグして、画面端のアクティブスワイプゾーンをプレビュー。</string>
     <string name="float_ball_line_opacity">ラインの不透明度</string>
     <string name="float_ball_size">ボールサイズ</string>

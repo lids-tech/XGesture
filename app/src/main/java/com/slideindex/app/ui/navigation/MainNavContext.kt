@@ -243,7 +243,7 @@ class MainNavContext(
         opacity: Float? = null,
         visibleFraction: Float? = null,
         lineHeightFraction: Float? = null,
-        lineWidthFraction: Float? = null,
+        lineWidthDp: Float? = null,
         lineOpacity: Float? = null,
     ) {
         activity.overlayServiceController.previewFloatBallAppearance(
@@ -251,7 +251,7 @@ class MainNavContext(
             opacity = opacity,
             visibleFraction = visibleFraction,
             lineHeightFraction = lineHeightFraction,
-            lineWidthFraction = lineWidthFraction,
+            lineWidthDp = lineWidthDp,
             lineOpacity = lineOpacity,
         )
     }

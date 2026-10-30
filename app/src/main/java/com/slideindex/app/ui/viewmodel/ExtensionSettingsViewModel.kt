@@ -616,8 +616,8 @@ class ExtensionSettingsViewModel @Inject constructor(
         settingsRepository.setFloatBallLineHeightFraction(value)
     }
 
-    fun setFloatBallLineWidthFraction(value: Float) = launchSettingsWrite {
-        settingsRepository.setFloatBallLineWidthFraction(value)
+    fun setFloatBallLineWidthDp(value: Float) = launchSettingsWrite {
+        settingsRepository.setFloatBallLineWidthDp(value)
     }
 
     fun setFloatBallLineOpacity(value: Float) = launchSettingsWrite {

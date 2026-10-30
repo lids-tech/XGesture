@@ -81,21 +81,18 @@ class FloatBallLayoutTest {
   }
 
   @Test
-  fun line_strip_matches_trigger_width_and_height_fractions() {
+  fun line_strip_matches_trigger_width_dp_and_height_fraction() {
     val settings = testSettings(
       FloatBallSettings(
         floatBallPositionMode = FloatBallPositionMode.BOTH_EDGES,
-        floatBallLineWidthFraction = 0.10f,
+        floatBallLineWidthDp = 40f,
         floatBallLineHeightFraction = 0.20f,
         floatBallPositionYFraction = 0.5f,
       ),
     )
-    val width = FloatBallLayout.lineTriggerWidthPx(settings, metrics.widthPixels, metrics.density)
+    val width = FloatBallLayout.lineTriggerWidthPx(settings, metrics.density)
     val height = FloatBallLayout.lineTriggerHeightPx(settings, metrics.heightPixels, metrics.density)
-    val expectedWidth = max(
-      (metrics.widthPixels * 0.10f).roundToInt(),
-      (24f * metrics.density).roundToInt(),
-    )
+    val expectedWidth = (40f * metrics.density).roundToInt()
     val expectedHeight = max(
       (metrics.heightPixels * 0.20f).roundToInt(),
       (48f * metrics.density).roundToInt(),
@@ -106,16 +103,43 @@ class FloatBallLayoutTest {
   }
 
   @Test
+  fun line_strip_width_dp_is_clamped_to_settings_range() {
+    val tooNarrow = testSettings(
+      FloatBallSettings(
+        floatBallPositionMode = FloatBallPositionMode.BOTH_EDGES,
+        floatBallLineWidthDp = -5f,
+      ),
+    )
+    val zero = testSettings(
+      FloatBallSettings(
+        floatBallPositionMode = FloatBallPositionMode.BOTH_EDGES,
+        floatBallLineWidthDp = 0f,
+      ),
+    )
+    val tooWide = testSettings(
+      FloatBallSettings(
+        floatBallPositionMode = FloatBallPositionMode.BOTH_EDGES,
+        floatBallLineWidthDp = 500f,
+      ),
+    )
+
+    // 下限 0（只显示线、不接收触摸），上限 96dp；任何越界值都不该把触发带拉成整块屏。
+    assertEquals(0, FloatBallLayout.lineTriggerWidthPx(tooNarrow, metrics.density))
+    assertEquals(0, FloatBallLayout.lineTriggerWidthPx(zero, metrics.density))
+    assertEquals((96f * metrics.density).roundToInt(), FloatBallLayout.lineTriggerWidthPx(tooWide, metrics.density))
+  }
+
+  @Test
   fun line_strip_width_is_narrower_than_ball_window() {
     val settings = testSettings(
       FloatBallSettings(
         floatBallPositionMode = FloatBallPositionMode.RIGHT,
         floatBallSizeDp = 64f,
-        floatBallLineWidthFraction = 0.04f,
+        floatBallLineWidthDp = 24f,
       ),
     )
     val ballSizePx = FloatBallLayout.ballSize(settings, metrics.density).heightPx
-    val stripWidth = FloatBallLayout.lineTriggerWidthPx(settings, metrics.widthPixels, metrics.density)
+    val stripWidth = FloatBallLayout.lineTriggerWidthPx(settings, metrics.density)
 
     assertTrue(stripWidth < ballSizePx)
   }

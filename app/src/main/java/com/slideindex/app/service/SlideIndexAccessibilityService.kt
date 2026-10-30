@@ -665,7 +665,7 @@ class SlideIndexAccessibilityService : AccessibilityService() {
             opacity: Float? = null,
             visibleFraction: Float? = null,
             lineHeightFraction: Float? = null,
-            lineWidthFraction: Float? = null,
+            lineWidthDp: Float? = null,
             lineOpacity: Float? = null
         ) {
             requireOverlayProcess("previewFloatBallAppearance")
@@ -674,7 +674,7 @@ class SlideIndexAccessibilityService : AccessibilityService() {
                 opacity = opacity,
                 visibleFraction = visibleFraction,
                 lineHeightFraction = lineHeightFraction,
-                lineWidthFraction = lineWidthFraction,
+                lineWidthDp = lineWidthDp,
                 lineOpacity = lineOpacity
             )
         }

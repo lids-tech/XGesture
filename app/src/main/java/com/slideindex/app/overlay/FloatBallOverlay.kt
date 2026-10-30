@@ -44,6 +44,7 @@ import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureTriggerMode
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.floatball.FloatBallGestureType
+import com.slideindex.app.settings.FloatBallSettings
 import com.slideindex.app.settings.FloatBallPositionMode
 import com.slideindex.app.settings.FloatBallSide
 import com.slideindex.app.overlay.ringlauncher.RingLauncherOverlayWindow
@@ -121,6 +122,9 @@ object FloatBallOverlay {
 
     private var windowManager: WindowManager? = null
     private var displayView: FloatBallDisplayHost? = null
+
+    /** 球体独立小窗（球大小、常驻可见）；拖动只改它的坐标。 */
+    private var ballIconWindow: FloatBallIconWindow? = null
     private var displayLayoutParams: WindowManager.LayoutParams? = null
     private var displayOwner: OverlayComposeOwner? = null
     private var touchHost: FloatBallTouchHostLayout? = null
@@ -177,7 +181,7 @@ object FloatBallOverlay {
         val opacity: Float,
         val visibleFraction: Float,
         val lineHeightFraction: Float,
-        val lineWidthFraction: Float,
+        val lineWidthDp: Float,
         val lineOpacity: Float
     )
 
@@ -239,6 +243,7 @@ object FloatBallOverlay {
      * 拖拽中禁止 bringOverlayToFront / 换窗，避免丢 MOVE/UP。
      */
 
+
     private fun setDragging(dragging: Boolean) {
         val wasDragging = isDragging
         isDragging = dragging
@@ -247,10 +252,15 @@ object FloatBallOverlay {
                 cancelPassiveLineRestore()
                 cancelDeferredGifResume()
                 cancelDeferredDragStart()
-                clearSplitIdleChrome()
-                displayView?.visibility = View.VISIBLE
+                // ⚠ 顺序很重要：先让 display 层把球摆好、再显示、最后才删掉空闲层。
+                // 以前是「先删空闲层 → 再显示 display 层 → 最后才布局」，中间会有一帧
+                // 两层都没画出球 —— 在「两侧都是线 / 双贴边」这类走 splitIdleChrome 的模式
+                // 里，按下悬浮球的瞬间就会看到球原地闪一下。
                 sceneState?.ballDragging?.value = true
-                settingsState?.value?.let { syncDisplayBallLayout(it) }
+                // 用"拖动中的实际球心"布局，避免先按停靠位画一帧再跳回手指。
+                settingsState?.value?.let { applyDragBallLayout(it) }
+                displayView?.visibility = View.VISIBLE
+                clearSplitIdleChrome()
             }
             !dragging && wasDragging -> {
                 cancelDeferredDragStart()
@@ -346,6 +356,9 @@ object FloatBallOverlay {
     private var currentGestureHintType: FloatBallGestureType? = null
     /** slop 内球体已跟手，超 slop 后升级为完整取词拖。 */
     private var slopPhaseBallFollowActive = false
+
+    /** 拖动死区进度（0..1，1 = 已走满死区），由手势检测器的 onPreviewProgress 提供。 */
+    private var slopPreviewProgress = 0f
     private var slopPhaseFromLineStrip = false
 
     val isShowing: Boolean get() = displayView != null
@@ -596,7 +609,7 @@ object FloatBallOverlay {
         opacity: Float? = null,
         visibleFraction: Float? = null,
         lineHeightFraction: Float? = null,
-        lineWidthFraction: Float? = null,
+        lineWidthDp: Float? = null,
         lineOpacity: Float? = null
     ) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -606,7 +619,7 @@ object FloatBallOverlay {
                     opacity,
                     visibleFraction,
                     lineHeightFraction,
-                    lineWidthFraction,
+                    lineWidthDp,
                     lineOpacity
                 )
             }
@@ -620,7 +633,7 @@ object FloatBallOverlay {
                 opacity = current.floatBallOpacity,
                 visibleFraction = current.floatBallVisibleFraction,
                 lineHeightFraction = current.floatBallLineHeightFraction,
-                lineWidthFraction = current.floatBallLineWidthFraction,
+                lineWidthDp = current.floatBallLineWidthDp,
                 lineOpacity = current.floatBallLineOpacity
             )
         }
@@ -633,8 +646,10 @@ object FloatBallOverlay {
                     ?: current.floatBallVisibleFraction,
                 floatBallLineHeightFraction = lineHeightFraction?.coerceIn(0.04f, 0.4f)
                     ?: current.floatBallLineHeightFraction,
-                floatBallLineWidthFraction = lineWidthFraction?.coerceIn(0.01f, 0.50f)
-                    ?: current.floatBallLineWidthFraction,
+                floatBallLineWidthDp = lineWidthDp?.coerceIn(
+                    FloatBallSettings.MIN_LINE_WIDTH_DP,
+                    FloatBallSettings.MAX_LINE_WIDTH_DP
+                ) ?: current.floatBallLineWidthDp,
                 floatBallLineOpacity = lineOpacity?.coerceIn(0f, 1f) ?: current.floatBallLineOpacity
             )
         )
@@ -643,7 +658,7 @@ object FloatBallOverlay {
         setBallForceRevealed(true)
         invalidateChrome()
         val layoutChanged = sizeDp != null || visibleFraction != null ||
-            lineHeightFraction != null || lineWidthFraction != null
+            lineHeightFraction != null || lineWidthDp != null
         if (layoutChanged) {
             applyAllLayouts(updated)
             syncTouchWindowLayout(updated)
@@ -667,7 +682,7 @@ object FloatBallOverlay {
                     floatBallOpacity = baseline.opacity,
                     floatBallVisibleFraction = baseline.visibleFraction,
                     floatBallLineHeightFraction = baseline.lineHeightFraction,
-                    floatBallLineWidthFraction = baseline.lineWidthFraction,
+                    floatBallLineWidthDp = baseline.lineWidthDp,
                     floatBallLineOpacity = baseline.lineOpacity
                 )
             )
@@ -1054,7 +1069,7 @@ object FloatBallOverlay {
                         floatBallOpacity = current.floatBallOpacity,
                         floatBallVisibleFraction = current.floatBallVisibleFraction,
                         floatBallLineHeightFraction = current.floatBallLineHeightFraction,
-                        floatBallLineWidthFraction = current.floatBallLineWidthFraction,
+                        floatBallLineWidthDp = current.floatBallLineWidthDp,
                         floatBallLineOpacity = current.floatBallLineOpacity
                     )
                 )
@@ -1116,6 +1131,8 @@ object FloatBallOverlay {
         cancelPauseTimer()
         cancelPendingChromeRaise()
         val wm = windowManager
+        ballIconWindow?.dispose()
+        ballIconWindow = null
         displayView?.let { view -> wm?.let { runCatching { it.removeView(view) } } }
         touchHost?.let { view -> wm?.let { runCatching { it.removeView(view) } } }
         lineTouchHost?.let { view -> wm?.let { runCatching { it.removeView(view) } } }
@@ -1425,10 +1442,12 @@ object FloatBallOverlay {
             }
 
             fun onPreviewStart(screenX: Float, screenY: Float) {
+                slopPreviewProgress = 0f
                 showCursorPickPreview(screenX, screenY)
             }
 
             fun onPreviewProgress(progress: Float) {
+                slopPreviewProgress = progress
                 if (!slopPhaseBallFollowActive) {
                     updateCursorPickPreviewAlpha(progress)
                 }
@@ -1462,7 +1481,8 @@ object FloatBallOverlay {
                     lineDragEndedWithGesture = false
                     dragActiveSideOverride = null
                 }
-                expandBallTouchCapture()
+                // 球窗是触摸模态的：拖动全程不需要扩窗，只需关掉线条窗的拦截。
+                setLineTouchHostEnabled(false)
                 showCursorAtScreenTouch(
                     touchDownX = touchDownX,
                     touchDownY = touchDownY,
@@ -1496,7 +1516,6 @@ object FloatBallOverlay {
         val displayHost = FloatBallDisplayHost(
             context = overlayContext,
             lineChromeOwner = displayDialogOwner,
-            ballIconView = ballIcon,
             cursorPreviewView = cursorPreview
         ).apply {
             isClickable = false
@@ -1659,7 +1678,8 @@ object FloatBallOverlay {
         }
 
         val displayLp = buildDisplayLayoutParams(hostContext, "XG:ball-display")
-        val touchLp = buildTouchLayoutParams(hostContext, "XG:ball-touch")
+        // 对齐 FV：球触摸窗是"触摸模态"的小窗，手指拖出窗外也能继续收事件，因此拖动不需要扩窗。
+        val touchLp = buildTouchLayoutParams(hostContext, "XG:ball-touch", touchModal = true)
         val lineTouchLp = buildTouchLayoutParams(hostContext, "XG:ball-line")
 
         val displayAdded = runCatching { wm.addView(displayHost, displayLp) }
@@ -1672,6 +1692,9 @@ object FloatBallOverlay {
             displayDialogOwner.destroy()
             return
         }
+
+        // 球体独立小窗：常驻、球大小。挂在这里保证 z-order 在 display 层之上、触摸窗之下。
+        ballIconWindow = FloatBallIconWindow(hostContext, ballIcon).also { it.attach() }
 
         val touchAdded = runCatching { wm.addView(touchLayout, touchLp) }
             .onFailure { Log.e(TAG, "failed to add ball touch overlay", it) }
@@ -1753,13 +1776,10 @@ object FloatBallOverlay {
     }
 
     private fun shouldUseSplitIdleChrome(settings: AppSettings): Boolean {
-        if (!FloatBallLayout.shouldShowLine(settings)) return false
-        if (isDragging || captureSuppressed || passthroughRestorePending) return false
-        if (sceneState?.stripZonePreview?.value == true) return false
-        if (cursorVisibleState?.value == true) return false
-        if (cursorPreviewActive) return false
-        if (passiveLineRestoreRunnable != null) return false
-        return true
+        // 【第三步：单层常显】球和线始终由 display 层绘制，空闲态不再另起一套 Compose 层。
+        // 之前空闲时把 display 层设成 GONE、改用触摸窗里的 Compose 层画；拖动开始时再切回来，
+        // 那次 GONE→VISIBLE 要 1~2 帧，就是"手指动了、球还停在原地"的停滞感来源。
+        return false
     }
 
     private fun syncSplitIdleChrome(settings: AppSettings) {
@@ -2189,16 +2209,21 @@ object FloatBallOverlay {
     private fun buildTouchLayoutParams(
         context: Context,
         title: String = "XG:ball-touch",
+        /** true = 触摸模态：球窗按下后，手指移出窗口也继续收到 MOVE/UP（FV 的做法，拖动无需扩窗）。 */
+        touchModal: Boolean = false,
     ): WindowManager.LayoutParams {
+        var flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        if (!touchModal) {
+            flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        }
         return WindowManager.LayoutParams(
             1,
             1,
             OverlayWindowTypes.overlayWindowType(context),
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            flags,
             PixelFormat.TRANSLUCENT
         ).apply {
             this.title = title
@@ -2812,8 +2837,8 @@ object FloatBallOverlay {
         )
         val (left, top) = state.ballWindowTopLeft(settings, metrics, activeSide, center, screenHeightPx)
         val ballSize = FloatBallLayout.ballSize(settings, metrics.density)
-        host.layoutBall(left, top, ballSize.widthPx, ballSize.heightPx)
-        host.setBallVisible(state.ballVisible.value)
+        ballIconWindow?.moveTo(left, top, ballSize.widthPx, ballSize.heightPx)
+        ballIconWindow?.setVisible(state.ballVisible.value)
         if (!layoutOnly) {
             ballIconView?.bind(
                 settings = settings,
@@ -2837,7 +2862,7 @@ object FloatBallOverlay {
         if (captureSuppressed) {
             state.chromeVisible.value = false
             syncTouchWindowLayout(settings)
-            displayView?.setBallVisible(false)
+            ballIconWindow?.setVisible(false)
             return
         }
         if (FloatBallLayout.isKeyboardTriggerDisabled(settings, isLandscapeLayout())) {
@@ -2845,7 +2870,7 @@ object FloatBallOverlay {
             state.ballVisible.value = false
             state.lineVisible.value = false
             syncTouchWindowLayout(settings)
-            displayView?.setBallVisible(false)
+            ballIconWindow?.setVisible(false)
             return
         }
         state.chromeVisible.value = true
@@ -2855,7 +2880,14 @@ object FloatBallOverlay {
             if (!dragOriginatedFromLine) {
                 setLineTouchHostEnabled(false)
             }
-            syncDisplayBallLayout(settings, layoutOnly = isDragging)
+            // ⚠ 拖动中必须用拖动会话里的球心布局：`syncDisplayBallLayout` 没有 overrideCenter 时
+            // 会回落到 dockBallCenter，于是任何一次周期性 relayout（拖动中约 200ms 一次）都会把
+            // 球打回停靠位一帧、下一帧再跳回手指 —— 观感就是拖动时轻微抖动。
+            if (isDragging) {
+                applyDragBallLayout(settings)
+            } else {
+                syncDisplayBallLayout(settings)
+            }
             return
         }
         state.ballVisible.value = true
@@ -3294,17 +3326,23 @@ object FloatBallOverlay {
         val view = displayView ?: return
         val settings = settingsState?.value ?: return
         if (!slopPhaseBallFollowActive) {
+            // 对齐 FV：没有拖动死区。按下那一刻（位移为 0）什么都不做；
+            // 手指一离开按下点就建立会话、球立刻跟手（不再等死区走满）。
+            if (fingerX == touchDownX && fingerY == touchDownY) return
             if (fromLineStrip) {
                 prepareLineDragStateForSlop()
             } else {
-                expandBallTouchCapture()
+                // 对齐 FV：球拖动全程**不改窗口尺寸**。
+                // 收到 ACTION_DOWN 的窗口会持续收到后续 MOVE（手指移出窗口也一样），
+                // 扩窗只会多一次尺寸变更（updateViewLayout）——那 1~2 帧就是"手指动了球没动"的空档。
+                setLineTouchHostEnabled(false)
             }
             slopPhaseBallFollowActive = true
             slopPhaseFromLineStrip = fromLineStrip
             cancelCursorPickPreview()
-            setDragging(true)
-            ballDraggingState?.value = true
-            ballIconView?.setDragging(true)
+            // ⚠ 先 armed 再 setDragging：setDragging(true) 会把 display 层显示出来并布局，
+            // 此时必须已经能用 dragSession 算出"球在手指处"的位置，否则会先按停靠位画一帧、
+            // 再把球挪到手指 —— 看起来就是"球先跳到别处再跳回手指"。
             armDragSessionAtFinger(
                 settings = settings,
                 metrics = view.resources.displayMetrics,
@@ -3314,6 +3352,9 @@ object FloatBallOverlay {
                 fingerY = fingerY,
                 fromEdgeGesture = false
             )
+            setDragging(true)
+            ballDraggingState?.value = true
+            ballIconView?.setDragging(true)
             flushDragChromeLayout(syncAnchorState = true)
         } else {
             dragSession.updateFingerPosition(fingerX, fingerY)
@@ -3323,6 +3364,7 @@ object FloatBallOverlay {
     }
 
     private fun cancelSlopPhaseBallFollow() {
+        slopPreviewProgress = 0f
         if (!slopPhaseBallFollowActive) return
         slopPhaseBallFollowActive = false
         revertLineDragStateForSlop()
@@ -3476,6 +3518,7 @@ object FloatBallOverlay {
     }
 
     private fun clearCursorUi(restoreLayout: Boolean = true) {
+        slopPreviewProgress = 0f
         slopPhaseBallFollowActive = false
         slopPhaseFromLineStrip = false
         dragOriginatedFromLine = false

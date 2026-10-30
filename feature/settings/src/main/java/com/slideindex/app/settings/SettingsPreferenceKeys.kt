@@ -588,6 +588,8 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_POSITION_MODE = stringPreferencesKey("float_ball_position_mode")
     val FLOAT_BALL_ACTIVE_SIDE = stringPreferencesKey("float_ball_active_side")
     val FLOAT_BALL_LINE_HEIGHT_FRACTION = floatPreferencesKey("float_ball_line_height_fraction")
+    /** 触发带宽度（dp）。旧键 [FLOAT_BALL_LINE_WIDTH_FRACTION] 只用于一次性迁移。 */
+    val FLOAT_BALL_LINE_WIDTH_DP = floatPreferencesKey("float_ball_line_width_dp")
     val FLOAT_BALL_LINE_WIDTH_FRACTION = floatPreferencesKey("float_ball_line_width_fraction")
     val FLOAT_BALL_LINE_OPACITY = floatPreferencesKey("float_ball_line_opacity")
     val FLOAT_BALL_GESTURE_ACTIONS = stringSetPreferencesKey("float_ball_gesture_actions")

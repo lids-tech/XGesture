@@ -340,7 +340,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onVisibleFractionChange = viewModel::setFloatBallVisibleFraction,
             onPositionYChange = viewModel::setFloatBallPositionYFraction,
             onLineHeightChange = viewModel::setFloatBallLineHeightFraction,
-            onLineWidthChange = viewModel::setFloatBallLineWidthFraction,
+            onLineWidthChange = viewModel::setFloatBallLineWidthDp,
             onLineOpacityChange = viewModel::setFloatBallLineOpacity,
             onOpenStyleSettings = { ctx.navigate(AppNavKey.FloatBallStyle) },
             onStripZonePreviewStart = { ctx.startFloatBallStripZonePreview() },
@@ -348,13 +348,13 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onPositionYPreviewStart = { /* preview starts on first drag tick */ },
             onPositionYPreviewChange = { ctx.previewFloatBallPositionY(it) },
             onPositionYPreviewStop = { restore -> ctx.endFloatBallPositionYPreview(restore) },
-            onPreviewAppearance = { size, opacity, visible, lineHeight, lineWidth, lineOpacity ->
+            onPreviewAppearance = { size, opacity, visible, lineHeight, lineWidthDp, lineOpacity ->
                 ctx.previewFloatBallAppearance(
                     sizeDp = size,
                     opacity = opacity,
                     visibleFraction = visible,
                     lineHeightFraction = lineHeight,
-                    lineWidthFraction = lineWidth,
+                    lineWidthDp = lineWidthDp,
                     lineOpacity = lineOpacity,
                 )
             },

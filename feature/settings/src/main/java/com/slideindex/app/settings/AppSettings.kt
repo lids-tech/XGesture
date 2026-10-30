@@ -309,7 +309,7 @@ data class AppSettings(
     val floatBallPositionMode get() = floatBall.floatBallPositionMode
     val floatBallActiveSide get() = floatBall.floatBallActiveSide
     val floatBallLineHeightFraction get() = floatBall.floatBallLineHeightFraction
-    val floatBallLineWidthFraction get() = floatBall.floatBallLineWidthFraction
+    val floatBallLineWidthDp get() = floatBall.floatBallLineWidthDp
     val floatBallLineOpacity get() = floatBall.floatBallLineOpacity
     val floatBallGestureActions get() = floatBall.floatBallGestureActions
     val floatBallStyleType get() = floatBall.floatBallStyleType

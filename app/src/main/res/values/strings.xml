@@ -683,6 +683,7 @@
     <string name="float_ball_position_xy_hint">The percentage shows how much of the ball stays on screen when docked</string>
     <string name="float_ball_line_height">Line height</string>
     <string name="float_ball_line_width">Trigger width</string>
+    <string name="float_ball_line_width_value">%1$.0f dp</string>
     <string name="float_ball_line_width_preview_hint">Drag the trigger width slider to preview the active swipe zone along the screen edge.</string>
     <string name="float_ball_line_opacity">Line opacity</string>
     <string name="float_ball_translation_settings_title">Pick panel translate</string>

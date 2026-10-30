@@ -1,6 +1,7 @@
 package com.slideindex.app.overlay
 
 import android.os.Handler
+import android.util.Log
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -61,7 +62,11 @@ internal class FloatBallGestureDetector(
     private var downSwipeShortPx = 60f
     private var sideSwipeShortPx = 60f
     private var upSwipeShortPx = 60f
-    private var slopPx = 8f
+    /**
+     * 点击/双击判定的容差（px）：取系统 `ViewConfiguration.scaledTouchSlop`，与 FV 一致。
+     * 它**不参与**拖动起点判定 —— 对齐 FV：手指一动球就跟、取词立即开始，没有死区。
+     */
+    private var tapSlopPx = 8f
     private var longPressMs = LONG_PRESS_MS
     private var configuredActions: Map<FloatBallGestureType, GestureAction> = emptyMap()
 
@@ -155,7 +160,7 @@ internal class FloatBallGestureDetector(
     private val longPressRunnable = Runnable {
         if (pickDragStarted || isPickCommitLocked() || longPressFired) return@Runnable
         val dist = hypot(lastX - downX, lastY - downY)
-        if (dist <= slopPx * 2f) {
+        if (dist <= tapSlopPx * 2f) {
             longPressFired = true
             pendingSingleTap = false
             onGesture?.invoke(FloatBallGestureType.LONG_PRESS, lastX, lastY, downX, downY)
@@ -182,6 +187,7 @@ internal class FloatBallGestureDetector(
     fun bind(
         settings: AppSettings,
         density: Float,
+        systemTouchSlopPx: Float,
         onPickStart: (touchDownX: Float, touchDownY: Float, fingerX: Float, fingerY: Float) -> Unit,
         onPickDrag: (fingerX: Float, fingerY: Float) -> Unit,
         onPickEnd: () -> Unit,
@@ -201,10 +207,7 @@ internal class FloatBallGestureDetector(
         downSwipeShortPx = swipeThresholdPx(settings.floatBallDownSwipeShortPercent, density)
         sideSwipeShortPx = swipeThresholdPx(settings.floatBallSideSwipeShortPercent, density)
         upSwipeShortPx = swipeThresholdPx(settings.floatBallUpSwipeShortPercent, density)
-        slopPx = settings.floatBallPointerSlopDp.coerceIn(
-            FloatingPointerBounds.PICK_SLOP_MIN_DP,
-            FloatingPointerBounds.PICK_SLOP_MAX_DP,
-        ) * density
+        tapSlopPx = systemTouchSlopPx
         longPressMs = settings.floatBallLongPressMs.coerceIn(200, 2000).toLong()
         configuredActions = settings.floatBallGestureActions
         this.onPickStart = onPickStart
@@ -276,14 +279,14 @@ internal class FloatBallGestureDetector(
                 gesturePath.add(event.rawY)
                 val distFromStart = hypot(event.rawX - downX, event.rawY - downY)
                 if (!pickDragStarted) {
-                    val progress = if (slopPx > 0f) (distFromStart / slopPx).coerceIn(0f, 1f) else 1f
-                    onPickPreviewProgress?.invoke(progress)
+                    onPickPreviewProgress?.invoke(1f)
                     if (distFromStart > 0f) {
                         onPickPreviewMove?.invoke(downX, downY, event.rawX, event.rawY)
                     }
                 }
                 var justStartedPickDrag = false
-                if (distFromStart > slopPx) {
+                // 对齐 FV：没有拖动死区 —— 手指一离开按下点就跟手/开始取词。
+                if (distFromStart > 0f) {
                     movedBeyondSlop = true
                     handler.removeCallbacks(longPressRunnable)
                     pendingSingleTap = false
@@ -360,7 +363,7 @@ internal class FloatBallGestureDetector(
                             ?.let { onGesture?.invoke(it, event.rawX, event.rawY, downX, downY) }
                         finishGestureOnly()
                     }
-                    movedBeyondSlop || totalDist > slopPx -> finishGestureOnly()
+                    movedBeyondSlop || totalDist > tapSlopPx -> finishGestureOnly()
                     else -> {
                         classifyTapRelease(event.rawX, event.rawY, downX, downY)
                         finishGestureOnly()
@@ -463,7 +466,7 @@ internal class FloatBallGestureDetector(
     private fun classifyTapRelease(upX: Float, upY: Float, touchDownX: Float, touchDownY: Float) {
         val now = SystemClock.uptimeMillis()
         val isDoubleTap = now - lastTapUpTime <= DOUBLE_TAP_MS &&
-            hypot(upX - lastTapUpX, upY - lastTapUpY) <= slopPx * 2f
+            hypot(upX - lastTapUpX, upY - lastTapUpY) <= tapSlopPx * 2f
         if (isDoubleTap) {
             handler.removeCallbacks(singleTapRunnable)
             pendingSingleTap = false
@@ -550,8 +553,8 @@ internal class FloatBallGestureDetector(
     internal fun isGestureArmedForTest(): Boolean = gestureArmed
 
     internal fun retainsGestureCommitment(forwardProgress: Float): Boolean {
-        if (peakForwardProgressPx <= slopPx) {
-            return forwardProgress > slopPx
+        if (peakForwardProgressPx <= tapSlopPx) {
+            return forwardProgress > tapSlopPx
         }
         return forwardProgress >= peakForwardProgressPx * GESTURE_CANCEL_RETAIN_FRACTION
     }
@@ -610,7 +613,7 @@ internal class FloatBallGestureDetector(
     private fun qualifiesAsSwipe(dx: Float, dy: Float): Boolean {
         val absDx = abs(dx)
         val absDy = abs(dy)
-        if (hypot(dx, dy) <= slopPx) return false
+        if (hypot(dx, dy) <= tapSlopPx) return false
         return when {
             absDy > absDx * DIRECTION_RATIO && dy < 0f -> true
             absDy > absDx * DIRECTION_RATIO && dy > 0f -> true
@@ -656,7 +659,7 @@ internal class FloatBallGestureDetector(
         val now = SystemClock.uptimeMillis()
         val heldAtOrigin = reboundStartTime > 0L &&
             now - reboundStartTime >= REBOUND_CANCEL_HOLD_MS &&
-            hypot(lastX - downX, lastY - downY) <= slopPx * 2.5f
+            hypot(lastX - downX, lastY - downY) <= tapSlopPx * 2.5f
         if (heldAtOrigin) return null
 
         return returnType

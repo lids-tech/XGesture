@@ -85,21 +85,6 @@ fun floatBallPickAdvancedCardItems(
             onValueChange = onPickBottomTransitionChange,
         )
     },
-    settingsCardScopeItem("pointer-slop") {
-        SettingsSliderRow(
-            title = stringResource(R.string.float_ball_pointer_slop),
-            value = settings.floatBallPointerSlopDp,
-            // 下限放到 1dp：默认仍是 4dp，但想把"球跟手前的死区"压到几乎为零时可以调到这里
-            // （0dp 会让按下抖动直接变成拖动，长按/单击都会被吞，所以不放 0）。
-            valueRange = FloatingPointerBounds.PICK_SLOP_MIN_DP..
-                FloatingPointerBounds.PICK_SLOP_MAX_DP,
-            steps = (FloatingPointerBounds.PICK_SLOP_MAX_DP -
-                FloatingPointerBounds.PICK_SLOP_MIN_DP).toInt() - 1,
-            enabled = true,
-            label = stringResource(R.string.float_ball_size_value, settings.floatBallPointerSlopDp),
-            onValueChange = onPointerSlopChange,
-        )
-    },
     settingsCardScopeItem("hover-pause-delay") {
         SettingsSliderRow(
             title = stringResource(R.string.float_ball_hover_pause_delay),

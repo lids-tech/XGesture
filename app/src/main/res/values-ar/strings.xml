@@ -1781,6 +1781,7 @@
     <string name="float_ball_position_xy_hint">النسبة المئوية المعروضة تمثل نسبة بقاء الكرة العائمة داخل الشاشة عند اللصق بالحافة</string>
     <string name="float_ball_line_height">ارتفاع الخط</string>
     <string name="float_ball_line_width">عرض منطقة التشغيل</string>
+    <string name="float_ball_line_width_value">%1$.0f dp</string>
     <string name="float_ball_line_width_preview_hint">عند سحب شريط «عرض منطقة التشغيل»، سيتم معاينة نطاق السحب الفعال على حافة الشاشة</string>
     <string name="float_ball_line_opacity">شفافية الخط</string>
     <string name="float_ball_size">حجم الكرة</string>

@@ -1899,6 +1899,7 @@
     <string name="float_ball_position_xy_hint">显示百分比表示贴边时球体留在屏幕内的比例</string>
     <string name="float_ball_line_height">线高度</string>
     <string name="float_ball_line_width">触发区宽度</string>
+    <string name="float_ball_line_width_value">%1$.0f dp</string>
     <string name="float_ball_line_width_preview_hint">拖动「触发区宽度」滑块时，会在屏幕边缘预览有效滑动范围</string>
     <string name="float_ball_line_opacity">线透明度</string>
     <string name="float_ball_size">球体大小</string>

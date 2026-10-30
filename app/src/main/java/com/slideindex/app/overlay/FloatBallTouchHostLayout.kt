@@ -3,6 +3,7 @@ package com.slideindex.app.overlay
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.View
 import android.widget.FrameLayout
 import com.slideindex.app.floatball.FloatBallGestureType
@@ -207,6 +208,7 @@ internal class FloatBallTouchHostLayout(
         detector.bind(
             settings = settings,
             density = density,
+            systemTouchSlopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
             onPickStart = onDragStart,
             onPickDrag = onDrag,
             onPickEnd = onDragEnd,

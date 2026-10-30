@@ -87,6 +87,7 @@ internal class FloatBallStripHost(
         gestureDetector.bind(
             settings = settings,
             density = density,
+            systemTouchSlopPx = android.view.ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
             onPickStart = { downX, downY, fingerX, fingerY ->
                 onDragStart?.invoke(downX, downY, fingerX, fingerY)
             },
