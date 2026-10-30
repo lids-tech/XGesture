@@ -114,6 +114,11 @@
         </intent>
     </queries>
 
+            <activity
+            android:name=".ui.QuickWheelSlotEditorActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SlideIndex" />
+
     <application
         android:name=".SlideIndexApp"
         tools:targetApi="33"

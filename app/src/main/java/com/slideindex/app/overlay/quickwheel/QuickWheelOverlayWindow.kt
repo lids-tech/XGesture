@@ -14,6 +14,7 @@ import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.gesture.QuickWheelAnchorMode
 import com.slideindex.app.gesture.QuickWheelLaunchShape
 import com.slideindex.app.overlay.OverlayBlurGate
+import com.slideindex.app.overlay.OverlayViewBackHandler
 import com.slideindex.app.overlay.OverlayCompose
 import com.slideindex.app.overlay.OverlayComposeOwner
 import com.slideindex.app.overlay.OverlayWindowTypes
@@ -31,6 +32,28 @@ import com.slideindex.app.settings.withQuickWheelLaunchMode
 import com.slideindex.app.settings.withoutLaunchWindowMode
 import com.slideindex.app.ui.theme.OverlayAwareModuleTheme
 import com.slideindex.app.ui.toWheelShapeOrNull
+import android.widget.Toast
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.slideindex.app.settings.QuickWheelCodec
+import com.slideindex.app.ui.QuickWheelEditorOverlay
+import kotlinx.coroutines.launch
 
 /**
  * 「快捷轮盘」浮层宿主（Compose）。
@@ -47,6 +70,8 @@ object QuickWheelOverlayWindow {
     private var composeOwner: OverlayComposeOwner? = null
     private var windowManager: WindowManager? = null
     private var activeExecutor: ActionExecutor? = null
+    /** 返回键 / 返回手势的路由（与侧滑面板同一套：键盘优先、魅族注入兜底、predictive back）。 */
+    private var backHandler: OverlayViewBackHandler? = null
     private var activeSettings: AppSettings = AppSettings()
 
     /** 本应用包名：容器选了"始终小窗"时用于硬排除判定（桌面 / 系统界面 / 自身 → 仍全屏）。 */
@@ -279,9 +304,41 @@ object QuickWheelOverlayWindow {
         activeSelfPackage = hostContext.packageName
 
         val owner = OverlayComposeOwner()
+        val appContext = hostContext.applicationContext
         val view = OverlayCompose.createComposeView(hostContext, owner).apply {
             setContent {
+                // 编辑态的草稿轮盘：拖动 / 增删会让它不断变化，所以必须是 State 而不是入参。
+                var editorWheel by remember { mutableStateOf(wheel) }
+                var editing by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
                 OverlayAwareModuleTheme {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (editing) {
+                            QuickWheelEditorOverlay(
+                                wheel = editorWheel,
+                                onChange = { updated ->
+                                    editorWheel = updated
+                                    scope.launch { persistWheel(appContext, updated) }
+                                },
+                                // 第 3 步接配置页；先给个提示，别让点击无反馈。
+                                onOpenSlot = { path ->
+    runCatching {
+        appContext.startActivity(
+            android.content.Intent(appContext, QuickWheelSlotEditorActivity::class.java)
+                .putExtra(QuickWheelSlotEditorActivity.EXTRA_WHEEL_ID, wheel.id)
+                .putExtra(QuickWheelSlotEditorActivity.EXTRA_PATH, path)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+    // 配置页是另一个任务，回来时编辑层还开着；重读一次最新轮盘，改动能立刻看到。
+    persistReload(appContext, wheel.id)
+    editing = false
+},
+                                onClose = { editing = false },
+                                // 编辑层用和真实呼出同一个锚点，位置/形状才对得上。
+                                anchorOverride = anchorX to anchorY,
+                            )
+                        } else {
                     QuickWheelOverlayContent(
                         wheel = wheel,
                         anchorX = anchorX,
@@ -305,6 +362,27 @@ object QuickWheelOverlayWindow {
                         },
                     )
                 }
+                
+                if (!editing) {
+                    Surface(
+                        modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 48.dp, end = 16.dp)
+                                    .size(40.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 3.dp,
+                            ) {
+                                IconButton(onClick = { editing = true }) {
+                                    Icon(Icons.Default.Edit, contentDescription = null)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            alpha = 1f
+        }
             }
             // 与「圆环启动器」一致：显式声明视图不透明（View 默认即 1f，
             // AppSwitcherOverlayController.show 里同样显式写 next.alpha = 1f）。
@@ -339,6 +417,12 @@ object QuickWheelOverlayWindow {
             // 事件流，所以跟手高亮 / 松手确认仍由外部事件（onExternalMove / confirmContinuousRelease）
             // 驱动；同机上的圆环启动器用的就是同一套模型（它持续触发时同样不带 NOT_TOUCHABLE）。
             OverlayWindowTypes.applyPresentationInteractiveFlags(this)
+            // 返回键：FLAG_NOT_FOCUSABLE 的窗口收不到系统返回派发（侧滑面板踩过同一个坑，
+            // 见 OverlaySidePanelHost.ensurePanelBrowsingInput 的注释）。
+            // 放开聚焦才能收到返回；再用 ALT_FOCUSABLE_IM =「可聚焦但不与输入法交互」，
+            // 避免轮盘一呼出就把输入法抢过来。
+            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            flags = flags or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
             type = if (canHostOpaqueOverlay) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -364,11 +448,18 @@ object QuickWheelOverlayWindow {
                 "blurDp=$blurDp blurAvailable=$blurAvailable dim=${wheel.backdropDimPercent}",
         )
 
-        return runCatching {
+            return runCatching {
             wm.addView(view, params)
             composeView = view
             composeOwner = owner
             windowManager = wm
+            backHandler?.detach()
+            backHandler = OverlayViewBackHandler(view) { dismissForSession(mySession) }.also {
+                // requestViewFocus：legacy（注入 KEYCODE_BACK）那条路要靠视图焦点才收得到。
+                it.attach(requestViewFocus = true)
+                // 再补一档更早的拦截：Compose 自己消费了 Key.Back 时，unhandled 回调不会触发。
+                it.attachKeyFallback()
+            }
             true
         }.getOrElse {
             Log.w(TAG, "show: addView 失败", it)
@@ -425,6 +516,8 @@ object QuickWheelOverlayWindow {
         composeView = null
         composeOwner = null
         windowManager = null
+        backHandler?.detach()
+        backHandler = null
         activeExecutor = null
         activeSettings = AppSettings()
         activeSelfPackage = ""
@@ -486,5 +579,22 @@ object QuickWheelOverlayWindow {
         if (wheels.isEmpty()) return null
         if (wheelId.isBlank()) return wheels.firstOrNull()
         return wheels.firstOrNull { it.id == wheelId } ?: wheels.firstOrNull()
+    }
+}
+
+/**
+ * 把编辑后的轮盘写回设置。
+ *
+ * 复用仓库既有的两个入口：`SettingsRepository.edit`（DataStore 事务）+ `QuickWheelCodec.writeToPreferences`
+ * （轮盘自己的扁平编解码），不另造一套存储格式。
+ */
+private fun persistWheel(context: Context, wheel: QuickWheel) {
+    val repo = OverlayDependencyAccess.overlayDependencies(context)?.settingsRepository ?: return
+    kotlinx.coroutines.MainScope().launch {
+        repo.edit { prefs ->
+            val wheels = QuickWheelCodec.decode(prefs)
+            val next = wheels.map { if (it.id == wheel.id) wheel else it }
+            QuickWheelCodec.writeToPreferences(next, prefs)
+        }
     }
 }
