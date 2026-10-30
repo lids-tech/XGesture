@@ -477,6 +477,14 @@
             android:theme="@style/Theme.SlideIndex.Transparent" />
 
         <activity
+            android:name=".overlay.filebrowser.FileBrowserMediaDeleteActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SlideIndex.Transparent" />
+
+        <activity
             android:name=".overlay.searchpanel.CameraPermissionTrampolineActivity"
             android:excludeFromRecents="true"
             android:exported="false"

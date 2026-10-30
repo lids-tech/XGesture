@@ -4,7 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -73,6 +75,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -112,11 +115,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.slideindex.app.R
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
+import com.slideindex.app.di.OverlayDependencyAccess
+import com.slideindex.app.ocr.OcrDependencyAccess
+import com.slideindex.app.ocr.OcrEngines
+import com.slideindex.app.ocr.OcrRecognizeResult
+import com.slideindex.app.overlay.searchpanel.SearchPanelOverlayWindow
+import com.slideindex.app.overlay.searchpanel.SearchPanelSessionState
+import com.slideindex.app.stash.StashCoordinator
 import com.slideindex.app.ui.miuix.MiuixSearchField
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.slideindex.app.ui.theme.LocalAppDarkTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -220,6 +232,31 @@ internal fun FileBrowserPanel(
             .sumOf { it.sizeBytes }
     }
     val context = LocalContext.current
+    val fileImageItems = remember(filtered, context) {
+        filtered.mapNotNull { entry ->
+            if (FileKind.from(entry.name, entry.kind) != FileKind.IMAGE) return@mapNotNull null
+            val file = java.io.File(entry.path)
+            if (!file.isFile || !file.canRead()) return@mapNotNull null
+            val uri = runCatching {
+                androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file,
+                )
+            }.getOrNull() ?: return@mapNotNull null
+            FileBrowserMediaItem(
+                id = entry.path.hashCode().toLong(),
+                uri = uri,
+                name = entry.name,
+                mimeType = android.webkit.MimeTypeMap.getSingleton()
+                    .getMimeTypeFromExtension(file.extension.lowercase())
+                    ?: "image/*",
+                sizeBytes = file.length(),
+                modifiedEpochSeconds = file.lastModified() / 1000L,
+                relativePath = entry.path,
+            )
+        }
+    }
     val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
     var copied by remember { mutableStateOf(false) }
@@ -249,6 +286,7 @@ internal fun FileBrowserPanel(
     var deleteTarget by remember { mutableStateOf<FileBrowserEntry?>(null) }
     var operationError by remember { mutableStateOf(false) }
     var showBatchDelete by remember { mutableStateOf(false) }
+    var ocrText by remember { mutableStateOf<String?>(null) }
     val actionScope = rememberCoroutineScope()
 
     LaunchedEffect(operationError) {
@@ -469,7 +507,25 @@ internal fun FileBrowserPanel(
 
                                                 FileEntryKind.FILE,
                                                 FileEntryKind.OTHER,
-                                                -> controller.showDetails(entry)
+                                                -> {
+                                                    if (
+                                                        FileKind.from(entry.name, entry.kind) ==
+                                                        FileKind.IMAGE
+                                                    ) {
+                                                        imagePreview = entry
+                                                    } else {
+                                                        val opened = FileBrowserOpen.open(
+                                                            context = context,
+                                                            path = entry.path,
+                                                            chooserTitle = context.getString(
+                                                                R.string.file_browser_open_with,
+                                                            ),
+                                                        )
+                                                        if (!opened) {
+                                                            controller.showDetails(entry)
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     },
@@ -672,22 +728,55 @@ internal fun FileBrowserPanel(
                         )
                     }
                     state.mediaPreview?.let { preview ->
-                        val previewIndex = mediaImages.indexOfFirst { it.id == preview.id }
-                        FileBrowserMediaImageViewer(
-                            item = preview,
-                            onPrevious = if (previewIndex > 0) {
-                                { controller.showMediaPreview(mediaImages[previewIndex - 1]) }
-                            } else {
-                                null
-                            },
-                            onNext = if (previewIndex >= 0 && previewIndex < mediaImages.lastIndex) {
-                                { controller.showMediaPreview(mediaImages[previewIndex + 1]) }
-                            } else {
-                                null
-                            },
-                            onShare = { shareMediaItems(context, listOf(preview)) },
+                        FileBrowserMediaViewer(
+                            items = mediaImages,
+                            initialItem = preview,
                             onClose = controller::hideMediaPreview,
+                            onShare = { item -> shareMediaItems(context, listOf(item)) },
+                            onEdit = { bitmap ->
+                                val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
+                                    .put(context, bitmap)
+                                com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
+                                    .launch(context, editorPath)
+                            },
+                            onPin = { bitmap ->
+                                StashCoordinator.pinImageToScreen(context, bitmap)
+                            },
+                            onOcr = { bitmap ->
+                                actionScope.launch {
+                                    val text = recognizeImageText(context, bitmap)
+                                    if (text.isNullOrBlank()) {
+                                        Toast.makeText(
+                                            context,
+                                            R.string.file_browser_media_ocr_empty,
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    } else {
+                                        ocrText = text
+                                    }
+                                }
+                            },
+                            onSearch = { bitmap ->
+                                openImageSearch(context, bitmap)
+                            },
+                            onDelete = { item ->
+                                FileBrowserMediaDeleteActivity.launch(context, item.uri) { success ->
+                                    if (success) controller.refresh()
+                                }
+                            },
                         )
+                    }
+                    ocrText?.let { text ->
+                        FileBrowserDialog(
+                            title = stringResource(R.string.file_browser_media_ocr),
+                            onDismiss = { ocrText = null },
+                            confirmLabel = stringResource(R.string.file_browser_close),
+                            onConfirm = { ocrText = null },
+                        ) {
+                            SelectionContainer {
+                                Text(text = text, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
                     }
                     if (showPathDialog) {
                         FileBrowserPathDialog(
@@ -873,35 +962,79 @@ internal fun FileBrowserPanel(
                         )
                     }
                     imagePreview?.let { entry ->
-                        val images = filtered.filter {
-                            FileKind.from(it.name, it.kind) == FileKind.IMAGE
+                        val viewerItem = fileImageItems.firstOrNull {
+                            it.relativePath == entry.path
                         }
-                        val imageIndex = images.indexOfFirst { it.path == entry.path }
-                        FileBrowserImageViewer(
-                            entry = entry,
-                            access = state.access,
-                            onPrevious = if (imageIndex > 0) {
-                                { imagePreview = images[imageIndex - 1] }
-                            } else {
-                                null
-                            },
-                            onNext = if (imageIndex >= 0 && imageIndex < images.lastIndex) {
-                                { imagePreview = images[imageIndex + 1] }
-                            } else {
-                                null
-                            },
-                            onDetails = {
-                                imagePreview = null
-                                controller.showDetails(entry)
-                            },
-                            onEdit = { bitmap ->
-                                val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
-                                    .put(context, bitmap)
-                                com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
-                                    .launch(context, editorPath)
-                            },
-                            onClose = { imagePreview = null },
-                        )
+                        if (viewerItem != null) {
+                            FileBrowserMediaViewer(
+                                items = fileImageItems,
+                                initialItem = viewerItem,
+                                onClose = { imagePreview = null },
+                                onShare = { item -> shareMediaItems(context, listOf(item)) },
+                                onEdit = { bitmap ->
+                                    val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
+                                        .put(context, bitmap)
+                                    com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
+                                        .launch(context, editorPath)
+                                },
+                                onPin = { bitmap ->
+                                    StashCoordinator.pinImageToScreen(context, bitmap)
+                                },
+                                onOcr = { bitmap ->
+                                    actionScope.launch {
+                                        val text = recognizeImageText(context, bitmap)
+                                        if (text.isNullOrBlank()) {
+                                            Toast.makeText(
+                                                context,
+                                                R.string.file_browser_media_ocr_empty,
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        } else {
+                                            ocrText = text
+                                        }
+                                    }
+                                },
+                                onSearch = { bitmap ->
+                                    openImageSearch(context, bitmap)
+                                },
+                                onDelete = { item ->
+                                    val target = state.entries.firstOrNull {
+                                        it.path == item.relativePath
+                                    }
+                                    if (target != null) controller.deleteEntry(target)
+                                },
+                            )
+                        } else {
+                            val images = filtered.filter {
+                                FileKind.from(it.name, it.kind) == FileKind.IMAGE
+                            }
+                            val imageIndex = images.indexOfFirst { it.path == entry.path }
+                            FileBrowserImageViewer(
+                                entry = entry,
+                                access = state.access,
+                                onPrevious = if (imageIndex > 0) {
+                                    { imagePreview = images[imageIndex - 1] }
+                                } else {
+                                    null
+                                },
+                                onNext = if (imageIndex >= 0 && imageIndex < images.lastIndex) {
+                                    { imagePreview = images[imageIndex + 1] }
+                                } else {
+                                    null
+                                },
+                                onDetails = {
+                                    imagePreview = null
+                                    controller.showDetails(entry)
+                                },
+                                onEdit = { bitmap ->
+                                    val editorPath = com.slideindex.app.imageeditor.ImageEditorLaunchCache
+                                        .put(context, bitmap)
+                                    com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
+                                        .launch(context, editorPath)
+                                },
+                                onClose = { imagePreview = null },
+                            )
+                        }
                     }
                     if (operationError) {
                         Text(
@@ -1139,6 +1272,51 @@ private fun tabTitle(path: String): String {
     }
 }
 
+private fun openImageSearch(context: Context, bitmap: Bitmap) {
+    // 文件浏览器本身也是 overlay；先收起它，再把图片交给搜索面板的图片模式。
+    SearchPanelSessionState.pushImage(bitmap)
+    FileBrowserOverlayWindow.dismiss()
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+        { SearchPanelOverlayWindow.show(context) },
+        240L,
+    )
+}
+
+private suspend fun recognizeImageText(
+    context: Context,
+    bitmap: Bitmap,
+): String? {
+    val settings = OverlayDependencyAccess.overlayDependencies(context)
+        ?.settingsRepository
+        ?.readSnapshot()
+    val configured = settings?.floatBallOcrModelId.orEmpty()
+    val catalog = OcrDependencyAccess.catalogProvider(context) ?: return null
+    val repository = OcrDependencyAccess.modelRepository(context) ?: return null
+    val modelId = if (configured.isNotBlank()) {
+        configured.takeIf {
+            catalog.findModel(it)?.engine == OcrEngines.PPOCR && repository.isInstalled(it)
+        }
+    } else {
+        null
+    } ?: repository.installedModelIds().firstOrNull { id ->
+        catalog.findModel(id)?.engine == OcrEngines.PPOCR
+    } ?: run {
+        Toast.makeText(
+            context,
+            R.string.share_image_ocr_model_required,
+            Toast.LENGTH_SHORT,
+        ).show()
+        return null
+    }
+    val inference = OcrDependencyAccess.inferenceService(context) ?: return null
+    return withContext(Dispatchers.Default) {
+        when (val result = inference.recognizeBitmap(modelId, bitmap)) {
+            is OcrRecognizeResult.Success -> result.text
+            is OcrRecognizeResult.Failure -> null
+        }
+    }
+}
+
 private fun openMediaExternally(context: Context, item: FileBrowserMediaItem) {
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(item.uri, item.mimeType ?: "*/*")
@@ -1152,7 +1330,11 @@ private fun openMediaExternally(context: Context, item: FileBrowserMediaItem) {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    runCatching { context.startActivity(chooser) }
+    runCatching {
+        context.startActivity(intent)
+    }.onFailure {
+        runCatching { context.startActivity(chooser) }
+    }
 }
 
 private fun shareMediaItems(context: Context, items: List<FileBrowserMediaItem>) {

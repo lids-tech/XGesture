@@ -165,6 +165,7 @@ private fun FileBrowserEntryRow(
     dragPaths: List<String>,
 ) {
     val fileKind = FileKind.from(entry.name, entry.kind)
+    val isGif = fileKind == FileKind.IMAGE && entry.name.endsWith(".gif", ignoreCase = true)
     val isFolder = entry.kind == FileEntryKind.DIRECTORY
     val context = LocalContext.current
     val view = LocalView.current
@@ -351,6 +352,19 @@ private fun FileBrowserEntryRow(
                         contentDescription = null,
                         tint = tint,
                         modifier = Modifier.size(22.dp),
+                    )
+                }
+                if (isGif) {
+                    Text(
+                        text = "GIF",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(2.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+                            .padding(horizontal = 3.dp, vertical = 1.dp),
                     )
                 }
             }
