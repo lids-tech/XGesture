@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.dp
 import com.slideindex.app.settings.QuickWheelCodec
 import com.slideindex.app.ui.QuickWheelEditorOverlay
 import kotlinx.coroutines.launch
+import androidx.compose.material3.MaterialTheme
+import com.slideindex.app.ui.QuickWheelSlotEditorActivity
 
 /**
  * 「快捷轮盘」浮层宿主（Compose）。
@@ -307,10 +309,11 @@ object QuickWheelOverlayWindow {
         val appContext = hostContext.applicationContext
         val view = OverlayCompose.createComposeView(hostContext, owner).apply {
             setContent {
-                // 编辑态的草稿轮盘：拖动 / 增删会让它不断变化，所以必须是 State 而不是入参。
+                // 编辑态草稿：拖拽 / 增删会不断产生新对象，所以必须放在 State 里。
                 var editorWheel by remember { mutableStateOf(wheel) }
                 var editing by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
+
                 OverlayAwareModuleTheme {
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (editing) {
@@ -320,52 +323,62 @@ object QuickWheelOverlayWindow {
                                     editorWheel = updated
                                     scope.launch { persistWheel(appContext, updated) }
                                 },
-                                // 第 3 步接配置页；先给个提示，别让点击无反馈。
                                 onOpenSlot = { path ->
-    runCatching {
-        appContext.startActivity(
-            android.content.Intent(appContext, QuickWheelSlotEditorActivity::class.java)
-                .putExtra(QuickWheelSlotEditorActivity.EXTRA_WHEEL_ID, wheel.id)
-                .putExtra(QuickWheelSlotEditorActivity.EXTRA_PATH, path)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
-    }
-    // 配置页是另一个任务，回来时编辑层还开着；重读一次最新轮盘，改动能立刻看到。
-    persistReload(appContext, wheel.id)
-    editing = false
-},
+                                    runCatching {
+                                        appContext.startActivity(
+                                            android.content.Intent(
+                                                appContext,
+                                                QuickWheelSlotEditorActivity::class.java,
+                                            )
+                                                .putExtra(
+                                                    QuickWheelSlotEditorActivity.EXTRA_WHEEL_ID,
+                                                    editorWheel.id,
+                                                )
+                                                .putExtra(
+                                                    QuickWheelSlotEditorActivity.EXTRA_PATH,
+                                                    path,
+                                                )
+                                                .addFlags(
+                                                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK,
+                                                ),
+                                        )
+                                    }
+                                    editing = false
+                                },
                                 onClose = { editing = false },
-                                // 编辑层用和真实呼出同一个锚点，位置/形状才对得上。
                                 anchorOverride = anchorX to anchorY,
                             )
                         } else {
-                    QuickWheelOverlayContent(
-                        wheel = wheel,
-                        anchorX = anchorX,
-                        anchorY = anchorY,
-                        screenWidthPx = screenWidthPx,
-                        screenHeightPx = screenHeightPx,
-                        onExecuteTap = { slot -> executeSlot(slot, longPress = false, anchorX, anchorY) },
-                        onExecuteLongPress = { slot -> executeSlot(slot, longPress = true, anchorX, anchorY) },
-                        onDismiss = { dismissForSession(mySession) },
-                        externalTracking = externalTracking,
-                        showCenter = showCenter,
-                        adaptive = adaptive,
-                        secondaryAdaptive = secondaryAdaptive,
-                        primarySectorMaskOverride = primarySectorMaskOverride,
-                        // 容器以外区域的黑色遮罩浓度（容器本身不透明，不受影响）。
-                        backdropDimAlpha = QuickWheelLayoutEngine
-                            .clampBackdropDimPercent(wheel.backdropDimPercent) / 100f,
-                        onExternalHandlers = { move, up ->
-                            externalMoveHandler = move
-                            externalUpHandler = up
-                        },
-                    )
-                }
-                
-                if (!editing) {
-                    Surface(
-                        modifier = Modifier
+                            QuickWheelOverlayContent(
+                                wheel = editorWheel,
+                                anchorX = anchorX,
+                                anchorY = anchorY,
+                                screenWidthPx = screenWidthPx,
+                                screenHeightPx = screenHeightPx,
+                                onExecuteTap = { slot ->
+                                    executeSlot(slot, longPress = false, anchorX, anchorY)
+                                },
+                                onExecuteLongPress = { slot ->
+                                    executeSlot(slot, longPress = true, anchorX, anchorY)
+                                },
+                                onDismiss = { dismissForSession(mySession) },
+                                externalTracking = externalTracking,
+                                showCenter = showCenter,
+                                adaptive = adaptive,
+                                secondaryAdaptive = secondaryAdaptive,
+                                primarySectorMaskOverride = primarySectorMaskOverride,
+                                // 容器以外区域的黑色遮罩浓度（容器本身不透明，不受影响）。
+                                backdropDimAlpha = QuickWheelLayoutEngine
+                                    .clampBackdropDimPercent(editorWheel.backdropDimPercent) / 100f,
+                                onExternalHandlers = { move, up ->
+                                    externalMoveHandler = move
+                                    externalUpHandler = up
+                                },
+                            )
+
+                            // 编辑入口：窗口右上角的小铅笔。
+                            Surface(
+                                modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(top = 48.dp, end = 16.dp)
                                     .size(40.dp),
@@ -380,9 +393,6 @@ object QuickWheelOverlayWindow {
                         }
                     }
                 }
-            }
-            alpha = 1f
-        }
             }
             // 与「圆环启动器」一致：显式声明视图不透明（View 默认即 1f，
             // AppSwitcherOverlayController.show 里同样显式写 next.alpha = 1f）。
