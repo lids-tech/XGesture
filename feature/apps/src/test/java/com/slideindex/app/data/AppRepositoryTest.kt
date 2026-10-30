@@ -1,5 +1,6 @@
 package com.slideindex.app.data
 
+import android.content.Context
 import android.content.Intent
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.util.PinyinHelper
@@ -30,6 +31,12 @@ class AppRepositoryTest {
                 override fun launch(intent: Intent, settings: AppSettings, fullscreen: Boolean) = Unit
             },
             launchIconCache = AppLaunchIconCache(RuntimeEnvironment.getApplication()),
+            appIconOverride = object : AppIconOverrideProvider {
+                override fun bitmap(context: Context, packageName: String, sizePx: Int) = null
+                override fun peekBitmap(context: Context, packageName: String, sizePx: Int) = null
+                override fun drawable(context: Context, packageName: String, sizePx: Int) = null
+                override fun peekDrawable(context: Context, packageName: String, sizePx: Int) = null
+            },
             applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
     }

@@ -1,5 +1,6 @@
 package com.slideindex.app.overlay.holographic
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.slideindex.app.data.AppRepository
@@ -22,6 +23,7 @@ internal object HolographicLauncherIconLoader {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun loadMissingIconsAsync(
+        context: Context,
         appRepository: AppRepository,
         apps: List<HolographicLauncherApp>,
         onIconsReady: () -> Unit,
@@ -31,7 +33,11 @@ internal object HolographicLauncherIconLoader {
         worker.execute {
             var updated = false
             for (app in missing) {
-                val drawable = appRepository.launchIconDrawable(app.packageName) ?: continue
+                // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                val drawable = com.slideindex.app.ui.AppIconOverride
+                    .drawable(context, app.packageName, 128)
+                    ?: appRepository.launchIconDrawable(app.packageName)
+                    ?: continue
                 app.icon = com.slideindex.app.util.CloneBadge.wrap(drawable, app.cloneUserId > 0) ?: drawable
                 updated = true
             }

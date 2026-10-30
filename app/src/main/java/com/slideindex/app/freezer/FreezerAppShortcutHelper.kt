@@ -41,7 +41,9 @@ object FreezerAppShortcutHelper {
         if (cloneUserId > 0) "freezer_app_${packageName}_u$cloneUserId" else "freezer_app_$packageName"
 
     private fun appShortcutIcon(context: Context, packageName: String): Icon {
-        val drawable = runCatching { context.packageManager.getApplicationIcon(packageName) }.getOrNull()
+        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+        val drawable = com.slideindex.app.ui.AppIconOverride.drawable(context, packageName, 96)
+            ?: runCatching { context.packageManager.getApplicationIcon(packageName) }.getOrNull()
         return if (drawable != null) {
             Icon.createWithAdaptiveBitmap(drawable.toBitmap(96, 96))
         } else {

@@ -229,6 +229,9 @@ internal fun QuickWheelSlotIcon(
     val context = LocalContext.current
     val targetPx = with(LocalDensity.current) { rasterDp.toPx() }.toInt()
 
+    // 读 revision：图标库里改完应用图标，轮盘里的槽位要立刻换图
+    val iconRevision = com.slideindex.app.ui.GlobalIconStore.revision
+
     val libraryVector = if (slot.iconSource == QuickWheelIconSource.ICON_LIBRARY) {
         QuickWheelIconResolver.vectorFor(slot.iconValue)
     } else {
@@ -236,7 +239,9 @@ internal fun QuickWheelSlotIcon(
     }
     val bitmap = when (slot.iconSource) {
         QuickWheelIconSource.APP_ICON, QuickWheelIconSource.GALLERY ->
-            QuickWheelIconResolver.bitmapFor(context, slot, targetPx)
+            remember(slot, targetPx, iconRevision) {
+                QuickWheelIconResolver.bitmapFor(context, slot, targetPx)
+            }
         else -> null
     }
 
@@ -249,7 +254,7 @@ internal fun QuickWheelSlotIcon(
     // 与「动作选择器」列表里显示的一致。只在容器自身没配图标、且单击动作存在时解析
     //（配了图标就以用户的为准）。取不到才退回下面的矢量动作图标。
     val actionBitmap = if (slot.iconSource == QuickWheelIconSource.NONE && fallbackAction != null) {
-        remember(fallbackAction, targetPx) {
+        remember(fallbackAction, targetPx, iconRevision) {
             QuickWheelIconResolver.actionBitmapFor(context, fallbackAction, targetPx)
         }
     } else {

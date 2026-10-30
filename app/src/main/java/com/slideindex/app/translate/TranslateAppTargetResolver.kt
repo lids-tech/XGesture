@@ -40,7 +40,9 @@ object TranslateAppTargetResolver {
             label = runCatching { pm.getApplicationLabel(info).toString().trim() }
                 .getOrDefault(packageName)
                 .ifBlank { packageName },
-            icon = runCatching { pm.getApplicationIcon(info) }.getOrNull(),
+            // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+            icon = com.slideindex.app.ui.AppIconOverride.drawable(context, packageName, 128)
+                ?: runCatching { pm.getApplicationIcon(info) }.getOrNull(),
         )
     }
 }

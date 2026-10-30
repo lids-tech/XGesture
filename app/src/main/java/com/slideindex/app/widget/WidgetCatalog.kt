@@ -119,7 +119,12 @@ object WidgetCatalog {
                 ResourcesCompat.getDrawable(res, entry.iconRes, null)
               }.getOrNull()
             } else null
-            val iconBitmap = (iconDrawable ?: runCatching { pm.getApplicationIcon(pkg) }.getOrNull())?.toSafeImageBitmap(48)
+            val iconBitmap = (
+              iconDrawable
+                // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                ?: com.slideindex.app.ui.AppIconOverride.drawable(appContext, pkg, 48)
+                ?: runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
+              )?.toSafeImageBitmap(48)
             val sortKey = PinyinHelper.sortKey(label)
             val initialKey = PinyinHelper.initialKey(label)
             list.add(
@@ -243,7 +248,9 @@ object WidgetCatalog {
       }
       grouped.map { (pkg, widgets) ->
         val appLabel = widgets.firstOrNull()?.appLabel ?: pkg
-        val icon = runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
+        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+        val icon = com.slideindex.app.ui.AppIconOverride.drawable(appContext, pkg, 128)
+          ?: runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
         WidgetAppGroup(
           packageName = pkg,
           appLabel = appLabel,

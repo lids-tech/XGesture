@@ -135,7 +135,9 @@ object ManagedShortcutIconResolver {
 
     private fun appIcon(context: Context, packageName: String): Drawable? {
         if (packageName.isBlank()) return null
-        return runCatching { context.packageManager.getApplicationIcon(packageName) }.getOrNull()
+        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）：快捷方式回退到宿主应用图标时也要用覆盖后的图
+        return com.slideindex.app.ui.AppIconOverride.drawable(context, packageName, 128)
+            ?: runCatching { context.packageManager.getApplicationIcon(packageName) }.getOrNull()
     }
 
     private fun packageFromIntentUri(uri: String): String? = runCatching {
