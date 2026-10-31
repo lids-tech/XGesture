@@ -179,16 +179,6 @@ fun ExtensionHubScreen(
                     }
                 )
                 add(
-                    settingsCardScopeItem("share-sheet") {
-                        SettingNavigationRow(
-                            icon = { label -> Icon(Icons.Outlined.Share, contentDescription = label) },
-                            title = stringResource(R.string.share_sheet_settings_title),
-                            subtitle = stringResource(R.string.share_sheet_hub_subtitle),
-                            onClick = onOpenShareSheet,
-                        )
-                    }
-                )
-                add(
                     settingsCardScopeItem("stash-clipboard") {
                         StashClipboardEntryCard(
                             settings = settings,
@@ -241,6 +231,16 @@ fun ExtensionHubScreen(
                     settingsCardScopeItem("external-invocation") {
                         ExternalInvocationEntryCard(
                             onClick = onOpenExternalInvocations
+                        )
+                    }
+                )
+                add(
+                    settingsCardScopeItem("share-sheet") {
+                        SettingNavigationRow(
+                            icon = { label -> Icon(Icons.Outlined.Share, contentDescription = label) },
+                            title = stringResource(R.string.share_sheet_settings_title),
+                            subtitle = stringResource(R.string.share_sheet_hub_subtitle),
+                            onClick = onOpenShareSheet,
                         )
                     }
                 )
