@@ -190,6 +190,14 @@ enum class GestureActionType(val id: Int) {
 
     /** 「文件浏览器」：打开独立浮窗，支持系统根目录 / Android/data / Root 数据目录。 */
     FILE_BROWSER(107),
+
+    /**
+     * 「切换悬浮球」：把悬浮球总开关取反，只影响悬浮球。
+     *
+     * 状态落在 `FLOAT_BALL_ENABLED` 里，所以跨重启保持、设置页同步；
+     * 与「临时暂停悬浮层」（内存态 5 秒）不是一回事。
+     */
+    TOGGLE_FLOAT_BALL(108),
     ;
 
     companion object {
@@ -855,6 +863,12 @@ sealed class GestureAction {
         override val payload = ""
     }
 
+    /** 把「悬浮球」总开关取反（等价于悬浮球页顶部那个开关，但不影响边缘手势）。 */
+    data object ToggleFloatBall : GestureAction() {
+        override val type = GestureActionType.TOGGLE_FLOAT_BALL
+        override val payload = ""
+    }
+
     data object SwitchInputMethod : GestureAction() {
         override val type = GestureActionType.SWITCH_INPUT_METHOD
         override val payload = ""
@@ -1208,6 +1222,7 @@ sealed class GestureAction {
                 GestureActionType.SCREEN_RECORD -> ScreenRecord
                 GestureActionType.TOGGLE_WIFI -> ToggleWifi
                 GestureActionType.TOGGLE_SHAKE_GESTURE -> ToggleShakeGesture
+                GestureActionType.TOGGLE_FLOAT_BALL -> ToggleFloatBall
                 GestureActionType.TOGGLE_MOBILE_DATA -> ToggleMobileData
                 GestureActionType.SWITCH_INPUT_METHOD -> SwitchInputMethod
                 GestureActionType.CORNER_INNER_CANCEL -> CornerInnerCancel

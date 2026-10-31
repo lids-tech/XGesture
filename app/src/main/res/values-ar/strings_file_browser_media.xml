@@ -16,4 +16,19 @@
     <string name="file_browser_media_rotate">تدوير</string>
     <string name="file_browser_media_image_failed">تعذّر فتح هذه الصورة.</string>
     <string name="file_browser_media_selected">%1$d محدّد</string>
+    <string name="file_browser_media_edit">تعديل</string>
+    <string name="file_browser_media_pin">تثبيت</string>
+    <string name="file_browser_media_ocr">استخراج النص</string>
+    <string name="file_browser_media_search">بحث</string>
+    <string name="file_browser_media_continuous">عرض متتابع</string>
+    <string name="file_browser_media_single">عرض فردي</string>
+    <string name="file_browser_media_details">التفاصيل</string>
+    <string name="file_browser_media_fit">ملاءمة</string>
+    <string name="file_browser_media_actual_size">1:1</string>
+    <string name="file_browser_media_ocr_empty">لم يتم العثور على نص.</string>
+    <string name="file_browser_media_ocr_failed">تعذّر التعرف على النص.</string>
+    <string name="file_browser_media_details_name">الاسم</string>
+    <string name="file_browser_media_details_path">المسار</string>
+    <string name="file_browser_media_details_mime">النوع</string>
+    <string name="file_browser_media_details_size">الحجم</string>
 </resources>

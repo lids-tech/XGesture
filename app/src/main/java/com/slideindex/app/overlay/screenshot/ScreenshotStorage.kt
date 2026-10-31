@@ -11,6 +11,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.slideindex.app.BuildConfig
+import com.slideindex.app.overlay.share.ShareSheetLauncher
+import com.slideindex.app.overlay.share.ShareSheetPayload
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -92,20 +94,10 @@ object ScreenshotStorage {
         }.getOrDefault(false)
     }
 
-    fun share(context: Context, uri: Uri): Boolean {
-        return runCatching {
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = ClipData.newUri(context.contentResolver, "Screenshot", uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            val chooser = Intent.createChooser(send, null).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(chooser)
-            true
-        }.getOrDefault(false)
-    }
+    fun share(context: Context, uri: Uri, dismissSource: (() -> Unit)? = null): Boolean =
+        ShareSheetLauncher.share(
+            context = context,
+            payload = ShareSheetPayload.Image(uri = uri, mimeType = "image/png"),
+            dismissSource = dismissSource,
+        )
 }

@@ -1203,8 +1203,8 @@ object FloatBallPickResultPanel {
                         }
                     },
                     onShareText = {
-                        FloatBallTextPick.shareText(context, it)
-                        dismiss()
+                        // 分享面板点中目标前会调这个 lambda 收起本面板，避免目标 App 被它盖住。
+                        FloatBallTextPick.shareText(context, it) { dismiss() }
                     },
                     onTranslate = { FloatBallTranslateCoordinator.translate(context, it) },
                     onRemoveSpaces = { value, removeAll ->

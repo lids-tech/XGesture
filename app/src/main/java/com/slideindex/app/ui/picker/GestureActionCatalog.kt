@@ -138,6 +138,8 @@ object GestureActionCatalog {
         GestureActionType.MEDIA_PREVIOUS,
         GestureActionType.MEDIA_NEXT,
         GestureActionType.SWITCH_INPUT_METHOD,
+        // 「切换悬浮球」是一枚开关，归在「开关与调节」；不跟「暂停悬浮层」一起放指针区。
+        GestureActionType.TOGGLE_FLOAT_BALL,
         -> GestureActionCategory.Controls
 
         // 3. 截屏与识别 (Capture, OCR & Assistant)
@@ -300,6 +302,7 @@ object GestureActionCatalog {
         GestureAction.OpenVolumePanel,
         GestureAction.ToggleMute,
         GestureAction.ToggleShakeGesture,
+        GestureAction.ToggleFloatBall,
         GestureAction.MediaPlayPause,
         GestureAction.MediaPrevious,
         GestureAction.MediaNext,

@@ -1456,6 +1456,7 @@ internal fun HistoryPanelScreen(
                                 onClearSearch = { viewModel.setStashSearchQuery("") },
                                 onClearTagFilter = viewModel::clearTagFilter,
                                 onShowMessage = showPanelMessage,
+                                onDismissPanel = onDismiss,
                                 onListScrolledChange = { listScrolled = it },
                             )
                             HistoryPanelTab.Clipboard -> HistoryClipboardTabBody(
@@ -1475,6 +1476,7 @@ internal fun HistoryPanelScreen(
                                 onEnsureLoaded = viewModel::ensureClipboardPagesLoaded,
                                 onLoadMore = viewModel::loadMoreClipboard,
                                 onShowMessage = showPanelMessage,
+                                onDismissPanel = onDismiss,
                                 onListScrolledChange = { listScrolled = it },
                             )
                         }
@@ -2087,6 +2089,8 @@ private fun HistoryStashTabBody(
     onClearSearch: () -> Unit,
     onClearTagFilter: () -> Unit,
     onShowMessage: (Int) -> Unit,
+    /** 内置分享面板发出去之前先收起历史面板（否则目标 App 被面板盖住）。 */
+    onDismissPanel: () -> Unit,
     /** 列表滑离顶部 → 上报给宿主决定头部收不收（§0.16.5）。 */
     onListScrolledChange: (Boolean) -> Unit,
 ) {
@@ -2263,6 +2267,7 @@ private fun HistoryStashTabBody(
                                     flash = entry.id == flashEntryId,
                                     dayGroup = row.group,
                                     haptics = haptics,
+                                    onDismissPanel = onDismissPanel,
                                     onEdit = { onEditEntry(entry) },
                                     onShowMessage = onShowMessage,
                                     onPin = {
@@ -2282,11 +2287,15 @@ private fun HistoryStashTabBody(
                                         }
                                     },
                                     onShare = {
+                                        // 内置分享面板点中目标前会先收起本面板，避免目标 App 被它盖住。
                                         when (entry.type) {
-                                            StashEntryType.TEXT -> FloatBallTextPick.shareText(context, entry.text.orEmpty())
+                                            StashEntryType.TEXT -> FloatBallTextPick.shareText(
+                                                context,
+                                                entry.text.orEmpty(),
+                                            ) { onDismissPanel() }
                                             StashEntryType.IMAGE -> {
                                                 val bitmap = repo?.loadImage(entry) ?: return@HistoryStashEntryCard
-                                                FloatBallTextPick.shareScreenshot(context, bitmap)
+                                                FloatBallTextPick.shareScreenshot(context, bitmap) { onDismissPanel() }
                                             }
                                             StashEntryType.RICH -> {
                                                 // §0.16.21：用 `exportText()` 而不是 `combinedText()` ——
@@ -2294,12 +2303,12 @@ private fun HistoryStashTabBody(
                                                 // 一条只录了音的闪念用 combinedText 分享出去会是空的。
                                                 val combined = entry.exportText()
                                                 if (combined.isNotBlank()) {
-                                                    FloatBallTextPick.shareText(context, combined)
+                                                    FloatBallTextPick.shareText(context, combined) { onDismissPanel() }
                                                 } else {
                                                     val fileName = entry.allImageFileNames().firstOrNull()
                                                     val bitmap = fileName?.let { repo?.loadBitmapByFileName(it) }
                                                         ?: return@HistoryStashEntryCard
-                                                    FloatBallTextPick.shareScreenshot(context, bitmap)
+                                                    FloatBallTextPick.shareScreenshot(context, bitmap) { onDismissPanel() }
                                                 }
                                             }
                                         }
@@ -2339,6 +2348,8 @@ private fun HistoryClipboardTabBody(
     onEnsureLoaded: () -> Unit,
     onLoadMore: () -> Unit,
     onShowMessage: (Int) -> Unit,
+    /** 内置分享面板发出去之前先收起历史面板（否则目标 App 被面板盖住）。 */
+    onDismissPanel: () -> Unit,
     /** 列表滑离顶部 → 上报给宿主决定头部收不收（§0.16.5）。 */
     onListScrolledChange: (Boolean) -> Unit,
 ) {
@@ -2465,6 +2476,7 @@ private fun HistoryClipboardTabBody(
                         // 剪贴板卡片也按时间分档（设计稿 `clipItemHtml` 用的是同一套 .fresh/.mid/.old）。
                         dayGroup = historyDayGroupOf(entry.createdAtEpochMs, System.currentTimeMillis()),
                         haptics = haptics,
+                        onDismissPanel = onDismissPanel,
                         onShowMessage = onShowMessage,
                         onCopy = {
                             ClipboardWriter.write(context, entry)

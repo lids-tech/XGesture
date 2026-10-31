@@ -27,6 +27,7 @@
     <string name="external_invocation_entry_clipboard">Clipboard</string>
     <string name="external_invocation_entry_search_panel">Search panel</string>
     <string name="external_invocation_entry_toggle_gesture">Toggle gestures</string>
+    <string name="external_invocation_entry_toggle_float_ball">Toggle float ball</string>
     <string name="external_invocation_entry_shell_panel">Shell command panel</string>
     <string name="external_invocation_entry_notification_history_desc">Open notification hub</string>
     <string name="external_invocation_entry_stash_desc">Open side panel</string>
@@ -37,6 +38,7 @@
     <string name="external_invocation_action_clipboard_desc">Open clipboard panel</string>
     <string name="external_invocation_action_search_panel_desc">Open search panel</string>
     <string name="external_invocation_action_toggle_gesture_desc">Toggle edge gesture master switch</string>
+    <string name="external_invocation_action_toggle_float_ball_desc">Hide or show the float ball (the state is kept)</string>
     <string name="external_invocation_action_shell_panel_desc">Open shell panel (not exported; app shortcuts only)</string>
     <string name="shake_gestures_title">Shake Gestures</string>
     <string name="shake_gestures_section_basic">Basic shake actions</string>
@@ -2693,6 +2695,13 @@
     <string name="gesture_action_toggle_wifi">Toggle Wi-Fi</string>
     <string name="gesture_action_toggle_shake">Toggle shake gestures</string>
     <string name="gesture_action_toggle_shake_desc">Turn the shake-gesture master switch on or off</string>
+    <string name="gesture_action_toggle_float_ball">Toggle float ball</string>
+    <string name="gesture_action_toggle_float_ball_desc">Hide or show the float ball; the state is kept and edge gestures are untouched</string>
+    <string name="gesture_action_toggle_float_ball_hidden">Float ball hidden. Run again or restore it in settings</string>
+    <string name="gesture_action_toggle_float_ball_shown">Float ball shown</string>
+    <string name="gesture_action_toggle_float_ball_service_off">Float ball enabled, but the edge-gesture master switch is off</string>
+    <string name="gesture_action_toggle_float_ball_snoozed">Float ball enabled; overlays are paused and it will appear shortly</string>
+    <string name="gesture_action_toggle_float_ball_suppressed">Float ball enabled, but the rule for the current screen hides it</string>
     <string name="gesture_action_toggle_mobile_data">Toggle mobile data</string>
     <string name="gesture_action_screen_record_permission">Needs “Display over other apps” permission</string>
     <string name="screen_record_channel_name">Screen recording</string>
@@ -3521,6 +3530,7 @@ Questions: open a GitHub Issue on the project repository.</string>
     <string name="shell_panel_history_exit_code">Exit code %1$d</string>
     <string name="tile_gesture_switch">XGesture</string>
     <string name="shortcut_toggle_gesture">Toggle gestures</string>
+    <string name="shortcut_toggle_float_ball">Toggle float ball</string>
     <string name="shortcut_notification_hub">Notification filter</string>
     <string name="shortcut_shell_panel">Shell panel</string>
     <string name="shortcut_stash_panel">Open Ideas</string>
@@ -3644,6 +3654,7 @@ Questions: open a GitHub Issue on the project repository.</string>
     <string name="search_panel_app_quick_action_share">Share</string>
     <string name="search_panel_app_quick_action_freeze">Freeze</string>
     <string name="search_panel_app_quick_action_details">Details</string>
+    <string name="search_panel_app_share_failed">Unable to share this app</string>
     <string name="search_panel_contact_search_desc">Search contacts by name pinyin or phone number and dial</string>
     <string name="search_panel_contact_permission_title">Contacts permission</string>
     <string name="search_panel_contact_permission_granted">Contacts permission granted</string>
@@ -4438,6 +4449,8 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="gesture_search_force_stop_3">Stop process</string>
     <string name="gesture_search_keyevent_1">Simulate key</string>
     <string name="gesture_search_keyevent_2">Key simulation</string>
+    <string name="gesture_search_float_ball_hide">hide float ball</string>
+    <string name="gesture_search_float_ball_show">show float ball</string>
     <string name="ring_launcher_slot_title">Ring launcher · Slot %1$d</string>
     <string name="ring_launcher_slot_bound">Bound: %1$s</string>
     <string name="ring_launcher_slot_unconfigured">Not configured (auto-fill from recents)</string>
@@ -4805,4 +4818,18 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="quick_wheel_slot_save">Save</string>
     <string name="smart_screenshot_saved">Screenshot saved to gallery</string>
     <string name="smart_screenshot_copied">Screenshot copied to clipboard</string>
+    <string name="share_sheet_title">Share to</string>
+    <string name="share_sheet_hint">Long-press to pin</string>
+    <string name="share_sheet_empty">No share targets found</string>
+    <string name="share_sheet_toast_pinned">Pinned “%1$s”</string>
+    <string name="share_sheet_toast_unpinned">Unpinned “%1$s”</string>
+    <string name="share_sheet_use_system">System share sheet</string>
+    <string name="share_sheet_settings_title">Share panel</string>
+    <string name="share_sheet_settings_subtitle">Built-in share grid instead of the system sheet</string>
+    <string name="share_sheet_hub_subtitle">Grid panel with pinned targets</string>
+    <string name="share_sheet_settings_tip">• Sharing from a floating panel (text picker, file browser, drag &amp; drop) no longer leaves the overlay, so the system sheet can never hide behind our own floating windows.\n• Tap a target to share directly; long-press it to pin it to the front.</string>
+    <string name="share_sheet_settings_section">Behavior</string>
+    <string name="share_sheet_toggle_title">Built-in share panel</string>
+    <string name="share_sheet_toggle_desc">Replace the system share sheet with our grid: pin favorite targets and skip the system UI</string>
+    <string name="share_sheet_settings_pin_tip">Tip: pinned targets are kept locally; long-press one again to unpin it.</string>
 </resources>

@@ -359,7 +359,10 @@ object FloatBallTranslatePanel {
                     Toast.makeText(context, R.string.float_ball_text_copied, Toast.LENGTH_SHORT).show()
                 },
                 onSearch = { FloatBallTextPick.searchText(context, it) },
-                onShare = { FloatBallTextPick.shareText(context, it) },
+                onShare = {
+                    // 内置分享面板点中目标前先收起翻译浮窗，避免目标 App 被它盖住。
+                    FloatBallTextPick.shareText(context, it) { dismiss() }
+                },
                 onRemoveSpaces = { value, removeAll ->
                     translatedHolder.value = if (removeAll) {
                         value.replace(Regex("\\s+"), "")

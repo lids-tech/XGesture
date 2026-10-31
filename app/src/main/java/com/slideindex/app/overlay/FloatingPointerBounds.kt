@@ -39,7 +39,9 @@ internal object FloatingPointerBounds {
     const val PICK_ACCEL_ZONE_MAX = 1f
 
     /** 光标锚点相对唤醒侧屏幕边缘向屏外偏移的距离（dp）：让红十字"从屏幕外滑进来"。 */
-    const val PICK_ANCHOR_OUTSIDE_DP = 20f
+    // 12dp = 十字半宽 7.5dp + 4.5dp 余量：静止时整体在屏幕外（看不见、不会露边），
+    // 出现所需手指位移约 6dp（2× 起步区）/ 7dp（默认倍率），比 20dp 更跟手。
+    const val PICK_ANCHOR_OUTSIDE_DP = 12f
 
     /**
      * 取词拖动死区（slop）的可调范围（dp）。

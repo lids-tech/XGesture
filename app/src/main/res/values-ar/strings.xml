@@ -1494,6 +1494,13 @@
     <string name="gesture_action_toggle_wifi">تبديل Wi-Fi</string>
     <string name="gesture_action_toggle_shake">تبديل إيماءات الاهتزاز</string>
     <string name="gesture_action_toggle_shake_desc">تشغيل أو إيقاف المفتاح الرئيسي في صفحة الاهتزاز</string>
+    <string name="gesture_action_toggle_float_ball">تبديل عرض الكرة العائمة</string>
+    <string name="gesture_action_toggle_float_ball_desc">إخفاء الكرة العائمة أو إعادة عرضها؛ تُحفظ الحالة ولا تتأثر إيماءات الحافة</string>
+    <string name="gesture_action_toggle_float_ball_hidden">تم إخفاء الكرة العائمة. نفّذ مرة أخرى أو استعدها من الإعدادات</string>
+    <string name="gesture_action_toggle_float_ball_shown">تم عرض الكرة العائمة</string>
+    <string name="gesture_action_toggle_float_ball_service_off">تم تمكين الكرة العائمة، لكن المفتاح الرئيسي لإيماءات الحافة مُعطَّل</string>
+    <string name="gesture_action_toggle_float_ball_snoozed">تم تمكين الكرة العائمة؛ الطبقات معطّلة مؤقتًا وستظهر بعد قليل</string>
+    <string name="gesture_action_toggle_float_ball_suppressed">تم تمكين الكرة العائمة، لكن قاعدة الشاشة الحالية تخفيها</string>
     <string name="gesture_action_toggle_mobile_data">تبديل بيانات الجوال</string>
     <string name="gesture_action_switch_input_method">تبديل لوحة المفاتيح</string>
     <string name="gesture_action_screen_record_permission">يتطلب إذن «العرض فوق التطبيقات الأخرى»</string>
@@ -2719,6 +2726,7 @@
     <string name="external_invocation_entry_clipboard">الحافظة</string>
     <string name="external_invocation_entry_search_panel">لوحة البحث</string>
     <string name="external_invocation_entry_toggle_gesture">تبديل مفتاح الإيماءات</string>
+    <string name="external_invocation_entry_toggle_float_ball">تبديل الكرة العائمة</string>
     <string name="external_invocation_entry_shell_panel">لوحة أوامر Shell</string>
     <string name="external_invocation_entry_notification_history_desc">فتح مرشح الإشعارات</string>
     <string name="external_invocation_entry_stash_desc">فتح اللوحة الجانبية</string>
@@ -2729,6 +2737,7 @@
     <string name="external_invocation_action_clipboard_desc">فتح لوحة الحافظة</string>
     <string name="external_invocation_action_search_panel_desc">فتح لوحة البحث</string>
     <string name="external_invocation_action_toggle_gesture_desc">تبديل المفتاح الرئيسي لإيماءات الحافة</string>
+    <string name="external_invocation_action_toggle_float_ball_desc">إخفاء الكرة العائمة أو إعادة عرضها (تُحفظ الحالة)</string>
     <string name="external_invocation_action_shell_panel_desc">فتح لوحة أوامر Shell (غير مصدرة خارجياً، فقط للاختصارات داخل التطبيق)</string>
     <string name="activity_shortcut_title">الوصول المباشر داخل التطبيق</string>
     <string name="activity_shortcut_hint">يمكن ربط هذه القائمة بالإيماءات والمشغل؛ انقر على عنصر لفتحه. الاختصارات المضافة ستعرض أيقونات أصلية/مخصصة. الأنشطة غير المصدرة تتطلب Shizuku.</string>
@@ -3365,6 +3374,7 @@
     <string name="shell_panel_history_exit_code">رمز الخروج %1$d</string>
     <string name="tile_gesture_switch">XGesture</string>
     <string name="shortcut_toggle_gesture">تبديل الإيماءة</string>
+    <string name="shortcut_toggle_float_ball">تبديل الكرة العائمة</string>
     <string name="shortcut_notification_hub">مرشح الإشعارات</string>
     <string name="shortcut_shell_panel">لوحة Shell</string>
     <string name="shortcut_stash_panel">فتح الومضات</string>
@@ -4245,6 +4255,8 @@
     <string name="gesture_search_force_stop_3">إيقاف العملية</string>
     <string name="gesture_search_keyevent_1">محاكاة المفتاح</string>
     <string name="gesture_search_keyevent_2">محاكاة المفاتيح</string>
+    <string name="gesture_search_float_ball_hide">إخفاء الكرة العائمة</string>
+    <string name="gesture_search_float_ball_show">عرض الكرة العائمة</string>
     <string name="ring_launcher_slot_title">مشغل الحلقة · الفتحة %1$d</string>
     <string name="ring_launcher_slot_bound">مربوط بـ: %1$s</string>
     <string name="ring_launcher_slot_unconfigured">غير مهيأ (ملء تلقائي بالمهام الأخيرة)</string>
@@ -4778,4 +4790,18 @@
     <string name="action_icon_style_filled">ممتلئ</string>
     <string name="action_icon_text_title">أيقونة نصية</string>
     <string name="action_icon_text_hint">حرف إلى حرفين</string>
+    <string name="share_sheet_title">مشاركة إلى</string>
+    <string name="share_sheet_hint">اضغط مطولًا للتثبيت</string>
+    <string name="share_sheet_empty">لا توجد تطبيقات قابلة للمشاركة</string>
+    <string name="share_sheet_toast_pinned">تم تثبيت «%1$s»</string>
+    <string name="share_sheet_toast_unpinned">تم إلغاء تثبيت «%1$s»</string>
+    <string name="share_sheet_use_system">لوحة المشاركة في النظام</string>
+    <string name="share_sheet_settings_title">لوحة المشاركة</string>
+    <string name="share_sheet_settings_subtitle">شبكة مشاركة داخلية بدلًا من لوحة النظام</string>
+    <string name="share_sheet_hub_subtitle">لوحة شبكية مع أهداف مثبّتة</string>
+    <string name="share_sheet_settings_tip">• المشاركة من نافذة عائمة (لوحة النص، مستعرض الملفات، السحب والإفلات) لا تغادر الطبقة العائمة، لذلك لا يمكن أن تختفي لوحة النظام خلف نوافذنا.\n• اضغط على هدف للمشاركة فورًا، واضغط مطولًا لتثبيته في المقدمة.</string>
+    <string name="share_sheet_settings_section">السلوك</string>
+    <string name="share_sheet_toggle_title">لوحة مشاركة داخلية</string>
+    <string name="share_sheet_toggle_desc">استبدال لوحة مشاركة النظام بالشبكة الداخلية: ثبّت الأهداف المفضلة وتجاوز واجهة النظام</string>
+    <string name="share_sheet_settings_pin_tip">ملاحظة: تُحفظ الأهداف المثبّتة محليًا، واضغط مطولًا مرة أخرى لإلغاء التثبيت.</string>
 </resources>

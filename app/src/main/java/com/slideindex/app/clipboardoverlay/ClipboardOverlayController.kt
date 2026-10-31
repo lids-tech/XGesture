@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import com.slideindex.app.R
 import com.slideindex.app.clipboard.ClipboardPayload
 import com.slideindex.app.overlay.PickResultFromHistoryCoordinator
+import com.slideindex.app.overlay.share.ShareSheetLauncher
 import java.util.concurrent.Executors
 
 /**
@@ -244,8 +245,13 @@ internal class ClipboardOverlayController(
     }
 
     private fun shareContent(clip: ClipData) {
-        context.startActivity(ClipboardOverlayIntents.getShareIntent(clip, context))
-        animateOut()
+        val payload = ClipboardOverlayIntents.sharePayload(context, clip)
+        if (payload == null) {
+            animateOut()
+            return
+        }
+        // 内置面板点中目标 / 退回系统面板前会调 animateOut，先把这块浮窗收起来。
+        ShareSheetLauncher.share(context, payload, dismissSource = { animateOut() })
     }
 
     private fun animateIn() {

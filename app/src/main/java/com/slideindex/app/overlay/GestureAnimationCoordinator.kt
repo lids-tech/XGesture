@@ -91,6 +91,10 @@ class GestureAnimationCoordinator(
         overlay.bringToFront()
         // 预热：让浮层在按下这一帧就完成首次 composition，第一次 MOVE 才能立刻 onDragStart。
         overlay.prepareForGesture()
+        // A：按下就尝试起动画（不再等"位移超过阈值"）。
+        // 组合还没就绪时 startAnimationIfReady() 会自己 post 重试，行为与之前一致；
+        // 就绪时就变成"按下即出现"，消除"滑一段才冒出"。
+        startAnimationIfReady()
     }
 
     fun onTouchMove(rawX: Float, rawY: Float) {

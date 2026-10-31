@@ -24,6 +24,8 @@ import com.slideindex.app.clipboard.ClipboardWriter
 import com.slideindex.app.clipboard.DragFileMirror
 import com.slideindex.app.clipboard.audioText
 import com.slideindex.app.clipboard.resolvedContentBlocks
+import com.slideindex.app.overlay.dragdrop.DragFlowSession
+import com.slideindex.app.overlay.dragdrop.DragFlowSource
 import com.slideindex.app.stash.StashEntry
 import com.slideindex.app.stash.StashEntryType
 import com.slideindex.app.stash.StashRepository
@@ -196,6 +198,11 @@ internal object HistoryEntryDragHelper {
         onDragEnd: () -> Unit,
         onDropRejected: (() -> Unit)? = null,
         dragShadow: DragShadowBuilder? = null,
+        /**
+         * 流转栏的源会话：给了它，拖拽结束后"恢复还是关掉"由流转栏决定，
+         * [onDragEnd] 只在没被认领（流转栏没开 / 不是它负责的 MIME）时兜底。
+         */
+        dragFlowSource: DragFlowSource? = null,
     ): Boolean {
         val context = view.context
         val targetPackage = AccessibilityForegroundResolver.resolve(context)
@@ -223,7 +230,12 @@ internal object HistoryEntryDragHelper {
                         preparation.mirrorSession.releaseNow()
                         onDropRejected?.invoke()
                     }
-                    onDragEnd()
+                    // 被流转栏认领时由它按落点调用 restore()/discard()；这里只保留兜底，
+                    // 否则源会在 DROP 之后又自己弹回来，恢复/取消就永远看不出区别。
+                    if (dragFlowSource?.claimed != true) {
+                        onDragEnd()
+                    }
+                    DragFlowSession.end(dragFlowSource)
                     view.setOnDragListener(null)
                 }
             }
@@ -232,8 +244,16 @@ internal object HistoryEntryDragHelper {
         grantDragUriPermissionsToForegroundHost(context, effectiveClip, targetPackage)
         val flags = buildDragFlags(effectiveClip)
         val shadow = dragShadow ?: EntryDragShadowBuilder(view, preview)
-        view.startDragAndDrop(effectiveClip, shadow, null, flags)
-        return true
+        // 必须在 startDragAndDrop 之前登记：流转栏的 ACTION_DRAG_STARTED 可能排在
+        // 源视图的事件之前，晚一步登记就会被当成"没有源"。
+        dragFlowSource?.let(DragFlowSession::begin)
+        val started = view.startDragAndDrop(effectiveClip, shadow, null, flags)
+        if (!started) {
+            DragFlowSession.end(dragFlowSource)
+            // 起拖失败时把监听摘掉：否则这个 view 会一直挂着一个永远收不到事件的拖放监听。
+            view.setOnDragListener(null)
+        }
+        return started
     }
 
     /**

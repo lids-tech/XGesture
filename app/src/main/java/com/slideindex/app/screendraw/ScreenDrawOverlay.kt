@@ -42,6 +42,8 @@ import com.slideindex.app.overlay.OverlayScreenMetrics
 import com.slideindex.app.overlay.OverlayWindowTypes
 import com.slideindex.app.overlay.ScreenOffDismissReceiver
 import com.slideindex.app.overlay.ScreenPinManager
+import com.slideindex.app.overlay.dragdrop.DragFlowSession
+import com.slideindex.app.overlay.dragdrop.DragFlowSource
 import com.slideindex.app.overlay.screenshot.ScreenshotStorage
 import com.slideindex.app.overlay.screenshot.SmartScreenshotOcr
 import com.slideindex.app.service.ScreenshotCaptureOutcome
@@ -1158,10 +1160,21 @@ object ScreenDrawOverlay {
         }
 
         val flags = View.DRAG_FLAG_GLOBAL or View.DRAG_FLAG_GLOBAL_URI_READ
+        // 起拖前登记：流转栏按落点决定"把画布放回来"（恢复）还是"退出绘制"（关掉）。
+        val dragFlowSource = DragFlowSource(
+            onRestore = { restoreFromDragFlow() },
+            onDiscard = { dismiss() },
+        )
+        DragFlowSession.begin(dragFlowSource)
         val success = drawCanvas.startDragAndDrop(clipData, shadowBuilder, null, flags)
         if (success) {
             tempHideForDragFlow()
+            // 兜底：若流转栏没开/没收到这次拖拽，别让会话一直挂着被下一次拖拽误认领。
+            // 只清会话，不动画布（拖拽可能还没结束）。
+            mainHandler.postDelayed({ DragFlowSession.end(dragFlowSource) }, 30_000L)
             toast(host, "已抓起，可拖拽流转至操作栏")
+        } else {
+            DragFlowSession.end(dragFlowSource)
         }
         return success
     }

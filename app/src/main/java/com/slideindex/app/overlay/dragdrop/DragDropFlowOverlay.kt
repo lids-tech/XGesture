@@ -47,10 +47,11 @@ import com.slideindex.app.overlay.OverlayWindowTypes
 import com.slideindex.app.overlay.PickResultContentOrigin
 import com.slideindex.app.overlay.PickResultTextSource
 import com.slideindex.app.overlay.pickresult.PickResultTextMode
+import com.slideindex.app.overlay.share.ShareSheetLauncher
+import com.slideindex.app.overlay.share.ShareSheetPayload
 import com.slideindex.app.overlay.searchpanel.SearchPanelOverlayWindow
 import com.slideindex.app.overlay.searchpanel.SearchPanelQueryBridge
 import com.slideindex.app.overlay.searchpanel.SearchPanelSessionState
-import com.slideindex.app.screendraw.ScreenDrawOverlay
 import com.slideindex.app.search.SearchEngineLauncher
 import com.slideindex.app.service.RegionalScreenshotOcr
 import com.slideindex.app.settings.AppSettings
@@ -94,6 +95,9 @@ class DragDropFlowController(
 
         /** 盘旋在「操作」项上多久才展开动作菜单。太短会误触，太长会让人以为没反应。 */
         private const val HUB_DWELL_MS = 400L
+
+        /** 认领源后等 ACTION_DRAG_ENDED 的上限；超时就把源放回来，别让它永久藏着。 */
+        private const val SOURCE_WATCHDOG_MS = 15_000L
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -121,6 +125,13 @@ class DragDropFlowController(
     private var actionItems: List<DragDropFlowItem> = emptyList()
     private val hubExpandedState = mutableStateOf(false)
     private var dwellJob: Job? = null
+
+    /** 本次拖拽是否登记了可恢复的源（侧边面板 / 剪贴板浮窗 / 文件浏览器 / 屏幕绘制 / 全局复制）。 */
+    private val restoreAvailableState = mutableStateOf(false)
+    private var claimedSource: DragFlowSource? = null
+
+    /** 认领源后的兜底：个别 OEM 会漏发 ACTION_DRAG_ENDED，别把源永久藏住。 */
+    private var sourceWatchdog: Runnable? = null
 
     private var latestSettings: AppSettings = AppSettings()
     private var isHandlingDrop = false
@@ -172,11 +183,10 @@ class DragDropFlowController(
                         dragPosition = dragPositionState.value,
                         hapticEnabled = hapticEnabledState.value,
                         hubExpanded = hubExpandedState.value,
+                        canRestore = restoreAvailableState.value,
                         onHoverChanged = { currentHoveredId = it },
                         onHubHoverChanged = { active -> handleHubHover(active) },
                         onLeavePanel = { collapseHub() },
-                        onCancel = { handleCancel() },
-                        onRestore = { handleRestore() },
                         onSelectTarget = { /* handled on drop */ },
                     )
                 }
@@ -294,7 +304,8 @@ class DragDropFlowController(
                 val hasImage = desc.hasMimeType("image/*")
                 val hasAudio = desc.hasMimeType("audio/*") ||
                     desc.hasMimeType("audio/mp4")
-                val hasFile = hasAudio || desc.hasMimeType("application/*")
+                val hasFile = hasAudio || desc.hasMimeType("application/*") ||
+                    desc.hasMimeType("video/*")
                 val hasText = desc.hasMimeType("text/*") ||
                     desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
                     desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)
@@ -315,6 +326,24 @@ class DragDropFlowController(
                 itemsState.value = dockItems
                 currentHoveredId = null
                 isHandlingDrop = false
+
+                // 本应用注册过拖拽源就认领这次拖拽：之后源只负责藏好自己，
+                // "结束后恢复还是关掉"由下面 DROP / DRAG_ENDED 统一决定。
+                cancelSourceWatchdog()
+                claimedSource = DragFlowSession.claim()
+                restoreAvailableState.value = claimedSource != null
+                claimedSource?.let { source ->
+                    val runnable = Runnable {
+                        if (claimedSource === source) {
+                            claimedSource = null
+                            restoreAvailableState.value = false
+                            source.restore()
+                            DragFlowSession.end(source)
+                        }
+                    }
+                    sourceWatchdog = runnable
+                    mainHandler.postDelayed(runnable, SOURCE_WATCHDOG_MS)
+                }
 
                 // 瞬时展开为边缘带状窗并展示流转栏
                 expandToActiveRegion()
@@ -338,35 +367,41 @@ class DragDropFlowController(
                     return false
                 }
 
+                // 松在栏内空白处：不消费，交给 ACTION_DRAG_ENDED 按 result 决定源去留。
+                // （以前这里会先把 isHandlingDrop 置 true，导致空白处松手后源永远藏着。）
+                if (targetId == null) return false
+
                 isHandlingDrop = true
 
-                when {
-                    targetId == "__cancel__" -> {
+                when (targetId) {
+                    "__cancel__" -> {
                         Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_cancelled), Toast.LENGTH_SHORT).show()
-                        if (ScreenDrawOverlay.isShowing) {
-                            ScreenDrawOverlay.dismiss()
-                        }
+                        // 取消 = 不再需要这个源：面板 / 浮窗 / 画布 / 选区直接关掉。
+                        claimedSource?.discard()
                     }
-                    targetId == "__restore__" -> {
+                    "__restore__" -> {
                         Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_restored), Toast.LENGTH_SHORT).show()
-                        if (ScreenDrawOverlay.isShowing) {
-                            ScreenDrawOverlay.restoreFromDragFlow()
-                        }
+                        // 恢复 = 把源原样放回来（侧边面板回到原位、画布回来、选区回来）。
+                        claimedSource?.restore()
                     }
-                    targetId != null && clipData != null -> {
-                        processDrop(targetId, clipData)
-                        if (ScreenDrawOverlay.isShowing) {
-                            ScreenDrawOverlay.dismiss()
+                    else -> {
+                        if (clipData != null) {
+                            processDrop(targetId, clipData)
                         }
+                        // 内容已经交给目标了：源留在原地只会挡住目标应用，直接关掉。
+                        claimedSource?.discard()
                     }
                 }
+                // 决策已经落定，兜底计时器不用再等（ENDED 也可能被 OEM 吞掉）。
+                cancelSourceWatchdog()
                 // 仅当命中流转栏项目时消费 Drop，避免拦截正常页面拖拽
-                return targetId != null
+                return true
             }
 
             DragEvent.ACTION_DRAG_ENDED -> {
                 dragPositionState.value = null
                 cancelDwell()
+                cancelSourceWatchdog()
                 hubExpandedState.value = false
                 dockItems = emptyList()
                 actionItems = emptyList()
@@ -374,10 +409,16 @@ class DragDropFlowController(
                 currentHoveredId = null
                 visibleState.value = false
 
-                // 若未释放至流转栏即结束，且屏幕绘制处于临时隐藏，则销毁退出屏幕绘制
-                if (!isHandlingDrop && ScreenDrawOverlay.isShowing) {
-                    ScreenDrawOverlay.dismiss()
+                // 没落在本栏的项上（或落在空白处）时才由这里定案：
+                // result=true = 内容已被某个目标接收（在其它应用里松的手），关掉源；
+                // result=false = 这次拖拽没有接收方（取消），把源放回来。
+                val source = claimedSource
+                claimedSource = null
+                restoreAvailableState.value = false
+                if (!isHandlingDrop && source != null) {
+                    if (event.result) source.discard() else source.restore()
                 }
+                DragFlowSession.end(source)
 
                 // 等待淡出动画完成后还原为 1px 待机
                 mainHandler.postDelayed({
@@ -416,21 +457,6 @@ class DragDropFlowController(
         }
     }
 
-    private fun handleCancel() {
-        visibleState.value = false
-        if (ScreenDrawOverlay.isShowing) {
-            ScreenDrawOverlay.dismiss()
-        }
-        collapseToAnchor()
-    }
-
-    private fun handleRestore() {
-        visibleState.value = false
-        if (ScreenDrawOverlay.isShowing) {
-            ScreenDrawOverlay.restoreFromDragFlow()
-        }
-        collapseToAnchor()
-    }
     /**
      * 手指是否停在「操作」枢纽上。
      *
@@ -457,6 +483,11 @@ class DragDropFlowController(
     private fun cancelDwell() {
         dwellJob?.cancel()
         dwellJob = null
+    }
+
+    private fun cancelSourceWatchdog() {
+        sourceWatchdog?.let(mainHandler::removeCallbacks)
+        sourceWatchdog = null
     }
 
     /** 收起动作菜单，整列换回「枢纽 + 用户目标」。 */
@@ -671,12 +702,12 @@ class DragDropFlowController(
                         if (bitmap != null) {
                             val shareUri = FloatBallTextPick.createShareImageUri(context, bitmap)
                             if (shareUri != null) {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "image/*"
-                                    putExtra(Intent.EXTRA_STREAM, shareUri)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(intent, context.getString(R.string.drag_drop_flow_target_share_image)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                ShareSheetLauncher.share(
+                                    context = context,
+                                    payload = ShareSheetPayload.Image(shareUri, "image/*"),
+                                    // 流转载具是全屏浮窗：不收起的话目标 App 会被它盖住。
+                                    dismissSource = { collapseToAnchor() },
+                                )
                             }
                         }
                     }
@@ -743,12 +774,11 @@ class DragDropFlowController(
                         FloatBallTextPick.translateText(context, text, "zh-CN")
                     }
                     targetId == "system_share_text" && !text.isNullOrBlank() -> {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, text)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.drag_drop_flow_target_share_text)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        ShareSheetLauncher.share(
+                            context = context,
+                            payload = ShareSheetPayload.Text(text),
+                            dismissSource = { collapseToAnchor() },
+                        )
                     }
                 }
             }

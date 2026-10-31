@@ -44,6 +44,10 @@ import com.slideindex.app.ui.gestureTriggerIconImageVector
 import com.slideindex.app.ui.gestureTriggerIconRotationZ
 import kotlin.math.abs
 
+// B：按下瞬间的最小可见进度（px）。原来进度完全由位移驱动，
+// 手指只动几像素时画出来的形状小到看不见，观感像"还没出现"。
+private const val MIN_VISIBLE_PROGRESS_PX = 16f
+
 @Composable
 private fun rememberCornerPainters(): (PanelSide, GestureTriggerType, Painter) -> Painter {
     val cornerUpPainter = rememberVectorPainter(ThinActionIcons.CornerArrowUpRight)
@@ -126,7 +130,7 @@ private fun CapsuleGestureAnimation(
             fingerX = fingerXAnimVal,
             fingerY = fingerYAnimVal,
             swipeDirection = animationState.swipeDirection,
-        ) * animationState.entryRamp
+        ).coerceAtLeast(MIN_VISIBLE_PROGRESS_PX) * animationState.entryRamp
         if (progress <= 1f) {
             return@Canvas
         }
@@ -296,7 +300,7 @@ private fun BubbleGestureAnimation(
             fingerX = fingerXAnimVal,
             fingerY = fingerYAnimVal,
             swipeDirection = animationState.swipeDirection,
-        ) * animationState.entryRamp
+        ).coerceAtLeast(MIN_VISIBLE_PROGRESS_PX) * animationState.entryRamp
         if (progress <= 1f) {
             return@Canvas
         }

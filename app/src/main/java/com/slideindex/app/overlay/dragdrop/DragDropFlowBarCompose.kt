@@ -124,11 +124,10 @@ fun DragDropFlowBarLayout(
     dragPosition: Offset?,
     hapticEnabled: Boolean,
     hubExpanded: Boolean,
+    canRestore: Boolean,
     onHoverChanged: (String?) -> Unit,
     onHubHoverChanged: (Boolean) -> Unit,
     onLeavePanel: () -> Unit,
-    onCancel: () -> Unit,
-    onRestore: () -> Unit,
     onSelectTarget: (String) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -160,6 +159,12 @@ fun DragDropFlowBarLayout(
             val validIds = items.map { it.id }.toSet()
             itemBounds.keys.retainAll(validIds)
         }
+    }
+
+    // 没有可恢复的源（外部应用拖拽）时恢复药丸不显示，热区必须一起作废，
+    // 否则上一次拖拽残留的矩形还会把手指骗到"已恢复"上。
+    LaunchedEffect(canRestore) {
+        if (!canRestore) restoreBounds = null
     }
 
     // 监听手指拖拽位置并计算当前命中的目标项
@@ -269,6 +274,7 @@ fun DragDropFlowBarLayout(
                 DragDropFlowPosition.BOTTOM -> {
                     BottomFlowContent(
                         items = items,
+                        canRestore = canRestore,
                         hoveredId = hoveredId,
                         dragPosition = dragPosition,
                         itemBounds = itemBounds,
@@ -282,6 +288,7 @@ fun DragDropFlowBarLayout(
                     SideFlowContent(
                         isLeft = true,
                         items = items,
+                        canRestore = canRestore,
                         hoveredId = hoveredId,
                         dragPosition = dragPosition,
                         itemBounds = itemBounds,
@@ -295,6 +302,7 @@ fun DragDropFlowBarLayout(
                     SideFlowContent(
                         isLeft = false,
                         items = items,
+                        canRestore = canRestore,
                         hoveredId = hoveredId,
                         dragPosition = dragPosition,
                         itemBounds = itemBounds,
@@ -307,6 +315,7 @@ fun DragDropFlowBarLayout(
                 DragDropFlowPosition.RING -> {
                     RingFlowContent(
                         items = items,
+                        canRestore = canRestore,
                         hoveredId = hoveredId,
                         itemBounds = itemBounds,
                         onGeometryChanged = { ringGeometry = it },
@@ -325,6 +334,7 @@ fun DragDropFlowBarLayout(
 @Composable
 private fun BottomFlowContent(
     items: List<DragDropFlowItem>,
+    canRestore: Boolean,
     hoveredId: String?,
     dragPosition: Offset?,
     itemBounds: MutableMap<String, Rect>,
@@ -389,11 +399,15 @@ private fun BottomFlowContent(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 20.dp),
         ) {
-            PillActionCapsule(
-                text = stringResource(R.string.drag_drop_flow_restore),
-                isHovered = hoveredId == "__restore__",
-                onPositioned = onRestorePositioned,
-            )
+            // 只有本应用注册过拖拽源（面板 / 浮窗 / 画布 / 选区）时才谈得上"恢复"；
+            // 外部应用拖进来的内容没有源可回，别给一个按了只会说"已恢复"的假按钮。
+            if (canRestore) {
+                PillActionCapsule(
+                    text = stringResource(R.string.drag_drop_flow_restore),
+                    isHovered = hoveredId == "__restore__",
+                    onPositioned = onRestorePositioned,
+                )
+            }
             PillActionCapsule(
                 text = stringResource(R.string.drag_drop_flow_cancel),
                 isHovered = hoveredId == "__cancel__",
@@ -466,6 +480,7 @@ private fun BottomFlowContent(
 private fun SideFlowContent(
     isLeft: Boolean,
     items: List<DragDropFlowItem>,
+    canRestore: Boolean,
     hoveredId: String?,
     dragPosition: Offset?,
     itemBounds: MutableMap<String, Rect>,
@@ -590,11 +605,13 @@ private fun SideFlowContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 16.dp),
             ) {
-                PillActionCapsule(
-                    text = stringResource(R.string.drag_drop_flow_restore),
-                    isHovered = hoveredId == "__restore__",
-                    onPositioned = onRestorePositioned,
-                )
+                if (canRestore) {
+                    PillActionCapsule(
+                        text = stringResource(R.string.drag_drop_flow_restore),
+                        isHovered = hoveredId == "__restore__",
+                        onPositioned = onRestorePositioned,
+                    )
+                }
                 PillActionCapsule(
                     text = stringResource(R.string.drag_drop_flow_cancel),
                     isHovered = hoveredId == "__cancel__",
@@ -626,6 +643,7 @@ private data class RingGeometry(
 @Composable
 private fun RingFlowContent(
     items: List<DragDropFlowItem>,
+    canRestore: Boolean,
     hoveredId: String?,
     itemBounds: MutableMap<String, Rect>,
     onGeometryChanged: (RingGeometry) -> Unit,
@@ -745,11 +763,13 @@ private fun RingFlowContent(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillActionCapsule(
-                    text = stringResource(R.string.drag_drop_flow_restore),
-                    isHovered = hoveredId == "__restore__",
-                    onPositioned = onRestorePositioned,
-                )
+                if (canRestore) {
+                    PillActionCapsule(
+                        text = stringResource(R.string.drag_drop_flow_restore),
+                        isHovered = hoveredId == "__restore__",
+                        onPositioned = onRestorePositioned,
+                    )
+                }
                 PillActionCapsule(
                     text = stringResource(R.string.drag_drop_flow_cancel),
                     isHovered = hoveredId == "__cancel__",

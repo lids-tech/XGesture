@@ -665,6 +665,8 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_TRANSLATE_PICK_PANEL_ALPHA =
         floatPreferencesKey("float_ball_translate_pick_panel_alpha")
     val SHARE_IMAGE_OCR_HISTORY_ENABLED = booleanPreferencesKey("share_image_ocr_history_enabled")
+    /** 浮窗分享改用内置分享面板（网格 + 长按钉住 + 直发目标）。默认关 = 老行为（系统分享面板）。 */
+    val SHARE_SHEET_ENABLED = booleanPreferencesKey("share_sheet_enabled")
     val CLIPBOARD_BACKGROUND_MONITORING = booleanPreferencesKey("clipboard_background_monitoring")
     val CLIPBOARD_BACKGROUND_MONITORING_PATH = stringPreferencesKey("clipboard_background_monitoring_path")
     val CLIPBOARD_OVERLAY_ENABLED = booleanPreferencesKey("clipboard_overlay_enabled")

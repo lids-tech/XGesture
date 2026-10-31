@@ -45,6 +45,7 @@ import com.slideindex.app.overlay.WidgetPickerOverlayWindow
 import com.slideindex.app.overlay.WidgetPopupOverlayWindow
 import com.slideindex.app.service.OverlayService
 import com.slideindex.app.service.OverlayServiceController
+import com.slideindex.app.service.ToggleFloatBallTrampolineActivity
 import com.slideindex.app.service.QuickLauncherAddTrampoline
 import com.slideindex.app.service.ShellCommandEditorTrampoline
 import com.slideindex.app.service.ShellCommandPanelTrampoline
@@ -255,6 +256,7 @@ class MainActivity : ComponentActivity() {
     private fun reportShortcutUsageIfNeeded(action: String?) {
         val shortcutId = when (action) {
             "com.slideindex.app.action.TOGGLE_GESTURE" -> "toggle_gesture"
+            ToggleFloatBallTrampolineActivity.ACTION_TOGGLE_FLOAT_BALL -> "toggle_float_ball"
             ACTION_OPEN_NOTIFICATION_HISTORY -> "notification_hub"
             "com.slideindex.app.action.OPEN_SHELL_PANEL" -> "shell_panel"
             StashClipboardTrampolineActivity.ACTION_OPEN_STASH -> StashClipboardTrampolineActivity.SHORTCUT_ID_STASH

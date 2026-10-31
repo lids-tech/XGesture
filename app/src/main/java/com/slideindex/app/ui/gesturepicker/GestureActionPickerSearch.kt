@@ -225,6 +225,11 @@ fun gestureActionSearchAliases(context: Context, action: GestureAction): List<St
         "keyevent",
         "input keyevent",
     )
+    GestureActionType.TOGGLE_FLOAT_BALL -> listOf(
+        context.getString(R.string.gesture_search_float_ball_hide),
+        context.getString(R.string.gesture_search_float_ball_show),
+        "float ball",
+    )
     else -> emptyList()
 }
 
@@ -273,6 +278,7 @@ fun gestureActionDescriptionText(context: Context, action: GestureAction): Strin
         GestureActionType.POINTER_REALTIME_GESTURE -> context.getString(R.string.gesture_action_pointer_realtime_gesture_desc)
         GestureActionType.TOGGLE_MUTE -> context.getString(R.string.gesture_action_toggle_mute_desc)
         GestureActionType.TOGGLE_SHAKE_GESTURE -> context.getString(R.string.gesture_action_toggle_shake_desc)
+        GestureActionType.TOGGLE_FLOAT_BALL -> context.getString(R.string.gesture_action_toggle_float_ball_desc)
         GestureActionType.LOCK_SCREEN_AND_SILENCE_RING -> context.getString(R.string.gesture_action_lock_screen_and_silence_ring_desc)
         GestureActionType.LOCK_SCREEN_AND_MUTE_ALL -> context.getString(R.string.gesture_action_lock_screen_and_mute_all_desc)
         GestureActionType.SNOOZE_OVERLAYS -> context.getString(R.string.gesture_action_snooze_overlays_desc)
@@ -418,6 +424,7 @@ fun gestureActionLabelText(context: Context, action: GestureAction): String = wh
         GestureActionType.SCREEN_RECORD -> context.getString(R.string.gesture_action_screen_record)
         GestureActionType.TOGGLE_WIFI -> context.getString(R.string.gesture_action_toggle_wifi)
         GestureActionType.TOGGLE_SHAKE_GESTURE -> context.getString(R.string.gesture_action_toggle_shake)
+        GestureActionType.TOGGLE_FLOAT_BALL -> context.getString(R.string.gesture_action_toggle_float_ball)
         GestureActionType.TOGGLE_MOBILE_DATA -> context.getString(R.string.gesture_action_toggle_mobile_data)
         GestureActionType.SWITCH_INPUT_METHOD -> context.getString(R.string.gesture_action_switch_input_method)
         GestureActionType.OPEN_INTERNET_PANEL -> context.getString(R.string.gesture_action_open_internet_panel)
@@ -582,6 +589,7 @@ fun gestureActionLabel(action: GestureAction, settings: AppSettings? = null): St
         GestureActionType.SCREEN_RECORD -> stringResource(R.string.gesture_action_screen_record)
         GestureActionType.TOGGLE_WIFI -> stringResource(R.string.gesture_action_toggle_wifi)
         GestureActionType.TOGGLE_SHAKE_GESTURE -> stringResource(R.string.gesture_action_toggle_shake)
+        GestureActionType.TOGGLE_FLOAT_BALL -> stringResource(R.string.gesture_action_toggle_float_ball)
         GestureActionType.TOGGLE_MOBILE_DATA -> stringResource(R.string.gesture_action_toggle_mobile_data)
         GestureActionType.SWITCH_INPUT_METHOD -> stringResource(R.string.gesture_action_switch_input_method)
         GestureActionType.OPEN_INTERNET_PANEL -> stringResource(R.string.gesture_action_open_internet_panel)
@@ -669,6 +677,7 @@ fun gestureActionDescription(action: GestureAction): String? = when (action.type
     GestureActionType.OPEN_FLOATING_POINTER_RADIAL_MENU -> stringResource(R.string.gesture_action_open_floating_pointer_radial_menu_desc)
     GestureActionType.TOGGLE_MUTE -> stringResource(R.string.gesture_action_toggle_mute_desc)
     GestureActionType.TOGGLE_SHAKE_GESTURE -> stringResource(R.string.gesture_action_toggle_shake_desc)
+    GestureActionType.TOGGLE_FLOAT_BALL -> stringResource(R.string.gesture_action_toggle_float_ball_desc)
     GestureActionType.LOCK_SCREEN_AND_SILENCE_RING -> stringResource(R.string.gesture_action_lock_screen_and_silence_ring_desc)
     GestureActionType.LOCK_SCREEN_AND_MUTE_ALL -> stringResource(R.string.gesture_action_lock_screen_and_mute_all_desc)
     GestureActionType.OPEN_INTERNET_PANEL -> stringResource(R.string.gesture_action_open_internet_panel_desc)

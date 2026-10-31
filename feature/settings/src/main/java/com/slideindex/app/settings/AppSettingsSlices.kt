@@ -227,11 +227,11 @@ data class FloatBallSettings(
      *
      * 只说"看不见"，不影响命中：隐身期间球窗照常接收单击/滑动/长按。
      */
-    val floatBallHideWhenIdle: Boolean = false,
+    val floatBallHideWhenIdle: Boolean = true,
     /** 闲置时停止 GIF 出帧（保留当前帧，触摸后恢复播放）。 */
-    val floatBallIdleFreezeGif: Boolean = false,
+    val floatBallIdleFreezeGif: Boolean = true,
     /** 闲置隐身生效时球的不透明度（0–1，0 = 完全看不见）。 */
-    val floatBallIdleOpacity: Float = 0f,
+    val floatBallIdleOpacity: Float = 0.38f,
     /** 距最后一次触摸多久算闲置（ms，0 = 松手后立即隐身）。 */
     val floatBallIdleDelayMs: Int = 3000,
     /** Fraction of ball width visible on screen when docked to an edge (0.5–1). */
@@ -388,6 +388,13 @@ data class FloatBallSettings(
     val floatBallImageSearchPickPanelTransparency: Float = 0.65f,
     /** Save shared long-image OCR results for later re-open from pick settings. */
     val shareImageOcrHistoryEnabled: Boolean = true,
+    /**
+     * 浮窗里的「分享」是否改用内置分享面板（网格 + 长按钉住 + 直发目标）。
+     *
+     * 默认关：老行为是弹系统分享面板。开启后从浮窗发起分享不再离开浮层，
+     * 也顺带解决"系统面板被自家浮层盖住"的问题（见 `ShareSheetOverlayWindow`）。
+     */
+    val shareSheetEnabled: Boolean = false,
 ) {
     companion object {
         /**

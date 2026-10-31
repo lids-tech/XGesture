@@ -12,6 +12,10 @@
     <cache-path
         name="update_cache"
         path="update/" />
+    <!-- 搜索面板「分享应用」：/data/app 不在 FileProvider 白名单里，先把安装包复制到这里再授权。 -->
+    <cache-path
+        name="apk_share"
+        path="apk_share/" />
     <cache-path
         name="diagnostic_reports"
         path="diagnostics/" />

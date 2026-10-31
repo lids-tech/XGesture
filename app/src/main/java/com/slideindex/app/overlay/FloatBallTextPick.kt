@@ -21,6 +21,8 @@ import com.slideindex.app.clipboard.ClipboardPayload
 import com.slideindex.app.clipboard.ClipboardReader
 import com.slideindex.app.R
 import com.slideindex.app.imageeditor.ImageEditorPickReturnContext
+import com.slideindex.app.overlay.share.ShareSheetLauncher
+import com.slideindex.app.overlay.share.ShareSheetPayload
 import com.slideindex.app.search.SearchEngineLauncher
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.translate.TranslateAppCapability
@@ -261,18 +263,18 @@ object FloatBallTextPick {
         SearchEngineLauncher.launchOpenableUri(context, url, settings, longPressTriggered)
     }
 
-    fun shareText(context: Context, text: String) {
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        val chooser = Intent.createChooser(intent, context.getString(R.string.float_ball_action_share))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(chooser) }
-            .onFailure {
-                Toast.makeText(context, R.string.float_ball_action_failed, Toast.LENGTH_SHORT).show()
-            }
+    /**
+     * 分享文本。
+     *
+     * [dismissSource] 是发起分享的来源浮窗（取词面板 / 历史面板…）：内置分享面板点中目标前
+     * 会先把它收起来，否则目标 App 会被自己的浮窗盖住。
+     */
+    fun shareText(context: Context, text: String, dismissSource: (() -> Unit)? = null) {
+        ShareSheetLauncher.share(
+            context = context,
+            payload = ShareSheetPayload.Text(text),
+            dismissSource = dismissSource,
+        )
     }
 
     fun shareTextTo(context: Context, text: String, target: ComponentName): Boolean {
@@ -347,26 +349,17 @@ object FloatBallTextPick {
         }.getOrNull()
     }
 
-    fun shareScreenshot(context: Context, bitmap: Bitmap) {
+    fun shareScreenshot(context: Context, bitmap: Bitmap, dismissSource: (() -> Unit)? = null) {
         val uri = createShareImageUri(context, bitmap)
             ?: run {
                 Toast.makeText(context, R.string.float_ball_action_failed, Toast.LENGTH_SHORT).show()
                 return
             }
-        runCatching {
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = ClipData.newUri(context.contentResolver, "image", uri)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val chooser = Intent.createChooser(intent, context.getString(R.string.float_ball_action_share))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(chooser)
-        }.onFailure {
-            deleteShareImageUri(context, uri)
-            Toast.makeText(context, R.string.float_ball_action_failed, Toast.LENGTH_SHORT).show()
-        }
+        ShareSheetLauncher.share(
+            context = context,
+            payload = ShareSheetPayload.Image(uri = uri, mimeType = "image/*"),
+            dismissSource = dismissSource,
+        )
     }
 
     fun viewScreenshot(
