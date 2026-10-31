@@ -18,7 +18,7 @@ Chinese ones, each falling back to the other when a version is missing.
 - New file browser overlay, opened from the quick menu, with three read tiers: Root, Shizuku and all-files access
 - Tabs, favourites and a quick bar in the file browser, with per-tab sessions and the last path restored automatically
 - Multi-select, copy, move, batch delete and new folder in the file browser, with a choice of overwrite or keep on name conflicts
-- A trash in the file browser, so deleted files can be undone and restored to their original location
+- Deleted files go to a cache trash and can be undone from the hint bar, restoring them to their original location (latest batch only)
 - Recursive search in the current folder, folder details, long-press rename and jump-to-path in the file browser
 - Multiple storage volumes plus Android/obb entry points, with on-demand thumbnails for images, videos, APKs and PDFs
 - An album-style media grid and image viewer with GIF playback, previous/next switching and an entry to the image editor
