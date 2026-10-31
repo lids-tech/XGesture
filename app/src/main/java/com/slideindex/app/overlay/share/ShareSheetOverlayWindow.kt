@@ -448,6 +448,17 @@ private fun ShareSheetRoot(
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             items(items = ordered, key = { it.key }) { item ->
+                                // 资源文案必须在**组合期**用 stringResource 取：在 onClick 回调里
+                                // 走 LocalContext.current.getString(...) 不是配置感知的，Compose lint 会判
+                                // Error（LocalContextGetResourceValueCall）并让 lintLiteDebug 直接失败。
+                                val pinnedToast = stringResource(
+                                    R.string.share_sheet_toast_pinned,
+                                    item.target.appLabel,
+                                )
+                                val unpinnedToast = stringResource(
+                                    R.string.share_sheet_toast_unpinned,
+                                    item.target.appLabel,
+                                )
                                 ShareSheetCell(
                                     item = item,
                                     pinned = item.key in pins,
@@ -460,11 +471,7 @@ private fun ShareSheetRoot(
                                             val pinnedNow = item.key in updated
                                             OverlayToastWindow.show(
                                                 context,
-                                                context.getString(
-                                                    if (pinnedNow) R.string.share_sheet_toast_pinned
-                                                    else R.string.share_sheet_toast_unpinned,
-                                                    item.target.appLabel,
-                                                ),
+                                                if (pinnedNow) pinnedToast else unpinnedToast,
                                             )
                                         }
                                     },
