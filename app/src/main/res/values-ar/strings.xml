@@ -3497,6 +3497,7 @@
     <string name="search_panel_app_quick_action_share">مشاركة</string>
     <string name="search_panel_app_quick_action_freeze">تجميد</string>
     <string name="search_panel_app_quick_action_details">التفاصيل</string>
+    <string name="search_panel_app_share_failed">تعذّر مشاركة هذا التطبيق</string>
     <string name="search_panel_contact_search_desc">البحث عن جهات الاتصال بأحرف الاسم الأولى أو الاسم الكامل أو رقم الهاتف، مع إمكانية الاتصال الفوري</string>
     <string name="search_panel_contact_permission_title">إذن قراءة جهات الاتصال</string>
     <string name="search_panel_contact_permission_granted">تم منح إذن جهات الاتصال</string>
