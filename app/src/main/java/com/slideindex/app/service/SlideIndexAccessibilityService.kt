@@ -1009,6 +1009,8 @@ class SlideIndexAccessibilityService : AccessibilityService() {
         syncMonitoring()
         backTapGestureHost.start(serviceScope)
         GestureToggleTileWarmup.requestListening(this, "a11yConnected")
+        // 预热分享面板的目标列表（文本分享最常见）：延迟几秒，避开服务连接高峰期；命中缓存时是空操作。
+        com.slideindex.app.overlay.share.ShareSheetTargetCache.warmUpAsync(this)
         notifyModuleHostState(ready = true)
         Log.i(TAG, "onServiceConnected: edge overlays attached")
     }

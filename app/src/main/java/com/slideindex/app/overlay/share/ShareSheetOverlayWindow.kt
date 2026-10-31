@@ -56,7 +56,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
@@ -83,11 +82,9 @@ import com.slideindex.app.search.ShareImageTarget
 import com.slideindex.app.ui.compose.LocalAppDependencies
 import com.slideindex.app.ui.theme.OverlayAwareModuleTheme
 import com.slideindex.app.util.PermissionHelper
-import com.slideindex.app.util.toSafeImageBitmap
+import com.slideindex.app.util.PickerAppIconBitmap
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private const val TAG = "ShareSheetOverlay"
 private const val SHARE_SHEET_SCRIM_ANIM_MS = 180
@@ -301,23 +298,23 @@ object ShareSheetOverlayWindow {
     }
 }
 
-/** 网格里的一项：目标 + 已经解码好的图标（解码放在 IO 线程，避免主线程掉帧）。 */
-private data class ShareSheetItem(
-    val target: ShareImageTarget,
-    val icon: ImageBitmap?,
-)
-
-private fun orderItems(items: List<ShareSheetItem>, pins: List<String>): List<ShareSheetItem> {
+/**
+ * 钉住的排前面，其余保持解析器给的顺序（应用名拼音）。
+ *
+ * 只存目标、不存图标：图标在格子真正可见时才由 [PickerAppIconBitmap] 取（它自带缓存），
+ * 一屏 20 格就只解码 20 个，不再像以前那样把几十个目标的图标全解一遍。
+ */
+private fun orderItems(items: List<ShareImageTarget>, pins: List<String>): List<ShareImageTarget> {
     if (pins.isEmpty()) return items
-    val byKey = items.associateBy { it.key }
+    val byKey = items.associateBy { it.shareKey }
     val pinned = pins.mapNotNull { byKey[it] }
     if (pinned.isEmpty()) return items
-    val pinnedKeys = pinned.map { it.key }.toSet()
-    return pinned + items.filter { it.key !in pinnedKeys }
+    val pinnedKeys = pinned.map { it.shareKey }.toSet()
+    return pinned + items.filter { it.shareKey !in pinnedKeys }
 }
 
-private val ShareSheetItem.key: String
-    get() = "${target.packageName}/${target.activityClassName}"
+private val ShareImageTarget.shareKey: String
+    get() = "$packageName/$activityClassName"
 
 @Composable
 private fun ShareSheetRoot(
@@ -330,26 +327,18 @@ private fun ShareSheetRoot(
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    var items by remember(payload) { mutableStateOf<List<ShareSheetItem>>(emptyList()) }
-    var pins by remember(payload) { mutableStateOf<List<String>>(emptyList()) }
-    var loading by remember(payload) { mutableStateOf(true) }
+    // 首帧直接用缓存（有就立刻画，不等 PackageManager）；冷启动才先转圈。
+    var items by remember(payload) {
+        mutableStateOf(ShareSheetTargetCache.peek(payload.kind).orEmpty())
+    }
+    var pins by remember(payload) { mutableStateOf(ShareSheetPins.peek().orEmpty()) }
+    var loading by remember(payload) { mutableStateOf(items.isEmpty()) }
 
     LaunchedEffect(payload) {
         pins = ShareSheetPins.read(context)
-        items = withContext(Dispatchers.IO) {
-            val appPackage = context.packageName
-            payload.targets(context)
-                .asSequence()
-                // 分享给自己没有意义，还会在面板里占一格。
-                .filterNot { it.packageName == appPackage }
-                .map { target ->
-                    ShareSheetItem(
-                        target = target,
-                        icon = runCatching { target.icon?.toSafeImageBitmap(144) }.getOrNull(),
-                    )
-                }
-                .toList()
-        }
+        // 缓存命中时 [loading] 已经是 false，这里只是后台把列表刷新到最新。
+        val fresh = ShareSheetTargetCache.load(context, payload.kind)
+        items = fresh
         loading = false
     }
 
@@ -447,28 +436,28 @@ private fun ShareSheetRoot(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
-                            items(items = ordered, key = { it.key }) { item ->
+                            items(items = ordered, key = { it.shareKey }) { target ->
                                 // 资源文案必须在**组合期**用 stringResource 取：在 onClick 回调里
                                 // 走 LocalContext.current.getString(...) 不是配置感知的，Compose lint 会判
                                 // Error（LocalContextGetResourceValueCall）并让 lintLiteDebug 直接失败。
                                 val pinnedToast = stringResource(
                                     R.string.share_sheet_toast_pinned,
-                                    item.target.appLabel,
+                                    target.appLabel,
                                 )
                                 val unpinnedToast = stringResource(
                                     R.string.share_sheet_toast_unpinned,
-                                    item.target.appLabel,
+                                    target.appLabel,
                                 )
                                 ShareSheetCell(
-                                    item = item,
-                                    pinned = item.key in pins,
-                                    onClick = { onSend(item.target) },
+                                    target = target,
+                                    pinned = target.shareKey in pins,
+                                    onClick = { onSend(target) },
                                     onLongClick = {
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         scope.launch {
-                                            val updated = ShareSheetPins.toggle(context, item.key)
+                                            val updated = ShareSheetPins.toggle(context, target.shareKey)
                                             pins = updated
-                                            val pinnedNow = item.key in updated
+                                            val pinnedNow = target.shareKey in updated
                                             OverlayToastWindow.show(
                                                 context,
                                                 if (pinnedNow) pinnedToast else unpinnedToast,
@@ -499,7 +488,7 @@ private fun ShareSheetRoot(
 
 @Composable
 private fun ShareSheetCell(
-    item: ShareSheetItem,
+    target: ShareImageTarget,
     pinned: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -513,25 +502,7 @@ private fun ShareSheetCell(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {
-            val icon = item.icon
-            if (icon != null) {
-                Image(
-                    bitmap = icon,
-                    contentDescription = item.target.label,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(11.dp)),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                // 图标解码失败也别留空：给一个占位方块，布局不跳。
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
-            }
+            ShareTargetIcon(target = target)
             if (pinned) {
                 Icon(
                     imageVector = Icons.Default.Star,
@@ -545,7 +516,7 @@ private fun ShareSheetCell(
         }
         Spacer(modifier = Modifier.size(6.dp))
         Text(
-            text = item.target.label,
+            text = target.label,
             style = MaterialTheme.typography.labelSmall,
             fontSize = 11.sp,
             lineHeight = 13.sp,
@@ -553,6 +524,48 @@ private fun ShareSheetCell(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/**
+ * 单个目标的图标：先同步 peek 共享缓存（命中就直接画），未命中才异步加载。
+ *
+ * 关键点：这段只在格子**真正组合**时执行，`LazyVerticalGrid` 只组合可见的十几格，
+ * 于是图标解码量 = 屏幕上的格子数，而不是目标总数。
+ */
+@Composable
+private fun ShareTargetIcon(target: ShareImageTarget) {
+    val context = LocalContext.current
+    val cacheKey = target.shareKey
+    var bitmap by remember(cacheKey) {
+        mutableStateOf(
+            PickerAppIconBitmap.peekActivity(target.packageName, target.activityClassName)
+        )
+    }
+    LaunchedEffect(cacheKey) {
+        if (bitmap == null) {
+            bitmap =
+                PickerAppIconBitmap.loadActivity(context, target.packageName, target.activityClassName)
+        }
+    }
+    val current = bitmap
+    if (current != null) {
+        Image(
+            bitmap = current,
+            contentDescription = target.label,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(11.dp)),
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        // 图标还没加载/解码失败也别留空：给一个占位方块，布局不跳。
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         )
     }
 }

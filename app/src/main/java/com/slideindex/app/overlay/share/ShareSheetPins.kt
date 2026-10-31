@@ -28,20 +28,32 @@ object ShareSheetPins {
     /** 最多钉 8 个：面板一行 5 格，再多就要占掉两整行、把普通目标挤走。 */
     const val MAX_PINS = 8
 
-    suspend fun read(context: Context): List<String> = runCatching {
-        context.shareSheetDataStore.data.first()[KEY]
-            ?.let { raw -> json.decodeFromString<List<String>>(raw) }
-            .orEmpty()
-            .distinct()
-            .take(MAX_PINS)
-    }.getOrDefault(emptyList())
+    /** 内存缓存：面板是高频打开的，钉住列表不该每次都读一遍 DataStore。 */
+    @Volatile
+    private var cached: List<String>? = null
+
+    /** 同步取已加载的钉住列表（面板首帧用）；还没读过就返回 null。 */
+    fun peek(): List<String>? = cached
+
+    suspend fun read(context: Context): List<String> {
+        cached?.let { return it }
+        val loaded = runCatching {
+            context.shareSheetDataStore.data.first()[KEY]
+                ?.let { raw -> json.decodeFromString<List<String>>(raw) }
+                .orEmpty()
+                .distinct()
+                .take(MAX_PINS)
+        }.getOrDefault(emptyList())
+        cached = loaded
+        return loaded
+    }
 
     /** 钉住 / 取消钉住，返回更新后的列表（钉住的排在前面）。 */
     suspend fun toggle(context: Context, key: String): List<String> {
         var updated: List<String> = emptyList()
         runCatching {
             context.shareSheetDataStore.edit { prefs ->
-                val current = prefs[KEY]
+                val current = cached ?: prefs[KEY]
                     ?.let { raw -> runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList()) }
                     .orEmpty()
                 updated = if (key in current) {
@@ -51,6 +63,9 @@ object ShareSheetPins {
                 }
                 prefs[KEY] = json.encodeToString(updated)
             }
+        }
+        if (updated.isNotEmpty() || cached != null) {
+            cached = updated
         }
         return updated
     }
