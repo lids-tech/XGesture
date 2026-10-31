@@ -3672,6 +3672,7 @@
     <string name="search_panel_app_quick_action_share">分享</string>
     <string name="search_panel_app_quick_action_freeze">冻结</string>
     <string name="search_panel_app_quick_action_details">详情</string>
+    <string name="search_panel_app_share_failed">分享失败</string>
     <string name="search_panel_contact_search_desc">按姓名简拼、全拼或电话号码检索联系人并一键拨号</string>
     <string name="search_panel_contact_permission_title">通讯录读取权限</string>
     <string name="search_panel_contact_permission_granted">已授予通讯录权限</string>

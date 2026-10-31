@@ -900,8 +900,21 @@ fun SearchPanelScreen(
                 }
             }
             SearchPanelAppQuickAction.SHARE -> {
-                runCatching { SearchPanelAppShare.shareApk(context, app.packageName) }
-                dismissPanel()
+                coroutineScope.launch {
+                    val shared = SearchPanelAppShare.shareApk(
+                        context = context,
+                        packageName = app.packageName,
+                        // 内置面板点中目标前先收起搜索面板，否则目标 App 会被它盖住。
+                        dismissSource = { dismissPanel() },
+                    )
+                    if (!shared) {
+                        Toast.makeText(
+                            context,
+                            R.string.search_panel_app_share_failed,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
             }
             SearchPanelAppQuickAction.FREEZE -> {
                 coroutineScope.launch {
@@ -1899,9 +1912,8 @@ fun SearchPanelScreen(
                     }
                 },
                 onShare = {
-                    if (FileSearchLauncher.share(context, previewTarget)) {
+                    if (FileSearchLauncher.share(context, previewTarget) { dismissPanel() }) {
                         clearPreviewState()
-                        dismissPanel()
                     }
                 },
             )

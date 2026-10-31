@@ -3644,6 +3644,7 @@ Questions: open a GitHub Issue on the project repository.</string>
     <string name="search_panel_app_quick_action_share">Share</string>
     <string name="search_panel_app_quick_action_freeze">Freeze</string>
     <string name="search_panel_app_quick_action_details">Details</string>
+    <string name="search_panel_app_share_failed">Unable to share this app</string>
     <string name="search_panel_contact_search_desc">Search contacts by name pinyin or phone number and dial</string>
     <string name="search_panel_contact_permission_title">Contacts permission</string>
     <string name="search_panel_contact_permission_granted">Contacts permission granted</string>
