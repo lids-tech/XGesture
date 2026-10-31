@@ -19,6 +19,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
@@ -454,6 +455,17 @@ object EdgeCardOverlayWindow {
             SideBubbleHorizontalEdge.Right -> screenWidth() - dp(VISIBLE_COLLAPSED_DP)
             SideBubbleHorizontalEdge.Left -> dp(VISIBLE_COLLAPSED_DP) - width
         }
+    }
+
+    /** 手指动过但没到阈值（或手势被系统取消）：只把窗口弹回当前形态的目标位，不重绑内容。 */
+    private fun settleBack(entry: EdgeCardEntry) {
+        val view = entry.view ?: return
+        val params = entry.params ?: return
+        val expanded = entry.state.isExpanded
+        val targetX = if (expanded) expandedX(entry) else collapsedX(entry)
+        val targetAlpha =
+            if (expanded) 1f else entry.plan.settings.edgeCardOpacity.coerceIn(0f, 1f)
+        animateTo(entry, view, params, targetX, targetAlpha, animated = true)
     }
 
     private fun applyEntry(entry: EdgeCardEntry, animated: Boolean) {
@@ -901,7 +913,8 @@ object EdgeCardOverlayWindow {
         private var downY = 0f
         private var totalX = 0f
         private var totalY = 0f
-        private var dragging = false
+        private var touchSlop = 0f
+        private var moved = false
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(view: View, event: MotionEvent): Boolean {
@@ -911,7 +924,8 @@ object EdgeCardOverlayWindow {
                     downY = event.rawY
                     totalX = 0f
                     totalY = 0f
-                    dragging = false
+                    touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop.toFloat()
+                    moved = false
                     entry.interacting = true
                     EdgeCardOverlayWindow.cancelAutoCollapse(entry)
                     entry.spring?.cancel()
@@ -923,11 +937,15 @@ object EdgeCardOverlayWindow {
                     if (abs(totalX) > abs(totalY) &&
                         abs(totalX) > EdgeCardOverlayWindow.dp(4f)
                     ) {
-                        dragging = true
+                        moved = true
                         EdgeCardOverlayWindow.dragTo(entry, totalX)
+                    } else if (!moved &&
+                        (abs(totalX) > touchSlop || abs(totalY) > touchSlop)
+                    ) {
+                        moved = true
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP -> {
                     entry.interacting = false
                     val swipe = EdgeCardUiState.resolveSwipe(
                         totalX = totalX,
@@ -937,11 +955,28 @@ object EdgeCardOverlayWindow {
                         verticalThresholdPx =
                             EdgeCardOverlayWindow.dp(EdgeCardOverlayWindow.VERTICAL_DISMISS_DP).toFloat(),
                     )
-                    if (!dragging) {
-                        EdgeCardOverlayWindow.onGesture(entry, totalX, totalY, EdgeCardSwipe.None)
-                    } else {
-                        EdgeCardOverlayWindow.onGesture(entry, totalX, totalY, swipe)
+                    // 必须以 resolveSwipe 为准：以前只有横拖才算“滑动”，纵向滑动一律当成点击
+                    // （下滑 → 展开态单击 → 打开会话），配置的上下滑动作永远不生效。
+                    when {
+                        swipe != EdgeCardSwipe.None ->
+                            EdgeCardOverlayWindow.onGesture(entry, totalX, totalY, swipe)
+                        // 手指动过但没过阈值：回位，不当作点击。
+                        moved -> EdgeCardOverlayWindow.settleBack(entry)
+                        else -> EdgeCardOverlayWindow.onGesture(
+                            entry,
+                            totalX,
+                            totalY,
+                            EdgeCardSwipe.None,
+                        )
                     }
+                    if (entry.view != null && entry.state.isExpanded) {
+                        EdgeCardOverlayWindow.scheduleAutoCollapse(entry)
+                    }
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    // 系统截走手势不是点击：回位即可，别把取消当成“打开会话”。
+                    entry.interacting = false
+                    EdgeCardOverlayWindow.settleBack(entry)
                     if (entry.view != null && entry.state.isExpanded) {
                         EdgeCardOverlayWindow.scheduleAutoCollapse(entry)
                     }
