@@ -435,10 +435,10 @@ internal object SettingsSnapshotReader {
             floatBallSizeDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_SIZE_DP] ?: 48f,
             floatBallPickCrossArmDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_CROSS_ARM_DP] ?: 7.5f,
             floatBallOpacity = prefs[SettingsPreferenceKeys.FLOAT_BALL_OPACITY] ?: 0.88f,
-            floatBallHideWhenIdle = prefs[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] ?: false,
-            floatBallIdleFreezeGif = prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] ?: false,
+            floatBallHideWhenIdle = prefs[SettingsPreferenceKeys.FLOAT_BALL_HIDE_WHEN_IDLE] ?: true,
+            floatBallIdleFreezeGif = prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_FREEZE_GIF] ?: true,
             floatBallIdleOpacity =
-                (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] ?: 0f).coerceIn(0f, 1f),
+                (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_OPACITY] ?: 0.38f).coerceIn(0f, 1f),
             floatBallIdleDelayMs =
                 (prefs[SettingsPreferenceKeys.FLOAT_BALL_IDLE_DELAY_MS] ?: 3000).coerceIn(0, 10_000),
             floatBallVisibleFraction = prefs[SettingsPreferenceKeys.FLOAT_BALL_VISIBLE_FRACTION] ?: 1f,
