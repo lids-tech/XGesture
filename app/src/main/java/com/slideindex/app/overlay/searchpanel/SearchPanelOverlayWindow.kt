@@ -57,6 +57,13 @@ object SearchPanelOverlayWindow {
     private var bringAboveRunnableB: Runnable? = null
     private var dismissToken = 0
 
+    /**
+     * Home / 最近任务已经关过面板：trampoline 回来的 [restore] 不再把它拉起来。
+     *
+     * 只有 [show] 会清掉它——用户重新呼出才算"又要用这块面板"。
+     */
+    private var suppressRestoreAfterSystemNavigation = false
+
     /** Warm-up keeps [composeView] alive while hidden; only treat visible window as showing. */
     val isShowing: Boolean get() = composeView?.visibility == View.VISIBLE
 
@@ -123,6 +130,7 @@ object SearchPanelOverlayWindow {
             destroyWindow()
         }
         ++dismissToken
+        suppressRestoreAfterSystemNavigation = false
         if (isShowing) {
             applyPanelShellActive()
             composeView?.post {
@@ -181,6 +189,22 @@ object SearchPanelOverlayWindow {
         }, SEARCH_PANEL_ANIM_MS.toLong())
     }
 
+    /**
+     * Home / 最近任务触发的关闭。
+     *
+     * 与 [dismiss] 同语义（持久化查询词 + 收回动画），额外做一件事：**作废「[hide] 的临时隐藏」**。
+     * 面板为选图 / 权限 trampoline 调过 [hide] 时，回来会走 [restore]；若这中间用户按了 Home，
+     * 那次 restore 会把面板重新拉到桌面上。这里立标记，[restore] 看到就跳过，直到下次 [show]。
+     */
+    fun dismissForSystemNavigation() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { dismissForSystemNavigation() }
+            return
+        }
+        suppressRestoreAfterSystemNavigation = true
+        dismiss()
+    }
+
     /** @return true if back was handled (preview dismissed or panel closed). */
     fun handleBack(): Boolean {
         if (!isShowing) return false
@@ -212,6 +236,10 @@ object SearchPanelOverlayWindow {
     fun restore() {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post { restore() }
+            return
+        }
+        if (suppressRestoreAfterSystemNavigation) {
+            Log.i(TAG, "restore skipped: panel dismissed by system navigation")
             return
         }
         if (composeView != null) {

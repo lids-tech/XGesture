@@ -14,6 +14,7 @@ import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.PointerSwipeConfig
 import com.slideindex.app.gesture.PointerSwipeDirection
 import com.slideindex.app.overlay.FloatBallStashPanel
+import com.slideindex.app.overlay.GlobalOverlayDismissHelper
 import com.slideindex.app.overlay.WidgetPickerOverlayWindow
 import com.slideindex.app.overlay.WidgetPopupOverlayWindow
 import java.util.concurrent.CountDownLatch
@@ -98,8 +99,20 @@ internal object SlideIndexAccessibilityGestureInjector {
                     }
                 }
             }
-            GestureAction.Home -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-            GestureAction.Recents -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+            GestureAction.Home, GestureAction.Recents -> {
+                // 面板都是独立 overlay 窗，Home / Recents 不会顺带关掉它们：桌面会被面板盖住，
+                // 而且面板还占着焦点（现状是"还得再点一次返回"）。
+                // 所有自有触发源（悬浮球 / 触钮 / 轮盘 / 摇一摇 / 屏幕控制条 / 外部调用）都汇到本漏斗，
+                // 所以在这里先清场、再执行系统动作，等于一次覆盖全部入口。
+                GlobalOverlayDismissHelper.dismissContentPanelsForSystemNavigation()
+                service.performGlobalAction(
+                    if (action == GestureAction.Home) {
+                        AccessibilityService.GLOBAL_ACTION_HOME
+                    } else {
+                        AccessibilityService.GLOBAL_ACTION_RECENTS
+                    }
+                )
+            }
             GestureAction.OpenNotifications ->
                 service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
             GestureAction.OpenQuickSettings ->
