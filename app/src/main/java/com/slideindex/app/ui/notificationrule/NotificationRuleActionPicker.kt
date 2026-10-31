@@ -94,10 +94,26 @@ private fun ActionConfigFields(
                 )
             }
             NotificationRuleActionType.LATER -> {
+                // 推迟时间要保留「用户正在输入的原文」：如果 value 直接取
+                // msToTimeString(parseTimeMs(原文))，敲下第一个字符就会被格式化回 "00:00"，
+                // 光标跳到末尾，实际上没法把时间打进去。空串表示未设置（此前会被 parse 成 0，
+                // 即「推迟到 00:00」，与空输入框的语义不符）。
+                var rawText by remember {
+                    mutableStateOf(entry.laterTimesMs.firstOrNull()?.let(::msToTimeString).orEmpty())
+                }
                 MiuixLabeledTextField(
-                    value = entry.laterTimesMs.firstOrNull()?.let(::msToTimeString).orEmpty(),
-                    onValueChange = {
-                        onChange(entry.copy(laterTimesMs = listOf(parseTimeMs(it))))
+                    value = rawText,
+                    onValueChange = { newText ->
+                        rawText = newText
+                        onChange(
+                            entry.copy(
+                                laterTimesMs = if (newText.isBlank()) {
+                                    emptyList()
+                                } else {
+                                    listOf(parseTimeMs(newText))
+                                },
+                            ),
+                        )
                     },
                     label = stringResource(R.string.notification_rule_action_later_time),
                 )

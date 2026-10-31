@@ -252,7 +252,11 @@ internal fun NotificationRuleConditionEditor(
                     FilterChip(
                         selected = day in weekDays,
                         onClick = {
-                            onWeekDaysChange(if (day in weekDays) weekDays - day else weekDays + day)
+                            val next = if (day in weekDays) weekDays - day else weekDays + day
+                            // 空集在持久化里会被解码回「全部星期」（NotificationFilterCodec 的
+                            // parseIntSet 对空数组回退 ALL），所以「一天都不选」表达不出来：
+                            // 允许取消最后一颗只会造成「保存成功、重进又全选」的假失效。
+                            if (next.isNotEmpty()) onWeekDaysChange(next)
                         },
                         label = { Text(weekDayLabel(day)) },
                     )

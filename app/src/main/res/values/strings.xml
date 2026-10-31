@@ -1494,10 +1494,10 @@
     <string name="notification_rule_keywords_exclude_hint">Exclude keywords, one per line</string>
     <string name="notification_rule_regex_hint">Regular expression</string>
     <string name="notification_rule_advanced_hint">Advanced filter JSON</string>
-    <string name="notification_rule_advanced_schema">{"match":"ANY|ALL|NONE","node":[{"field":"title","regex":"…","invert":false}]}\nfield: packageName, title, text, subText, channelId, category, key\nmatch ANY = at least one node, ALL = every node, NONE = no node. invert negates one node. Regex is substring-based, case-insensitive, DOTALL — anchor with ^…$ yourself.</string>
+    <string name="notification_rule_advanced_schema">{"match":"ANY|ALL|NONE","node":[{"field":"title","regex":"…","invert":false}]}\nfield: packageName, title, text, subText, channelId, category, key\nmatch ANY = at least one node, ALL = every node, NONE = no node. invert negates one node. Regex is substring-based, case-insensitive, DOTALL — anchor with ^…$ yourself. When omitted, match defaults to ALL.</string>
     <string name="notification_rule_advanced_error_invalid_json">Not valid JSON, or not a JSON object</string>
     <string name="notification_rule_advanced_error_empty_nodes">node must be a non-empty array</string>
-    <string name="notification_rule_advanced_error_invalid_match_type">match only accepts ANY or NONE (got “%1$s”)</string>
+    <string name="notification_rule_advanced_error_invalid_match_type">match only accepts ANY, ALL or NONE (got “%1$s”)</string>
     <string name="notification_rule_advanced_error_unknown_key">Unknown key “%1$s”</string>
     <string name="notification_rule_advanced_error_unsupported_field">Unknown field “%1$s”</string>
     <string name="notification_rule_advanced_error_empty_regex">regex must not be empty</string>

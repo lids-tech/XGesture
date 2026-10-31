@@ -65,6 +65,14 @@ object NotificationRuleMatcher {
         }
     }
 
+    /**
+     * 无 [StatusBarNotification] 的判定入口（历史条目、实时列表、预览）。
+     *
+     * [timestampMs] 必须是这条通知自己的时间（[NotificationHistoryItem.postedAtMs]），
+     * 不能用「现在」：时间条件描述的是通知到达时是否落在窗口内，用当前时刻会让同一条历史
+     * 记录的命中结果随查看页面的时间翻转（跨过窗口边界就变一套结论），也与监听路径用
+     * `sbn.postTime` 的判定不一致。缺省值只适合「此刻正在发生的通知」。
+     */
     fun matches(
         rule: NotificationFilterRule,
         packageName: String,
@@ -72,6 +80,7 @@ object NotificationRuleMatcher {
         title: String,
         text: String,
         subText: String = "",
+        timestampMs: Long = System.currentTimeMillis(),
     ): Boolean {
         return matches(
             rule = rule,
@@ -83,7 +92,7 @@ object NotificationRuleMatcher {
             title = title,
             text = text,
             subText = subText,
-            timestampMs = System.currentTimeMillis(),
+            timestampMs = timestampMs,
         )
     }
 

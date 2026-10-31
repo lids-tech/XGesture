@@ -69,12 +69,18 @@ sealed interface NotificationAdvancedFilterValidation {
  * - `invert: true` negates that single node's result.
  * - `match` is `ANY` (at least one node holds), `ALL` (every node holds), or `NONE` (no node
  *   holds). `invert` is applied per node before the `match` aggregation.
+ * - Omitting `match` means `ALL`: that is what the pre-validator matcher did, and legacy
+ *   documents were saved without the key. Defaulting to `ANY` silently turned those
+ *   multi-node rules from 「and」 into 「or」 — one condition stopped constraining anything.
  * - Matching is substring-based (`find`), case-insensitive, and DOTALL by default.
  */
 object NotificationAdvancedFilterJsonParser {
 
     private val TOP_LEVEL_KEYS = setOf("match", "node")
     private val NODE_KEYS = setOf("field", "regex", "invert")
+
+    /** 缺省 `match`：沿用历史匹配器的 `ALL`，见类注释。 */
+    private const val DEFAULT_MATCH_TYPE = NotificationRuleAdvancedMatchTypes.ALL
 
     fun parse(raw: String?): NotificationAdvancedFilterValidation {
         if (raw.isNullOrBlank()) {
@@ -90,8 +96,8 @@ object NotificationAdvancedFilterJsonParser {
             return invalid(NotificationAdvancedFilterError.UNKNOWN_KEY, detail = unknownRootKey)
         }
 
-        val rawMatchType = root.optString("match", NotificationRuleAdvancedMatchTypes.ANY)
-        val matchType = rawMatchType.trim().ifBlank { NotificationRuleAdvancedMatchTypes.ANY }
+        val rawMatchType = root.optString("match", DEFAULT_MATCH_TYPE)
+        val matchType = rawMatchType.trim().ifBlank { DEFAULT_MATCH_TYPE }
         if (!NotificationRuleAdvancedMatchTypes.isSupported(matchType.uppercase())) {
             return invalid(
                 NotificationAdvancedFilterError.INVALID_MATCH_TYPE,
