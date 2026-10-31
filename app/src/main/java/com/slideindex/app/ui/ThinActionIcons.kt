@@ -1861,4 +1861,30 @@ internal object ThinActionIcons {
             }
         }
     }
+
+    /**
+     * Tabler `icons`：圆 / 三角 / 叉 / 方块四种形状，表达「一套图标」。
+     * 用于扩展页「图标包」入口；描边 2f，与同组 Material Outlined 行观感一致。
+     */
+    val IconSet: ImageVector by lazy {
+        createThinIcon("ThinIconSet") {
+            val strokeWidth = 2f
+            val paths = listOf(
+                "M3 6.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0",
+                "M2.5 21h8l-4 -7l-4 7",
+                "M14 3l7 7",
+                "M14 10l7 -7",
+                "M14 14h7v7h-7l0 -7",
+            )
+            paths.forEach { pathData ->
+                addPath(
+                    pathData = PathParser().parsePathString(pathData).toNodes(),
+                    stroke = strokeBrush,
+                    strokeLineWidth = strokeWidth,
+                    strokeLineCap = StrokeCap.Round,
+                    strokeLineJoin = StrokeJoin.Round,
+                )
+            }
+        }
+    }
 }
