@@ -129,6 +129,43 @@ internal object ThinActionIcons {
     }
 
     /**
+     * 圆环启动器：贴边弹出的 180° 半圆面板。
+     *
+     * 真实面板是「180° 半圆 + 1~4 道同心环 + 每环 5/8/11/14 个槽位」（见 FvCircleLayoutEngine），
+     * 24dp 画不下那么多：这里取两道同心弧 + 外带 4 个槽位格，弦（=屏幕边）在下方。
+     * 内带留白保住「两环」的读法；分隔只落在外带，避免被读成放射光芒（与「屏幕常亮」区分）。
+     */
+    val RingLauncher: ImageVector by lazy {
+        createThinIcon("ThinRingLauncher") {
+            path(
+                stroke = strokeBrush,
+                strokeLineWidth = STROKE_WIDTH,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                // 外弧 r=9.4：半圆，圆心 (12, 19.2)
+                moveTo(2.6f, 19.2f)
+                curveTo(2.6f, 14.009f, 6.809f, 9.8f, 12f, 9.8f)
+                curveTo(17.191f, 9.8f, 21.4f, 14.009f, 21.4f, 19.2f)
+                // 内弧 r=6.0：第二道环
+                moveTo(6f, 19.2f)
+                curveTo(6f, 15.886f, 8.686f, 13.2f, 12f, 13.2f)
+                curveTo(15.314f, 13.2f, 18f, 15.886f, 18f, 19.2f)
+                // 弦 = 屏幕边（长度恰为直径，与两道弧的端点重合）
+                moveTo(2.6f, 19.2f)
+                lineTo(21.4f, 19.2f)
+                // 外带 3 条径向分隔 => 4 个槽位格
+                moveTo(16.24f, 14.96f)
+                lineTo(18.65f, 12.55f)
+                moveTo(12f, 13.2f)
+                lineTo(12f, 9.8f)
+                moveTo(7.76f, 14.96f)
+                lineTo(5.35f, 12.55f)
+            }
+        }
+    }
+
+    /**
      * 快捷轮盘：中心一个大圆 + 外围四个小圆（对应轮盘"中心盘 + 一圈容器"的结构）。
      *
      * 与「指尖环」等区分：中心圆明显更大，小圆只在四个正方向，整体是一个"环形阵列"的读法。
