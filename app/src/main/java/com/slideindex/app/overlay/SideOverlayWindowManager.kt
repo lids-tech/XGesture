@@ -178,6 +178,13 @@ internal class SideOverlayWindowManager(
 
     fun detachPresentationUnlessRequired() {
         if (overlayLayoutSuspended()) return
+        // 【常驻组合】该侧配了触钮时，空闲也不摘 presentation：
+        // 一旦摘掉，手势提示动画的 Compose 组合就没了，下次手势又要现搭（实测 DOWN 之后
+        // 18~32ms 才 BIND，动画因此在手指滑出一段后才出现）。
+        // 空闲态本来就已是 passthrough（NOT_TOUCHABLE）标志，不会挡住下面的应用。
+        if (ctrl.settings.triggerHandles(side).isNotEmpty()) {
+            return
+        }
         val view = presentationView ?: return
         if (ctrl.previewMode || view.isSessionActive() || view.needsPresentationDirectTouch() ||
             view.keepsOverlayExpanded() ||
@@ -194,8 +201,15 @@ internal class SideOverlayWindowManager(
         detachPresentationWindow()
     }
 
+
+
     fun syncCaptureWindowLayout() {
         val presentation = presentationView ?: return
+        // 只在还没挂上时补挂：ensurePresentationAttached() 对已挂窗口会走 updateViewLayout，
+        // 而本方法调用频繁，无条件调用会变成持续重排（实测空闲主线程 ~35% 空转、零绘制）。
+        if (!presentationAttached && ctrl.settings.triggerHandles(side).isNotEmpty()) {
+            ensurePresentationAttached(forceWhenIdle = true)
+        }
         if (ctrl.settings.triggerHandles(side).isEmpty()) {
             // 该侧没有触钮：只收触钮捕获窗与系统手势排除区。
             // ⚠️ 必须**逐类收**，不能走 [detachAllCaptureWindows]：它会

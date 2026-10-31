@@ -977,7 +977,9 @@ class SwipePathRecognizer(
         private const val TAP_SLOP_DP = 12f
         private const val TAP_LENIENT_SLOP_DP = 36f
         /** 手势提示动画的启动门槛（dp）：只影响"动画何时出现"，不参与任何手势判定。 */
-        private const val HINT_START_SLOP_DP = 3f
+        // B：提示动画启动阈值。原为 3dp，但首帧 MOVE 常被系统合并/稀疏投递，
+    // 等到第一个"超过 3dp 的帧"时往往已滑出几十像素；降到 0.5dp 让第一帧就生效。
+    private const val HINT_START_SLOP_DP = 0.5f
         const val TURN_SLOP_DP = 32f
         /** 折返手势的回缩门槛；无悬停时更易误触，对齐悬浮球的 28dp。 */
         const val RETURN_SLOP_DP = 28f
