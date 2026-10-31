@@ -1144,6 +1144,20 @@ class ClipboardFloatService : Service(), LifecycleOwner, SavedStateRegistryOwner
             activeInstance?.hideWindow()
         }
 
+        /**
+         * 拖拽流转栏判定"内容已经发出"：先把起拖时藏起来的浮窗恢复可见，
+         * 再按普通条目动作收起（与点击 / 粘贴成功后的行为一致）。
+         * 置顶（[panelPinned]）时保持可见，不替用户做收起决定。
+         */
+        fun discardAfterDragTransfer() {
+            val inst = activeInstance ?: return
+            inst.mainHandler.post {
+                if (!inst.viewAdded) return@post
+                inst.setEntryDragHidden(hidden = false)
+                if (!inst.panelPinned) inst.collapseAfterEntryAction()
+            }
+        }
+
         fun updateImeTop(context: Context, imeTop: Int) {
             context.applicationContext.startService(
                 Intent(context.applicationContext, ClipboardFloatService::class.java).apply {

@@ -86,6 +86,7 @@ import androidx.core.content.FileProvider
 import androidx.core.view.drawToBitmap
 import com.slideindex.app.R
 import com.slideindex.app.clipboard.ClipboardDragShareFallback
+import com.slideindex.app.overlay.dragdrop.DragFlowSource
 import com.slideindex.app.overlay.history.HistoryDragPreview
 import com.slideindex.app.overlay.history.HistoryEntryDragHelper
 import java.io.File
@@ -287,6 +288,11 @@ private fun FileBrowserEntryRow(
                         if (released != null) return@awaitEachGesture
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (rowSnapshot != null) {
+                            // 恢复 = 把文件浏览器浮窗放回来；关掉 = 关掉整个浏览器。
+                            val dragFlowSource = DragFlowSource(
+                                onRestore = { FileBrowserOverlayWindow.resumeFromFileDrag() },
+                                onDiscard = { FileBrowserOverlayWindow.dismiss() },
+                            )
                             val started = HistoryEntryDragHelper.startDrag(
                                 view = view,
                                 clipData = lockedClip,
@@ -310,6 +316,7 @@ private fun FileBrowserEntryRow(
                                         ).show()
                                     }
                                 },
+                                dragFlowSource = dragFlowSource,
                             )
                             if (!started &&
                                 !ClipboardDragShareFallback.shareToForegroundHost(context, lockedClip)

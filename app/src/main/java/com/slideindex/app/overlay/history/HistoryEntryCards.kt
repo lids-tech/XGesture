@@ -44,6 +44,7 @@ import com.slideindex.app.clipboard.shouldOfferExpand
 import com.slideindex.app.overlay.FloatBallStashPanel
 import com.slideindex.app.overlay.FloatBallTextPick
 import com.slideindex.app.overlay.PickResultFromHistoryCoordinator
+import com.slideindex.app.overlay.dragdrop.DragFlowSource
 import com.slideindex.app.stash.StashAccess
 import com.slideindex.app.stash.StashCoordinator
 import com.slideindex.app.stash.StashEntry
@@ -60,6 +61,15 @@ import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+/**
+ * 收纳面板的拖拽源：恢复 = 把面板原样放回来；关掉 = 真正收起（把手跟着回来）。
+ * 拖拽结束后由流转栏按落点调用（见 [com.slideindex.app.overlay.dragdrop.DragFlowSession]）。
+ */
+private fun stashPanelDragFlowSource() = DragFlowSource(
+    onRestore = { FloatBallStashPanel.setDragHidden(false) },
+    onDiscard = { FloatBallStashPanel.dismiss() },
+)
 
 @Composable
 internal fun HistoryClipboardEntryCard(
@@ -131,6 +141,7 @@ internal fun HistoryClipboardEntryCard(
         } else {
             // ⚠️ 必须先起协程：抓"整张卡"的快照是 suspend 的（得先让这一帧画进 GraphicsLayer）。
             dragScope.launch {
+                val dragFlowSource = stashPanelDragFlowSource()
                 val started = HistoryEntryDragHelper.startDrag(
                     view = view,
                     clipData = clipData,
@@ -145,6 +156,7 @@ internal fun HistoryClipboardEntryCard(
                             onShowMessage(R.string.history_drag_unsupported)
                         }
                     },
+                    dragFlowSource = dragFlowSource,
                 )
                 if (!started) {
                     if (!ClipboardDragShareFallback.shareToForegroundHost(context, clipData)) {
@@ -457,6 +469,7 @@ internal fun HistoryStashEntryCard(
         } else {
             // ⚠️ 必须先起协程：抓"整张卡"的快照是 suspend 的（得先让这一帧画进 GraphicsLayer）。
             dragScope.launch {
+                val dragFlowSource = stashPanelDragFlowSource()
                 val started = HistoryEntryDragHelper.startDrag(
                     view = view,
                     clipData = clipData,
@@ -471,6 +484,7 @@ internal fun HistoryStashEntryCard(
                             onShowMessage(R.string.history_drag_unsupported)
                         }
                     },
+                    dragFlowSource = dragFlowSource,
                 )
                 if (!started) {
                     if (!ClipboardDragShareFallback.shareToForegroundHost(context, clipData)) {

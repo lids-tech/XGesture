@@ -54,6 +54,8 @@ import com.slideindex.app.overlay.FloatBallTextPick
 import com.slideindex.app.overlay.OverlayWindowTypes
 import com.slideindex.app.overlay.PickResultContentOrigin
 import com.slideindex.app.overlay.PickResultTextSource
+import com.slideindex.app.overlay.dragdrop.DragFlowSession
+import com.slideindex.app.overlay.dragdrop.DragFlowSource
 import com.slideindex.app.overlay.pickresult.PickResultTextMode
 import com.slideindex.app.overlay.searchpanel.SearchPanelOverlayWindow
 import com.slideindex.app.overlay.searchpanel.SearchPanelQueryBridge
@@ -78,6 +80,14 @@ object UniversalCopyOverlay {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var currentOverlay: WeakReference<View>? = null
+    private var currentLayoutParams: WindowManager.LayoutParams? = null
+    private var currentWindowManager: WindowManager? = null
+
+    /**
+     * 本次长按拖拽的源会话。起拖时把浮层"藏起来但保留状态"，
+     * 由流转栏决定结束后恢复还是真正 [dismiss]（见 DragFlowSession）。
+     */
+    private var currentDragSource: DragFlowSource? = null
     private var dismissRunnable: Runnable? = null
     private var currentOcrJob: Job? = null
 
@@ -103,7 +113,7 @@ object UniversalCopyOverlay {
     private var closeButton: WeakReference<ImageView>? = null
     private var textBlocksViewRef: WeakReference<TextBlocksView>? = null
 
-    val isShowing: Boolean get() = currentOverlay?.get() != null
+    val isShowing: Boolean get() = currentOverlay?.get()?.visibility == View.VISIBLE
 
     fun show(context: Context, blocks: List<UniversalCopyBlock>) {
         handler.post {
@@ -123,6 +133,11 @@ object UniversalCopyOverlay {
     }
 
     fun dismiss(animated: Boolean = true) {
+        // 拖拽会话到这里作废：无论它是正常结束还是被"取消"，
+        // 都不能把恢复动作留给下一次拖拽。
+        currentDragSource?.let(DragFlowSession::end)
+        currentDragSource = null
+        textBlocksViewRef?.get()?.endDrag()
         dismissRunnable?.let(handler::removeCallbacks)
         dismissRunnable = null
         hideStatusRunnable?.let(handler::removeCallbacks)
@@ -166,11 +181,44 @@ object UniversalCopyOverlay {
             .start()
     }
 
+    /**
+     * 长按拖拽起拖：把浮层藏起来但**不清状态**（选区、块缓存、模式都留着），
+     * 这样"恢复"能原样回来；同时挂上 FLAG_NOT_TOUCHABLE，让手指下面的应用
+     * 正常接收这次投放，而不是被铺满全屏的选区窗吃掉。
+     */
+    private fun hideForDragFlow() {
+        val overlay = currentOverlay?.get() ?: return
+        val params = currentLayoutParams ?: return
+        overlay.visibility = View.INVISIBLE
+        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        runCatching { currentWindowManager?.updateViewLayout(overlay, params) }
+    }
+
+    /** 恢复药丸：把浮层连同选区原样放回来。 */
+    private fun restoreFromDragFlow() {
+        currentDragSource?.let(DragFlowSession::end)
+        currentDragSource = null
+        val overlay = currentOverlay?.get() ?: return
+        val params = currentLayoutParams ?: return
+        overlay.visibility = View.VISIBLE
+        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        runCatching { currentWindowManager?.updateViewLayout(overlay, params) }
+        overlay.requestFocus()
+        textBlocksViewRef?.get()?.endDrag()
+        // 恢复后重新给满一条自动关闭时间：拖拽期间那条计时不该继续吃掉用户的停留时间。
+        dismissRunnable?.let(handler::removeCallbacks)
+        val runnable = Runnable { dismiss() }
+        dismissRunnable = runnable
+        handler.postDelayed(runnable, AUTO_DISMISS_MS)
+    }
+
     private fun removeOverlayImmediate(overlay: View) {
         runCatching {
             val wm = overlay.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             wm.removeViewImmediate(overlay)
             currentOverlay = null
+            currentLayoutParams = null
+            currentWindowManager = null
         }
     }
 
@@ -243,6 +291,8 @@ object UniversalCopyOverlay {
 
         wm.addView(root, params)
         currentOverlay = WeakReference(root)
+        currentLayoutParams = params
+        currentWindowManager = wm
         isDismissing = false
 
         root.animate()
@@ -972,18 +1022,38 @@ object UniversalCopyOverlay {
             val shadowBuilder = TextDragShadowBuilder(this, dragText, density, accentColor)
             val flags = View.DRAG_FLAG_GLOBAL
 
-            // 5. 启动系统级跨应用拖拽
+            // 5. 启动系统级跨应用拖拽。
+            //    以前这里起拖即 dismiss，浮层和选区一起没了，流转栏点"恢复"也救不回来；
+            //    现在只藏起来，由 DragFlowSession 让流转栏决定结束后恢复还是关掉。
+            val source = DragFlowSource(
+                onRestore = { restoreFromDragFlow() },
+                onDiscard = { dismiss() },
+            )
+            currentDragSource = source
+            DragFlowSession.begin(source)
             isDragAndDropping = true
             val started = runCatching {
                 startDragAndDrop(clipData, shadowBuilder, null, flags)
             }.getOrDefault(false)
 
             if (started) {
-                // 拖拽启动成功后，将浮层极速淡出关闭，露出底层应用以便无缝投递
-                post { dismiss(animated = true) }
+                // 下一帧再藏：拖影已经起飞，浮层消失的时机与旧实现一致。
+                // 若这一帧里流转栏已经恢复/丢弃了源，就别再把它藏回去了。
+                post {
+                    if (currentDragSource === source) {
+                        hideForDragFlow()
+                    }
+                }
             } else {
+                DragFlowSession.end(source)
+                currentDragSource = null
                 isDragAndDropping = false
             }
+        }
+
+        /** 拖拽会话结束（恢复或丢弃）后复位，否则下一次长按会被 `isDragAndDropping` 挡住。 */
+        fun endDrag() {
+            isDragAndDropping = false
         }
 
         fun setBlocks(newBlocks: List<SelectableBlock>) {

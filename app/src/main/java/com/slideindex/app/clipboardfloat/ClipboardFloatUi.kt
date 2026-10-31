@@ -113,10 +113,12 @@ import com.slideindex.app.clipboard.hasImageContent
 import com.slideindex.app.di.OverlayDependencyAccess
 import com.slideindex.app.overlay.LocalFrostedGlassBackdrop
 import com.slideindex.app.overlay.canBlurInOverlay
+import com.slideindex.app.overlay.dragdrop.DragFlowSource
 import com.slideindex.app.overlay.history.HistoryEntryDragHelper
 import com.slideindex.app.overlay.history.HistoryPanelColors
 import com.slideindex.app.overlay.history.recordHistoryCardSnapshot
 import com.slideindex.app.overlay.history.rememberHistoryCardSnapshot
+import com.slideindex.app.service.ClipboardFloatService
 import com.slideindex.app.settings.ClipboardFloatWindowMetrics
 import com.slideindex.app.ui.theme.OverlayAwareModuleTheme
 import kotlinx.coroutines.Dispatchers
@@ -1146,6 +1148,11 @@ private fun startClipboardFloatEntryDrag(
         Toast.makeText(context, R.string.history_drag_unsupported, Toast.LENGTH_SHORT).show()
         return
     }
+    // 恢复 = 把浮窗放回来；关掉 = 恢复可见后按普通条目动作收起。
+    val dragFlowSource = DragFlowSource(
+        onRestore = onDragEnd,
+        onDiscard = { ClipboardFloatService.discardAfterDragTransfer() },
+    )
     val started = HistoryEntryDragHelper.startDrag(
         view = view,
         clipData = clipData,
@@ -1162,6 +1169,7 @@ private fun startClipboardFloatEntryDrag(
                 Toast.makeText(context, R.string.history_drag_unsupported, Toast.LENGTH_SHORT).show()
             }
         },
+        dragFlowSource = dragFlowSource,
     )
     if (!started) {
         if (!ClipboardDragShareFallback.shareToForegroundHost(context, clipData)) {
