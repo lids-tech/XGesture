@@ -1834,6 +1834,34 @@ internal object ThinActionIcons {
         }
     }
 
+    /**
+     * 悬浮球：球 + 下方一道投影弧（读作"浮在界面之上、可以拖着走"）。
+     *
+     * 原来借的是 `Icons.Outlined.Circle`：一个空心圆读不出「球」，
+     * 还会和定位 / 圆点类图标混在一起，所以自绘一张。
+     */
+    val FloatBall: ImageVector by lazy {
+        createThinIcon("ThinFloatBall") {
+            path(
+                stroke = strokeBrush,
+                strokeLineWidth = STROKE_WIDTH,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                // 球：r = 3.6，圆心 (12, 10.6)
+                moveTo(15.6f, 10.6f)
+                curveTo(15.6f, 12.588f, 13.988f, 14.2f, 12f, 14.2f)
+                curveTo(10.012f, 14.2f, 8.4f, 12.588f, 8.4f, 10.6f)
+                curveTo(8.4f, 8.612f, 10.012f, 7f, 12f, 7f)
+                curveTo(13.988f, 7f, 15.6f, 8.612f, 15.6f, 10.6f)
+                close()
+                // 投影弧
+                moveTo(6.6f, 19.1f)
+                curveTo(8.4f, 20.2f, 15.6f, 20.2f, 17.4f, 19.1f)
+            }
+        }
+    }
+
     val RemoteControl2: ImageVector by lazy {
         createThinIcon("ThinRemoteControl2") {
             addPath(
@@ -1847,7 +1875,8 @@ internal object ThinActionIcons {
 
     val PenTablet: ImageVector by lazy {
         createThinIcon("ThinPenTablet") {
-            val strokeWidth = 2f
+            // 与细线集同宽（原来是写死的 2f，比同组粗 33%）
+            val strokeWidth = STROKE_WIDTH
             val paths = listOf(
                 "M22 5V19C22 20.1046 21.1046 21 20 21H4C2.89543 21 2 20.1046 2 19V5C2 3.89543 2.89543 3 4 3H20C21.1046 3 22 3.89543 22 5Z",
                 "M2 12H6",
