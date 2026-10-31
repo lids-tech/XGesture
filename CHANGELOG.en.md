@@ -22,13 +22,13 @@ Chinese ones, each falling back to the other when a version is missing.
 - Recursive search in the current folder, folder details, long-press rename and jump-to-path in the file browser
 - Multiple storage volumes plus Android/obb entry points, with on-demand thumbnails for images, videos, APKs and PDFs
 - An album-style media grid and image viewer with GIF playback, previous/next switching and an entry to the image editor
-- Drag a file onto a folder to move it, and drag files to other apps to share them
+- Long-press a file in the file browser and drag it to another app to share it
 - New global icon packs: pick an icon pack installed on the phone and override app icons across the launcher and all running screens
 - New icon theme settings page to manage which screens an icon pack applies to and its override switch
 - The floating share sheet now uses the built-in panel: grid layout, pinnable targets, drag and drop plus search-result drops, off by default
 - New share panel settings page to reorder targets and manage pinned entries
 - System share entries for OCR text, image search and image editing
-- The floating ball, its line and its touch window now live in separate small windows, for smoother dragging and no drag dead zone
+- The floating ball and its touch window now share one window for smoother dragging, and the line lives in its own narrow window
 - New idle hiding and idle GIF pausing for the floating ball, with 38% idle opacity by default
 - New "Toggle floating ball" action, bindable to gestures, external calls and a desktop long press
 - New separate vibration switch for the back gesture, on by default
@@ -66,7 +66,6 @@ Chinese ones, each falling back to the other when a version is missing.
 - In-app global copy skipped the current app and left the previous app's selection behind
 - The share panel still showed an app after it was uninstalled
 - Sharing an app failed the FileProvider grant; the package is now copied into the cache first
-- The floating ball's full-screen touch window did not shrink back after collapsing, leaving an invisible full-screen layer
 - While the ring took over touches, slots fired by mistake and the ball jumped to the top-left corner
 - Releasing after a continuous ring trigger let the session take the hosted panel away
 - The floating toolbar covered text after selecting all in the text picker
@@ -77,7 +76,7 @@ Chinese ones, each falling back to the other when a version is missing.
 - The quick bar stayed visible when favourites were empty
 - Root folder size probing could hang; sizes are now computed on demand
 - The last path and display preferences were not restored after a cold start
-- Missing Japanese and Arabic strings were filled in
+- Missing Japanese and Arabic strings in the file browser, share entries and the actions hub were filled in
 
 ## [1.52.0] - 2026-10-27
 
