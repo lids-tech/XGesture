@@ -66,6 +66,7 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
             onOpenWidgetPanel = { ctx.navigate(AppNavKey.WidgetPanel) },
             onOpenStashClipboard = { ctx.navigate(AppNavKey.StashClipboard) },
             onOpenDragDropFlow = { ctx.navigate(AppNavKey.DragDropFlowSettings) },
+            onOpenShareSheet = { ctx.navigate(AppNavKey.ShareSheetSettings) },
             onOpenFreezer = { ctx.navigate(AppNavKey.ExtensionFreezer) },
             onOpenMacro = { ctx.navigate(AppNavKey.MacroList) },
             onOpenPageScroll = { ctx.navigate(AppNavKey.PageScrollSettings) },
@@ -102,6 +103,16 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
             onAddTarget = { ctx.navigate(AppNavKey.FileSharePickApp) },
             onDeleteEngine = viewModel::deleteEngine,
             onReorderEngines = viewModel::reorderFileShareEngines,
+        )
+    }
+
+    hiltEntry<AppNavKey.ShareSheetSettings> {
+        val viewModel: ExtensionSettingsViewModel = hiltViewModel()
+        val settings by viewModel.settings.collectAsStateWithLifecycle()
+        com.slideindex.app.ui.ShareSheetSettingsScreen(
+            settings = settings,
+            onBack = { ctx.backStack.removeLastOrNull() },
+            onEnabledChange = viewModel::setShareSheetEnabled,
         )
     }
 

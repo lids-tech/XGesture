@@ -354,6 +354,7 @@ data class AppSettings(
     val floatBallTranslateAppPackage get() = floatBall.floatBallTranslateAppPackage
     val floatBallImageSearchPickPanelTransparency get() = floatBall.floatBallImageSearchPickPanelTransparency
     val shareImageOcrHistoryEnabled get() = floatBall.shareImageOcrHistoryEnabled
+    val shareSheetEnabled get() = floatBall.shareSheetEnabled
 
     val clipboardBackgroundMonitoring get() = clipboard.clipboardBackgroundMonitoring
     val clipboardBackgroundMonitoringMode get() = clipboard.clipboardBackgroundMonitoringMode

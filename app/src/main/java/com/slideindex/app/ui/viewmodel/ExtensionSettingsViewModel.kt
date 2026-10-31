@@ -793,6 +793,10 @@ class ExtensionSettingsViewModel @Inject constructor(
         settingsRepository.setShareImageOcrHistoryEnabled(enabled)
     }
 
+    fun setShareSheetEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setShareSheetEnabled(enabled)
+    }
+
     fun setFloatBallHoverPauseDelayMs(value: Int) = launchSettingsWrite {
         settingsRepository.setFloatBallHoverPauseDelayMs(value)
     }

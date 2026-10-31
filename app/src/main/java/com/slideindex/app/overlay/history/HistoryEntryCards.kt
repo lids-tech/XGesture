@@ -86,6 +86,8 @@ internal fun HistoryClipboardEntryCard(
     onCopy: () -> Unit,
     onStash: () -> Unit,
     onDelete: () -> Unit,
+    /** 内置分享面板发出去之前要先收起历史面板，否则目标 App 会被面板盖住。 */
+    onDismissPanel: () -> Unit = {},
     haptics: HistoryHaptics = rememberHistoryHaptics(),
 ) {
     val context = LocalContext.current
@@ -280,7 +282,7 @@ internal fun HistoryClipboardEntryCard(
                                 icon = Icons.Outlined.Share,
                                 onClick = {
                                     haptics.tick()
-                                    FloatBallTextPick.shareScreenshot(context, selectedBitmap)
+                                    FloatBallTextPick.shareScreenshot(context, selectedBitmap) { onDismissPanel() }
                                 },
                             ),
                         )
@@ -304,7 +306,7 @@ internal fun HistoryClipboardEntryCard(
                                 icon = Icons.Outlined.Share,
                                 onClick = {
                                     haptics.tick()
-                                    FloatBallTextPick.shareText(context, bodyText)
+                                    FloatBallTextPick.shareText(context, bodyText) { onDismissPanel() }
                                 },
                             ),
                         )
@@ -337,6 +339,8 @@ internal fun HistoryStashEntryCard(
     onShare: () -> Unit,
     onToggleStar: () -> Unit,
     onDelete: () -> Unit,
+    /** 内置分享面板发出去之前要先收起历史面板，否则目标 App 会被面板盖住。 */
+    onDismissPanel: () -> Unit = {},
     /** 打开就地编辑条（设计稿 `.editbar`）。 */
     onEdit: () -> Unit = {},
     /** 卡片要展示的元数据（完成态 / 标签 / 追加 / 来源），见 `StashMetaRepository`。 */
@@ -453,10 +457,10 @@ internal fun HistoryStashEntryCard(
     val shareEntry: () -> Unit = {
         when {
             entry.type == StashEntryType.RICH && !expanded && richHasImages && richSelectedBitmap != null -> {
-                FloatBallTextPick.shareScreenshot(context, richSelectedBitmap)
+                FloatBallTextPick.shareScreenshot(context, richSelectedBitmap) { onDismissPanel() }
             }
             entry.type == StashEntryType.RICH && !expanded && exportText.isNotBlank() -> {
-                FloatBallTextPick.shareText(context, exportText)
+                FloatBallTextPick.shareText(context, exportText) { onDismissPanel() }
             }
             else -> onShare()
         }

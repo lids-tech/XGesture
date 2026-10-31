@@ -9,6 +9,8 @@ import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.slideindex.app.overlay.share.ShareSheetLauncher
+import com.slideindex.app.overlay.share.ShareSheetPayload
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
@@ -199,21 +201,15 @@ private fun shareBitmap(context: Context, bitmap: Bitmap) {
             file,
         )
         Log.d("FileBrowserShare", "uri=$uri")
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = Intent.createChooser(
-            intent,
-            context.getString(R.string.file_browser_share_image),
-        ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        // 悬浮窗是 TYPE_APPLICATION_OVERLAY，会盖住系统分享面板；先关掉再拉起。
-        FileBrowserOverlayWindow.dismiss()
-        context.startActivity(chooser)
-        Log.d("FileBrowserShare", "chooser started")
+        // 旧实现：这里先 dismiss 再拉起系统 chooser —— 悬浮窗（TYPE_APPLICATION_OVERLAY）会盖住
+        // 系统分享面板。现在统一交给 launcher：开关打开时在浮层里点选目标直发，开关关闭时
+        // 由 launcher 先收起本浮窗再拉系统面板。
+        ShareSheetLauncher.share(
+            context = context,
+            payload = ShareSheetPayload.Image(uri = uri, mimeType = "image/png"),
+            dismissSource = { FileBrowserOverlayWindow.dismiss() },
+        )
+        Log.d("FileBrowserShare", "share dispatched")
     } catch (t: Throwable) {
         Log.e("FileBrowserShare", "share failed", t)
         runCatching {

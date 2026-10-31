@@ -338,6 +338,7 @@ sealed interface AppNavKey : NavKey {
     @Serializable data object DragDropFlowSettings : AppNavKey
     @Serializable data object FileShareEngineSettings : AppNavKey
     @Serializable data object FileSharePickApp : AppNavKey
+    @Serializable data object ShareSheetSettings : AppNavKey
 
 @Serializable data object GlobalIconLibrary : AppNavKey
 @Serializable data object IconThemeSettings : AppNavKey

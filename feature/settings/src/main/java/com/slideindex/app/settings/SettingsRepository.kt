@@ -751,6 +751,8 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setShareImageOcrHistoryEnabled(enabled: Boolean) = overlay.setShareImageOcrHistoryEnabled(enabled)
 
+    suspend fun setShareSheetEnabled(enabled: Boolean) = overlay.setShareSheetEnabled(enabled)
+
     suspend fun setClipboardBackgroundMonitoring(enabled: Boolean) = overlay.setClipboardBackgroundMonitoring(enabled)
 
     suspend fun setClipboardBackgroundMonitoringMode(mode: ClipboardMonitoringMode) =

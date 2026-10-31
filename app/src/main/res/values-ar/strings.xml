@@ -4778,4 +4778,18 @@
     <string name="action_icon_style_filled">ممتلئ</string>
     <string name="action_icon_text_title">أيقونة نصية</string>
     <string name="action_icon_text_hint">حرف إلى حرفين</string>
+    <string name="share_sheet_title">مشاركة إلى</string>
+    <string name="share_sheet_hint">اضغط مطولًا للتثبيت</string>
+    <string name="share_sheet_empty">لا توجد تطبيقات قابلة للمشاركة</string>
+    <string name="share_sheet_toast_pinned">تم تثبيت «%1$s»</string>
+    <string name="share_sheet_toast_unpinned">تم إلغاء تثبيت «%1$s»</string>
+    <string name="share_sheet_use_system">لوحة المشاركة في النظام</string>
+    <string name="share_sheet_settings_title">لوحة المشاركة</string>
+    <string name="share_sheet_settings_subtitle">شبكة مشاركة داخلية بدلًا من لوحة النظام</string>
+    <string name="share_sheet_hub_subtitle">لوحة شبكية مع أهداف مثبّتة</string>
+    <string name="share_sheet_settings_tip">• المشاركة من نافذة عائمة (لوحة النص، مستعرض الملفات، السحب والإفلات) لا تغادر الطبقة العائمة، لذلك لا يمكن أن تختفي لوحة النظام خلف نوافذنا.\n• اضغط على هدف للمشاركة فورًا، واضغط مطولًا لتثبيته في المقدمة.</string>
+    <string name="share_sheet_settings_section">السلوك</string>
+    <string name="share_sheet_toggle_title">لوحة مشاركة داخلية</string>
+    <string name="share_sheet_toggle_desc">استبدال لوحة مشاركة النظام بالشبكة الداخلية: ثبّت الأهداف المفضلة وتجاوز واجهة النظام</string>
+    <string name="share_sheet_settings_pin_tip">ملاحظة: تُحفظ الأهداف المثبّتة محليًا، واضغط مطولًا مرة أخرى لإلغاء التثبيت.</string>
 </resources>

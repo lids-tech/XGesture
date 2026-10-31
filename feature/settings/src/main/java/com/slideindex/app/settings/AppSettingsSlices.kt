@@ -388,6 +388,13 @@ data class FloatBallSettings(
     val floatBallImageSearchPickPanelTransparency: Float = 0.65f,
     /** Save shared long-image OCR results for later re-open from pick settings. */
     val shareImageOcrHistoryEnabled: Boolean = true,
+    /**
+     * 浮窗里的「分享」是否改用内置分享面板（网格 + 长按钉住 + 直发目标）。
+     *
+     * 默认关：老行为是弹系统分享面板。开启后从浮窗发起分享不再离开浮层，
+     * 也顺带解决"系统面板被自家浮层盖住"的问题（见 `ShareSheetOverlayWindow`）。
+     */
+    val shareSheetEnabled: Boolean = false,
 ) {
     companion object {
         /**

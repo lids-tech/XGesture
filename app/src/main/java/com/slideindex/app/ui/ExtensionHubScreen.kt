@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -49,6 +50,7 @@ fun ExtensionHubScreen(
     onOpenWidgetPanel: () -> Unit,
     onOpenStashClipboard: () -> Unit,
     onOpenDragDropFlow: () -> Unit = {},
+    onOpenShareSheet: () -> Unit = {},
     onOpenIconLibrary: () -> Unit = {},
     onOpenIconTheme: () -> Unit = {},
     onOpenFreezer: () -> Unit = {},
@@ -177,6 +179,16 @@ fun ExtensionHubScreen(
                     }
                 )
                 add(
+                    settingsCardScopeItem("share-sheet") {
+                        SettingNavigationRow(
+                            icon = { label -> Icon(Icons.Outlined.Share, contentDescription = label) },
+                            title = stringResource(R.string.share_sheet_settings_title),
+                            subtitle = stringResource(R.string.share_sheet_hub_subtitle),
+                            onClick = onOpenShareSheet,
+                        )
+                    }
+                )
+                add(
                     settingsCardScopeItem("stash-clipboard") {
                         StashClipboardEntryCard(
                             settings = settings,
@@ -245,7 +257,7 @@ fun ExtensionHubScreen(
                 add(
                     settingsCardScopeItem("icon-theme") {
                         SettingNavigationRow(
-                            icon = { label -> Icon(ThinActionIcons.Apps, contentDescription = label) },
+                            icon = { label -> Icon(ThinActionIcons.IconSet, contentDescription = label) },
                             title = stringResource(R.string.extension_icon_theme_title),
                             subtitle = stringResource(R.string.extension_icon_theme_subtitle),
                             onClick = onOpenIconTheme

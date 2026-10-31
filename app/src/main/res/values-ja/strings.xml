@@ -4774,4 +4774,18 @@
     <string name="action_icon_style_filled">塗りつぶし</string>
     <string name="action_icon_text_title">テキストアイコン</string>
     <string name="action_icon_text_hint">1〜2 文字</string>
+    <string name="share_sheet_title">共有先</string>
+    <string name="share_sheet_hint">長押しでピン留め</string>
+    <string name="share_sheet_empty">共有できるアプリが見つかりません</string>
+    <string name="share_sheet_toast_pinned">「%1$s」をピン留めしました</string>
+    <string name="share_sheet_toast_unpinned">「%1$s」のピン留めを解除しました</string>
+    <string name="share_sheet_use_system">システムの共有画面</string>
+    <string name="share_sheet_settings_title">共有パネル</string>
+    <string name="share_sheet_settings_subtitle">システムの共有画面の代わりに内蔵グリッドを使う</string>
+    <string name="share_sheet_hub_subtitle">ピン留め付きのグリッドパネル</string>
+    <string name="share_sheet_settings_tip">• フローティングパネル（テキスト取得・ファイルブラウザ・ドラッグ＆ドロップ）からの共有はオーバーレイを離れないため、システムの共有画面が自前の浮動ウィンドウに隠れません。\n• アプリをタップで直接共有、長押しで先頭にピン留めします。</string>
+    <string name="share_sheet_settings_section">動作</string>
+    <string name="share_sheet_toggle_title">内蔵共有パネル</string>
+    <string name="share_sheet_toggle_desc">システムの共有画面を内蔵グリッドに置き換えます（ピン留め・システム UI の省略）</string>
+    <string name="share_sheet_settings_pin_tip">ヒント: ピン留めは端末内に保存されます。もう一度長押しで解除できます。</string>
 </resources>

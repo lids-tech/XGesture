@@ -577,6 +577,7 @@ internal object SettingsSnapshotReader {
                         ?.let { alpha -> (1f - alpha).coerceIn(0f, 1f) }
                     ?: 0.65f,
             shareImageOcrHistoryEnabled = prefs[SettingsPreferenceKeys.SHARE_IMAGE_OCR_HISTORY_ENABLED] ?: true,
+            shareSheetEnabled = prefs[SettingsPreferenceKeys.SHARE_SHEET_ENABLED] ?: false,
             ),
             clipboard = ClipboardSettings(
             clipboardBackgroundMonitoring = prefs[SettingsPreferenceKeys.CLIPBOARD_BACKGROUND_MONITORING] ?: true,

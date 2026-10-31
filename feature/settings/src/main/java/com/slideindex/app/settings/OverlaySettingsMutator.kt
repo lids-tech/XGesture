@@ -1201,6 +1201,10 @@ class OverlaySettingsMutator @Inject constructor(
         it[SettingsPreferenceKeys.SHARE_IMAGE_OCR_HISTORY_ENABLED] = enabled
     }
 
+    suspend fun setShareSheetEnabled(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.SHARE_SHEET_ENABLED] = enabled
+    }
+
     suspend fun setClipboardBackgroundMonitoring(enabled: Boolean) = editor.edit {
         it[SettingsPreferenceKeys.CLIPBOARD_BACKGROUND_MONITORING] = enabled
     }

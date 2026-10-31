@@ -9,6 +9,7 @@ import android.text.TextUtils
 import com.slideindex.app.R
 import com.slideindex.app.imageeditor.ImageEditorLaunchCache
 import com.slideindex.app.imageeditor.SlideIndexImageEditorActivity
+import com.slideindex.app.overlay.share.ShareSheetPayload
 import com.slideindex.app.util.resolveActivityCompat
 
 internal object ClipboardOverlayIntents {
@@ -26,26 +27,21 @@ internal object ClipboardOverlayIntents {
         }
     }
 
-    fun getShareIntent(clipData: ClipData, context: Context): Intent {
-        val shareIntent = Intent(Intent.ACTION_SEND)
-        val uri = clipData.getItemAt(0).uri
+    /**
+     * 把剪贴板条目转成内置分享面板的载荷；条目为空/空白时返回 null（调用方据此直接收起浮窗）。
+     *
+     * 以前这里直接返回一条 `createChooser` Intent，从剪贴板浮窗发起分享时会被自家浮层盖住。
+     */
+    fun sharePayload(context: Context, clipData: ClipData): ShareSheetPayload? {
+        val item = if (clipData.itemCount > 0) clipData.getItemAt(0) else return null
+        val uri = item.uri
         if (uri != null) {
             val mime = clipData.description.getMimeType(0) ?: "image/*"
-            shareIntent.type = mime
-            shareIntent.clipData = ClipData(
-                "content",
-                arrayOf(mime),
-                ClipData.Item(uri),
-            )
-            shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
-            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } else {
-            shareIntent.putExtra(Intent.EXTRA_TEXT, clipData.getItemAt(0).coerceToText(context).toString())
-            shareIntent.type = "text/plain"
+            return ShareSheetPayload.Image(uri = uri, mimeType = mime)
         }
-        return Intent.createChooser(shareIntent, null)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val text = item.coerceToText(context)?.toString().orEmpty()
+        if (text.isBlank()) return null
+        return ShareSheetPayload.Text(text)
     }
 
     fun getImageEditIntent(uri: Uri, context: Context): Intent {
