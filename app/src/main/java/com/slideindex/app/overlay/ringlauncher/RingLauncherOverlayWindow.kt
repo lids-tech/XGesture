@@ -194,6 +194,8 @@ object RingLauncherOverlayWindow {
         onLaunch: (QuickLauncherItem, Boolean) -> Unit,
         edgePanelSide: PanelSide? = null,
         initialHighlightSlot: Int = -1,
+        autoSelectOriginX: Float? = null,
+        autoSelectOriginY: Float? = null,
     ): Boolean {
         lastSettings = settings
         if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -209,6 +211,8 @@ object RingLauncherOverlayWindow {
                     onLaunch,
                     edgePanelSide,
                     initialHighlightSlot,
+                    autoSelectOriginX,
+                    autoSelectOriginY,
                 )
                 latch.countDown()
             }
@@ -286,6 +290,10 @@ object RingLauncherOverlayWindow {
         }
         this.externalTracking = externalTracking
         persistAfterPin = !externalTracking
+        // 「长按自动选中首槽」的判定基准：圆环弹出那一刻手指的位置。
+        // 缺省退回锚点（线条侧 / 边缘手势的锚点本来就是按下点）。
+        val resolvedAutoSelectOriginX = autoSelectOriginX ?: anchorRawX
+        val resolvedAutoSelectOriginY = autoSelectOriginY ?: anchorRawY
 
         val launchCallback = onLaunch
         val resolvedItems = targets.filterNotNull().map { it.item }
@@ -318,6 +326,8 @@ object RingLauncherOverlayWindow {
             layoutDensity = density,
             screenWidth = screenWidth,
             initialHighlightSlot = resolvedInitialHighlight,
+            autoSelectOriginX = resolvedAutoSelectOriginX,
+            autoSelectOriginY = resolvedAutoSelectOriginY,
             listener = object : RingLauncherOverlayController.Listener {
                 override fun onLaunch(target: com.slideindex.app.overlay.HoneycombRuntimeTarget, longPressArmed: Boolean) {
                     screenOffDismissReceiver.unregister()
@@ -473,7 +483,9 @@ object RingLauncherOverlayWindow {
         appContext = hostContext.applicationContext
         screenOffDismissReceiver.register(hostContext)
         if (externalTracking) {
-            overlayController.externalMove(anchorRawX, anchorRawY)
+            // 用**按下点**而不是锚点做开环后的第一次交互：半隐藏停靠 / 自定义位置时
+            // 球心离贴边锚点可能已超过自动选中阈值，用球心会一开环就把自动选中作废。
+            overlayController.externalMove(resolvedAutoSelectOriginX, resolvedAutoSelectOriginY)
         } else {
             overlayController.pinForLeaveOpen()
             FloatBallOverlay.suppressTouchHostsForActiveLauncherOverlay()
