@@ -131,13 +131,25 @@ fun SearchPanelCalculatorCard(
     expression: String,
     result: String,
     modifier: Modifier = Modifier,
+    /**
+     * 长按拖拽：带上「计算式 = 结果」整串；null / 返回 false = 维持旧的"长按也复制"。
+     *
+     * 计算结果被截断时界面上会带一个 `…`（见 `CalculatorUtils.formatResult`），
+     * 复制和拖拽都必须去掉，否则粘到别的应用里就是无效数字。
+     */
+    onLongPressDrag: ((expression: String, result: String) -> Boolean)? = null,
 ) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val cleanResult = result.trimEnd('…')
     fun copyResult() {
         scope.launch {
-            clipboard.setClipEntry(ClipData.newPlainText("calculator", result).toClipEntry())
+            clipboard.setClipEntry(ClipData.newPlainText("calculator", cleanResult).toClipEntry())
         }
+    }
+    // 拖拽没接上（流转栏关闭 / 起拖失败）时退回复制，别让长按变成没反应。
+    val longClick: () -> Unit = {
+        if (onLongPressDrag?.invoke(expression, result) != true) copyResult()
     }
     SearchPanelGroupedResultCard(
         modifier = modifier,
@@ -151,7 +163,7 @@ fun SearchPanelCalculatorCard(
                 .fillMaxWidth()
                 .combinedClickable(
                     onClick = ::copyResult,
-                    onLongClick = ::copyResult,
+                    onLongClick = longClick,
                 )
                 .padding(horizontal = 14.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

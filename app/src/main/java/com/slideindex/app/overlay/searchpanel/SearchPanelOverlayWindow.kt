@@ -67,6 +67,15 @@ object SearchPanelOverlayWindow {
     /** Warm-up keeps [composeView] alive while hidden; only treat visible window as showing. */
     val isShowing: Boolean get() = composeView?.visibility == View.VISIBLE
 
+    /**
+     * 拖拽源视图。
+     *
+     * 必须和 [suspendForDrag] 藏起来的是**同一个 View**：系统拖拽的
+     * `ACTION_DRAG_ENDED` 会派到这个发起拖拽的窗口/视图上，藏了别的层会收不到兜底事件。
+     * 用窗口内容根（FrameLayout）而不是 Compose 内部的 ComposeView，道理相同。
+     */
+    val dragHostView: View? get() = composeView
+
     /** True when [FLAG_BLUR_BEHIND] is active — Compose must not draw screenshot blur. */
     val isNativeBlurActive: Boolean get() = nativeBlurActive
     private var nativeBlurActive = false
@@ -247,6 +256,48 @@ object SearchPanelOverlayWindow {
             applyPanelShellActive()
             scheduleBringFloatBallAbovePanels()
         }
+    }
+
+    /**
+     * 长按拖拽起拖：把面板藏起来但**不销毁**，搜索词、结果、滚动位置都留着。
+     *
+     * 用 `INVISIBLE` 而不是 `GONE`：源视图自己的 `ACTION_DRAG_ENDED` 还要靠这个
+     * 窗口派回来（与收纳面板的 `setDragHidden` 一致）。`FLAG_NOT_FOCUSABLE`
+     * 会让输入法跟着收起，避免拖拽期间 IME 还压在屏幕上。
+     */
+    fun suspendForDrag() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { suspendForDrag() }
+            return
+        }
+        val wm = windowManager ?: return
+        val view = composeView ?: return
+        val params = layoutParams ?: return
+        params.flags = params.flags or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        view.clearFocus()
+        view.visibility = View.INVISIBLE
+        runCatching { wm.updateViewLayout(view, params) }
+    }
+
+    /**
+     * 拖拽落回【恢复】：面板原样回来。
+     *
+     * 输入法是否重新出现交给窗口焦点逻辑，这里不额外强制。如果拖拽期间面板已经被
+     * 别处关掉（返回键 / 熄屏 / Home），不再把它拉起来。
+     */
+    fun resumeFromDrag() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { resumeFromDrag() }
+            return
+        }
+        if (suppressRestoreAfterSystemNavigation) return
+        if (composeView == null) return
+        if (panelVisibilityState?.targetState != true) return
+        ++dismissToken
+        applyPanelShellActive()
+        scheduleBringFloatBallAbovePanels()
     }
 
     /** Applies cross-window blur when BLUR mode is active (matches honeycomb overlay). */

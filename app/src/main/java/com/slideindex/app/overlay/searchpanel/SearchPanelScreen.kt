@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -989,15 +990,63 @@ fun SearchPanelScreen(
         }
     }
 
-    fun handleClipboardCandidate(entry: ClipboardEntry, longPressTriggered: Boolean) {
-        if (longPressTriggered) {
-            pasteClipboardCandidate(entry)
-        } else {
-            copyClipboardCandidate(entry)
+    fun startCalculatorDrag(expression: String, result: String): Boolean {
+        if (!settings.dragDropFlowEnabled) return false
+        val view = SearchPanelOverlayWindow.dragHostView ?: return false
+        // 截断显示会带 `…`，拖出去的是数据，不是给人看的省略号。
+        val cleanResult = result.trimEnd('…').trim()
+        val cleanExpression = expression.trim()
+        val text = when {
+            cleanExpression.isEmpty() -> cleanResult
+            cleanResult.isEmpty() -> cleanExpression
+            else -> "$cleanExpression = $cleanResult"
         }
+        if (text.isEmpty()) return false
+        hideSearchKeyboard()
+        return SearchPanelDrag.text(view, text, text)
     }
 
-    fun launchContactCandidate(contact: ContactSearchEntry, @Suppress("UNUSED_PARAMETER") longPressTriggered: Boolean) {
+    fun startContactDrag(contact: ContactSearchEntry): Boolean {
+        if (!settings.dragDropFlowEnabled) return false
+        val number = contact.formattedPhone.ifBlank { contact.phoneNumber }.trim()
+        val text = listOf(contact.name.trim(), number)
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+        if (text.isEmpty()) return false
+        val view = SearchPanelOverlayWindow.dragHostView ?: return false
+        hideSearchKeyboard()
+        return SearchPanelDrag.text(view, text, contact.name.ifBlank { number })
+    }
+
+    fun startClipboardDrag(entry: ClipboardEntry): Boolean {
+        if (!settings.dragDropFlowEnabled) return false
+        val view = SearchPanelOverlayWindow.dragHostView ?: return false
+        hideSearchKeyboard()
+        return SearchPanelDrag.clipboard(view, context, entry)
+    }
+
+    fun startFileDrag(file: DeviceFileEntry): Boolean {
+        if (!settings.dragDropFlowEnabled) return false
+        if (file.isDirectory) {
+            Toast.makeText(context, R.string.history_drag_unsupported, Toast.LENGTH_SHORT).show()
+            return true
+        }
+        val view = SearchPanelOverlayWindow.dragHostView ?: return false
+        hideSearchKeyboard()
+        return SearchPanelDrag.file(view, context, file)
+    }
+
+    fun handleClipboardCandidate(entry: ClipboardEntry, longPressTriggered: Boolean) {
+        // 点击 = 复制并粘贴：粘贴链路本身会先写回剪贴板（writeToClipboardFirst），
+        // 所以"只复制"的旧路径没有丢；没有可粘贴目标时它会退回复制并提示。
+        // 长按 = 拖拽；流转栏关闭 / 起拖失败时退回旧的"长按 = 粘贴"。
+        if (longPressTriggered && startClipboardDrag(entry)) return
+        pasteClipboardCandidate(entry)
+    }
+
+    fun launchContactCandidate(contact: ContactSearchEntry, longPressTriggered: Boolean) {
+        // 长按 = 拖拽；流转栏关闭 / 起拖失败时退回原来的"打开联系人"。
+        if (longPressTriggered && startContactDrag(contact)) return
         hideSearchKeyboard()
         if (ContactSearchLauncher.openContact(context, contact)) {
             dismissPanel()
@@ -1018,7 +1067,9 @@ fun SearchPanelScreen(
         }
     }
 
-    fun launchFileCandidate(file: DeviceFileEntry, @Suppress("UNUSED_PARAMETER") longPressTriggered: Boolean) {
+    fun launchFileCandidate(file: DeviceFileEntry, longPressTriggered: Boolean) {
+        // 长按 = 拖拽；流转栏关闭 / 起拖失败时退回原来的"打开文件"。
+        if (longPressTriggered && startFileDrag(file)) return
         hideSearchKeyboard()
         if (
             settings.searchPanelFilePreviewsEnabled &&
@@ -1541,6 +1592,9 @@ fun SearchPanelScreen(
                                                         SearchPanelCalculatorCard(
                                                             expression = textQuery.trim(),
                                                             result = calcResult,
+                                                            onLongPressDrag = { expression, result ->
+                                                                startCalculatorDrag(expression, result)
+                                                            },
                                                         )
                                                     }
                                                 }
@@ -1614,7 +1668,8 @@ fun SearchPanelScreen(
                                                             filesExpanded = expanded
                                                         },
                                                         onOpenFile = ::launchFileCandidate,
-                                                        longPressEnabled = longPressEnabled,
+                                                        // 长按永远用于拖拽，不跟随「小窗启动策略」开关。
+                                                        longPressEnabled = true,
                                                     )
                                                 }
                                                 "contact_permission" -> {
@@ -1644,7 +1699,8 @@ fun SearchPanelScreen(
                                                         onLaunchContact = ::launchContactCandidate,
                                                         onCallContact = ::callContact,
                                                         onSmsContact = ::smsContact,
-                                                        longPressEnabled = longPressEnabled,
+                                                        // 长按永远用于拖拽，不跟随「小窗启动策略」开关。
+                                                        longPressEnabled = true,
                                                     )
                                                 }
                                                 "settings" -> {
@@ -1668,7 +1724,8 @@ fun SearchPanelScreen(
                                                             clipboardExpanded = expanded
                                                         },
                                                         onClipboardEntryAction = ::handleClipboardCandidate,
-                                                        longPressEnabled = longPressEnabled,
+                                                        // 长按永远用于拖拽，不跟随「小窗启动策略」开关。
+                                                        longPressEnabled = true,
                                                     )
                                                 }
                                                 "web_suggestions" -> {

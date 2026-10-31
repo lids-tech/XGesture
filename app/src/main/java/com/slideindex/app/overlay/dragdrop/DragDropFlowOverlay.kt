@@ -302,7 +302,8 @@ class DragDropFlowController(
                 val hasImage = desc.hasMimeType("image/*")
                 val hasAudio = desc.hasMimeType("audio/*") ||
                     desc.hasMimeType("audio/mp4")
-                val hasFile = hasAudio || desc.hasMimeType("application/*")
+                val hasFile = hasAudio || desc.hasMimeType("application/*") ||
+                    desc.hasMimeType("video/*")
                 val hasText = desc.hasMimeType("text/*") ||
                     desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
                     desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)
