@@ -131,10 +131,20 @@ internal class RingLauncherOverlayView(
      */
     private var autoSelectedSlot = -1
     /**
-     * 圆环弹出后手指是否移动过。一旦为 true 就永久作废"自动选中"，
-     * 之后空白/空隙一律不选（松手即取消）。
+     * 「圆环弹出那一刻手指的位置」——"动过没有"的判定基准（屏幕 raw 坐标）。
+     *
+     * 不能拿圆环锚点当基准：球侧锚点固定在贴边 20dp 处，与按下点天生差一段偏置
+     * （48dp 球心在 24dp，按在球边更远），拿锚点算会把这段偏置先算进容差里，
+     * 于是"只有按在球心才生效"。详见 [RingAutoSelectTracker]。
      */
-    private var autoSelectMoved = false
+    private var autoSelectOriginX = 0f
+    private var autoSelectOriginY = 0f
+    private var autoSelectSlopPx = 0f
+    /**
+     * 圆环弹出后手指是否移动过。一旦 [RingAutoSelectTracker.moved] 为 true 就永久作废
+     * "自动选中"，之后空白/空隙一律不选（松手即取消）。
+     */
+    private var autoSelectTracker: RingAutoSelectTracker? = null
     private var highlightedToolbarButton: FvToolbarButton? = null
     private var lastHapticToolbarButton: FvToolbarButton? = null
     private var lastHapticHighlightedSlot = -1
@@ -162,7 +172,7 @@ internal class RingLauncherOverlayView(
     private companion object {
         private const val EDIT_DRAG_LONG_PRESS_MS = 180L
         private const val EDIT_DRAG_SLOP_DP = 10f
-        /** 手指离圆环锚点多远算"动过"（超过即永久取消自动选中）。 */
+        /** 手指离开"按下点"多远算"动过"（超过即永久取消自动选中）。 */
         private const val AUTO_SELECT_SLOP_DP = 16f
     }
 
@@ -195,6 +205,8 @@ internal class RingLauncherOverlayView(
         layoutDensity: Float,
         screenWidth: Float,
         initialHighlightSlot: Int = -1,
+        autoSelectOriginX: Float? = null,
+        autoSelectOriginY: Float? = null,
     ) {
         this.settings = settings
         this.fvSettings = fvSettings
@@ -210,7 +222,12 @@ internal class RingLauncherOverlayView(
         this.density = layoutDensity
         this.layoutScreenWidth = screenWidth
         this.autoSelectedSlot = initialHighlightSlot
-        this.autoSelectMoved = false
+        // 基准点缺省退回圆环锚点：老调用方（线条侧、边缘手势、设置页预览）的锚点本来就是
+        // 按下点，行为不变；悬浮球侧由调用方显式传入"按下那一刻的手指位置"。
+        this.autoSelectOriginX = autoSelectOriginX ?: anchorX
+        this.autoSelectOriginY = autoSelectOriginY ?: anchorY
+        this.autoSelectSlopPx = AUTO_SELECT_SLOP_DP * layoutDensity
+        resetAutoSelectTracking()
         rebuildLayout()
     }
 
@@ -254,7 +271,7 @@ internal class RingLauncherOverlayView(
         panelPinned = false
         val hasConfiguredSlots = fvSettings.configuredCount() > 0
         sessionMode = if (!hasConfiguredSlots) SessionMode.EDIT else SessionMode.NORMAL
-        autoSelectMoved = false
+        resetAutoSelectTracking()
         highlightedSlot = if (sessionMode == SessionMode.NORMAL && autoSelectedSlot >= 0) {
             autoSelectedSlot
         } else {
@@ -350,19 +367,14 @@ internal class RingLauncherOverlayView(
         } else {
             -1
         }
-        // 自动选中只属于"手指还没动"的那一刻：以圆环锚点为基准，移动超过阈值就永久作废。
-        // 作废后一切以手指指向为准，空白/空隙一律不选（松手即取消）。
-        if (!autoSelectMoved && autoSelectedSlot >= 0) {
-            val slop = AUTO_SELECT_SLOP_DP * density
-            val dx = localX - screenAnchorX
-            val dy = localY - screenAnchorY
-            if (dx * dx + dy * dy > slop * slop) {
-                autoSelectMoved = true
-            }
-        }
+        // 自动选中只属于"手指还没动"的那一刻：以**圆环弹出时手指所在的位置**为基准，
+        // 走开超过阈值就永久作废（拿圆环锚点当基准会让"按在球边"天生就超阈值，
+        // 表现为只有按球心才生效）。作废后一切以手指指向为准，空白/空隙一律不选（松手即取消）。
+        autoSelectTracker?.update(localX, localY)
+        val autoSelectAlive = autoSelectTracker?.moved == false
         val slot = if (pointerSlot < 0 &&
             autoSelectedSlot >= 0 &&
-            !autoSelectMoved &&
+            autoSelectAlive &&
             sessionMode == SessionMode.NORMAL &&
             highlightedToolbarButton == null
         ) {
@@ -389,6 +401,19 @@ internal class RingLauncherOverlayView(
             syncEditDragTracking(slot, localX, localY)
         }
         syncSlotPressTracking(slot, eventTime)
+    }
+
+    /** 每次（重新）开始会话前复位"手指动过没有"：基准点还是配置时那个按下点。 */
+    private fun resetAutoSelectTracking() {
+        autoSelectTracker = if (autoSelectedSlot >= 0) {
+            RingAutoSelectTracker(
+                originX = autoSelectOriginX,
+                originY = autoSelectOriginY,
+                slopPx = autoSelectSlopPx,
+            )
+        } else {
+            null
+        }
     }
 
     private fun syncEditDragTracking(slot: Int, localX: Float, localY: Float) {
@@ -438,12 +463,12 @@ internal class RingLauncherOverlayView(
         val outside = FvCircleLayoutEngine.isOutsidePanel(layout, localX, localY, layout.itemSizePx * 0.35f) &&
             toolbarButton == null
         // 只有"从圆环弹出到现在手指一直没动过"才允许松手启动自动选中格。
-        // 动过的判断在 updateInteraction 里已经永久生效（autoSelectMoved），这里再以
+        // 动过的判断在 updateInteraction 里已经永久生效（autoSelectTracker），这里再以
         // "松手前画面上确实高亮着它"（highlightedBefore）确认一次，避免松手那一下的重算干扰。
         val autoActive = autoSelectedSlot >= 0 &&
             sessionMode == SessionMode.NORMAL &&
             !outside &&
-            !autoSelectMoved &&
+            autoSelectTracker?.moved == false &&
             highlightedBefore == autoSelectedSlot
         val releaseSlot = when {
             slot >= 0 -> slot

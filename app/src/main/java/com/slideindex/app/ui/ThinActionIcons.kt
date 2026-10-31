@@ -129,6 +129,43 @@ internal object ThinActionIcons {
     }
 
     /**
+     * 圆环启动器：贴边弹出的 180° 半圆面板。
+     *
+     * 真实面板是「180° 半圆 + 1~4 道同心环 + 每环 5/8/11/14 个槽位」（见 FvCircleLayoutEngine），
+     * 24dp 画不下那么多：这里取两道同心弧 + 外带 4 个槽位格，弦（=屏幕边）在下方。
+     * 内带留白保住「两环」的读法；分隔只落在外带，避免被读成放射光芒（与「屏幕常亮」区分）。
+     */
+    val RingLauncher: ImageVector by lazy {
+        createThinIcon("ThinRingLauncher") {
+            path(
+                stroke = strokeBrush,
+                strokeLineWidth = STROKE_WIDTH,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                // 外弧 r=9.4：半圆，圆心 (12, 19.2)
+                moveTo(2.6f, 19.2f)
+                curveTo(2.6f, 14.009f, 6.809f, 9.8f, 12f, 9.8f)
+                curveTo(17.191f, 9.8f, 21.4f, 14.009f, 21.4f, 19.2f)
+                // 内弧 r=6.0：第二道环
+                moveTo(6f, 19.2f)
+                curveTo(6f, 15.886f, 8.686f, 13.2f, 12f, 13.2f)
+                curveTo(15.314f, 13.2f, 18f, 15.886f, 18f, 19.2f)
+                // 弦 = 屏幕边（长度恰为直径，与两道弧的端点重合）
+                moveTo(2.6f, 19.2f)
+                lineTo(21.4f, 19.2f)
+                // 外带 3 条径向分隔 => 4 个槽位格
+                moveTo(16.24f, 14.96f)
+                lineTo(18.65f, 12.55f)
+                moveTo(12f, 13.2f)
+                lineTo(12f, 9.8f)
+                moveTo(7.76f, 14.96f)
+                lineTo(5.35f, 12.55f)
+            }
+        }
+    }
+
+    /**
      * 快捷轮盘：中心一个大圆 + 外围四个小圆（对应轮盘"中心盘 + 一圈容器"的结构）。
      *
      * 与「指尖环」等区分：中心圆明显更大，小圆只在四个正方向，整体是一个"环形阵列"的读法。
@@ -1797,6 +1834,34 @@ internal object ThinActionIcons {
         }
     }
 
+    /**
+     * 悬浮球：球 + 下方一道投影弧（读作"浮在界面之上、可以拖着走"）。
+     *
+     * 原来借的是 `Icons.Outlined.Circle`：一个空心圆读不出「球」，
+     * 还会和定位 / 圆点类图标混在一起，所以自绘一张。
+     */
+    val FloatBall: ImageVector by lazy {
+        createThinIcon("ThinFloatBall") {
+            path(
+                stroke = strokeBrush,
+                strokeLineWidth = STROKE_WIDTH,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                // 球：r = 3.6，圆心 (12, 10.6)
+                moveTo(15.6f, 10.6f)
+                curveTo(15.6f, 12.588f, 13.988f, 14.2f, 12f, 14.2f)
+                curveTo(10.012f, 14.2f, 8.4f, 12.588f, 8.4f, 10.6f)
+                curveTo(8.4f, 8.612f, 10.012f, 7f, 12f, 7f)
+                curveTo(13.988f, 7f, 15.6f, 8.612f, 15.6f, 10.6f)
+                close()
+                // 投影弧
+                moveTo(6.6f, 19.1f)
+                curveTo(8.4f, 20.2f, 15.6f, 20.2f, 17.4f, 19.1f)
+            }
+        }
+    }
+
     val RemoteControl2: ImageVector by lazy {
         createThinIcon("ThinRemoteControl2") {
             addPath(
@@ -1810,7 +1875,8 @@ internal object ThinActionIcons {
 
     val PenTablet: ImageVector by lazy {
         createThinIcon("ThinPenTablet") {
-            val strokeWidth = 2f
+            // 与细线集同宽（原来是写死的 2f，比同组粗 33%）
+            val strokeWidth = STROKE_WIDTH
             val paths = listOf(
                 "M22 5V19C22 20.1046 21.1046 21 20 21H4C2.89543 21 2 20.1046 2 19V5C2 3.89543 2.89543 3 4 3H20C21.1046 3 22 3.89543 22 5Z",
                 "M2 12H6",

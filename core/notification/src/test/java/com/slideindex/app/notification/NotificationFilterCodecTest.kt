@@ -58,6 +58,10 @@ class NotificationFilterCodecTest {
         assertEquals("收到 {{title}}", rule.actionEntries.first().ttsTemplate)
         assertEquals(ScreenMode.ANY, rule.screenMode)
         assertEquals(NotificationRuleChargeMask.UNRESTRICTED, rule.chargeMask)
+        // 时间与星期以前设了却不校验，回归时无声丢失（编辑页「保存后还是旧时间」正是这类问题）。
+        assertEquals(8 * 60 * 60 * 1000, rule.timeStartMs)
+        assertEquals(22 * 60 * 60 * 1000, rule.timeEndMs)
+        assertEquals(setOf(1, 2, 3, 4, 5), rule.weekDays)
     }
 
     @Test

@@ -185,13 +185,42 @@ class NotificationAdvancedFilterTest {
     }
 
     @Test
-    fun parser_defaultsMatchTypeToAnyWhenAbsent() {
+    fun parser_defaultsMatchTypeToAllWhenAbsent() {
+        // 校验器出现之前的历史匹配器缺省就是 ALL，存量文档都没有写 match。
+        // 缺省改成 ANY 会让多节点规则从「且」静默变成「或」——另一个条件不再约束任何东西。
         val parsed = NotificationAdvancedFilterJsonParser.parse(
             """{"node":[{"field":"title","regex":"x"}]}""",
         )
 
         val filter = (parsed as NotificationAdvancedFilterValidation.Valid).filter
-        assertEquals(NotificationRuleAdvancedMatchTypes.ANY, filter.matchType)
+        assertEquals(NotificationRuleAdvancedMatchTypes.ALL, filter.matchType)
+    }
+
+    @Test
+    fun parser_defaultsMatchTypeToAllForBlankMatch() {
+        val parsed = NotificationAdvancedFilterJsonParser.parse(
+            """{"match":"  ","node":[{"field":"title","regex":"x"}]}""",
+        )
+
+        val filter = (parsed as NotificationAdvancedFilterValidation.Valid).filter
+        assertEquals(NotificationRuleAdvancedMatchTypes.ALL, filter.matchType)
+    }
+
+    @Test
+    fun advanced_missingMatch_requiresEveryNode() {
+        // 回归用例：没写 match 的 title + text 规则必须两条都成立才命中。
+        val rule = advancedRule(
+            json = """
+                {"node":[
+                  {"field":"title","regex":"^张三$"},
+                  {"field":"text","regex":"验证码"}
+                ]}
+            """.trimIndent(),
+        )
+
+        assertTrue(match(rule, title = "张三", text = "验证码 1234"))
+        assertFalse(match(rule, title = "张三", text = "在吗"))
+        assertFalse(match(rule, title = "李四", text = "验证码 1234"))
     }
 
     @Test

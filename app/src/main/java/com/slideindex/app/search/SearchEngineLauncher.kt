@@ -121,16 +121,17 @@ object SearchEngineLauncher {
             Toast.makeText(context, R.string.search_engine_query_empty, Toast.LENGTH_SHORT).show()
             return false
         }
-        val intent = buildOpenableUriIntent(normalized) ?: return launchFailed(context)
-        return when (resolveLaunchTarget(context, intent)) {
+        val link = resolveLink(context, normalized) { candidate -> buildOpenableUriIntent(candidate) }
+            ?: return launchFailed(context)
+        return when (link.target) {
             LaunchTarget.UNRESOLVED -> launchFailed(context)
-            LaunchTarget.PRIVILEGED -> launchPrivilegedIntent(context, intent, autoInputQuery = null)
+            LaunchTarget.PRIVILEGED -> launchPrivilegedIntent(context, link.intent, autoInputQuery = null)
             LaunchTarget.DIRECT -> startActivity(
                 context = context,
-                intent = intent,
+                intent = link.intent,
                 settings = settings,
                 longPressTriggered = longPressTriggered,
-                useTrampoline = PickResultUrl.isIntentUri(normalized)
+                useTrampoline = PickResultUrl.isIntentUri(link.url)
             )
         }
     }
@@ -164,26 +165,27 @@ object SearchEngineLauncher {
         val template = engine.searchLink?.takeIf { it.isNotBlank() }
             ?: engine.externJumpLink?.takeIf { it.isNotBlank() }
             ?: return false
-        val url = formatQuery(template, query)
         val targetPkg = engine.targetPackage?.takeIf { it.isNotBlank() }
             ?: engine.externJumpPackage?.takeIf { it.isNotBlank() }
-        val intent = buildViewIntent(url, targetPkg) ?: return launchFailed(context)
+        val link = resolveLink(context, formatQuery(template, query)) { candidate ->
+            buildViewIntent(candidate, targetPkg)
+        } ?: return launchFailed(context)
         val hasPlaceholder = template.contains("%s") || template.contains("%q")
         val autoInput = engine.autoInputEnter && !hasPlaceholder
-        return when (resolveLaunchTarget(context, intent)) {
+        return when (link.target) {
             LaunchTarget.UNRESOLVED -> launchFailed(context)
             LaunchTarget.PRIVILEGED -> launchPrivilegedIntent(
                 context = context,
-                intent = intent,
+                intent = link.intent,
                 autoInputQuery = query.takeIf { autoInput },
             )
             LaunchTarget.DIRECT -> {
                 val started = startActivity(
                     context,
-                    intent,
+                    link.intent,
                     settings,
                     longPressTriggered,
-                    useTrampoline = isIntentUri(url),
+                    useTrampoline = isIntentUri(link.url),
                     fullscreenOverride = fullscreenOverride
                 )
                 if (started && autoInput) {
@@ -352,6 +354,36 @@ object SearchEngineLauncher {
         }.getOrNull()
 
     private enum class LaunchTarget { DIRECT, PRIVILEGED, UNRESOLVED }
+
+    private class ResolvedLink(
+        val url: String,
+        val intent: Intent,
+        val target: LaunchTarget,
+    )
+
+    /**
+     * 解析链接并判断接收方；原样解析不到接收方时，再按「补了 `intent:` 前缀」的形态试一次。
+     *
+     * 第三方分享出来的快捷方式串常常只给 `kugousc://search#Intent;…;end` 这一段、不写
+     * `intent:` 前缀（详见 [IntentUriNormalizer]）。原样发出去会退化成 ACTION_VIEW，
+     * 而目标 App 没注册那个自定义 scheme，最后必然「操作失败」；补完前缀才是一份
+     * [Intent.parseUri] 认得的 intent URI，能按 component 定点启动。
+     *
+     * 只在原样解析失败时才补，所以本来就能打开的链接行为不变。
+     */
+    private fun resolveLink(
+        context: Context,
+        url: String,
+        build: (String) -> Intent?,
+    ): ResolvedLink? {
+        val direct = build(url) ?: return null
+        val directTarget = resolveLaunchTarget(context, direct)
+        if (directTarget != LaunchTarget.UNRESOLVED) return ResolvedLink(url, direct, directTarget)
+        val repaired = IntentUriNormalizer.normalize(url)
+        if (repaired == url) return ResolvedLink(url, direct, directTarget)
+        val repairedIntent = build(repaired) ?: return ResolvedLink(url, direct, directTarget)
+        return ResolvedLink(repaired, repairedIntent, resolveLaunchTarget(context, repairedIntent))
+    }
 
     /**
      * 显式组件：存在且导出就直接启动；未导出交给特权链路。

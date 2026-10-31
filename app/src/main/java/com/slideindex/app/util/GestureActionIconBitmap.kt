@@ -30,7 +30,7 @@ enum class GestureActionPlateShape {
 }
 
 object GestureActionIconBitmap {
-    private const val CACHE_VERSION = 37
+    private const val CACHE_VERSION = 39
 
     /** 保持与 Filled 面板内边距一致的比例（无底板时） */
     private const val CONTENT_SCALE_BARE = 0.75f
@@ -172,69 +172,85 @@ object GestureActionIconBitmap {
         plateShape: GestureActionPlateShape,
         action: GestureAction,
     ): Bitmap {
-        val bitmap = createBitmap(sizePx, sizePx)
-        val canvas = Canvas(bitmap)
-
-        if (withPlate) {
-            val plateRect = RectF(0f, 0f, sizePx.toFloat(), sizePx.toFloat())
-            val cornerRadius = sizePx * 0.22f
-            val center = sizePx / 2f
-            val plateRadius = center
-
-            val isDark = com.slideindex.app.ui.IconPlateModeState.currentDark()
-            val (topColor, bottomColor) = plateColorsForAction(
-                action,
-                dark = isDark,
-            )
-            val shader = LinearGradient(
-                0f, 0f, 0f, sizePx.toFloat(),
-                topColor, bottomColor,
-                Shader.TileMode.CLAMP,
-            )
-            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                this.shader = shader
-            }
-            when (plateShape) {
-                GestureActionPlateShape.ROUNDED_RECT ->
-                    canvas.drawRoundRect(plateRect, cornerRadius, cornerRadius, bgPaint)
-                GestureActionPlateShape.CIRCLE ->
-                    canvas.drawCircle(center, center, plateRadius, bgPaint)
-            }
-
-            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = (sizePx / 64f).coerceIn(1f, 2.5f)
-                color = if (isDark) 0x33FFFFFF.toInt() else 0x1A000000.toInt()
-            }
-            val inset = strokePaint.strokeWidth / 2f
-            when (plateShape) {
-                GestureActionPlateShape.ROUNDED_RECT -> {
-                    plateRect.inset(inset, inset)
-                    canvas.drawRoundRect(plateRect, cornerRadius - inset, cornerRadius - inset, strokePaint)
-                }
-                GestureActionPlateShape.CIRCLE ->
-                    canvas.drawCircle(center, center, plateRadius - inset, strokePaint)
-            }
+        val isDark = com.slideindex.app.ui.IconPlateModeState.currentDark()
+        // 浅色底板必须配深色线条，否则白线画在浅底上会灰蒙蒙
+        val effectiveTint = if (withPlate) {
+            if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+        } else {
+            tintArgb
         }
 
+        val bitmap = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(bitmap)
+        if (withPlate) drawPlate(canvas, sizePx, plateShape, action, isDark)
+        drawGlyph(canvas, imageVector, sizePx, effectiveTint, withPlate, plateShape)
+        return bitmap
+    }
+
+    /** 自适应底板：竖向渐变 + 22% 圆角 + 一圈半透明内描边（与 App 图标观感一致）。 */
+    private fun drawPlate(
+        canvas: Canvas,
+        sizePx: Int,
+        plateShape: GestureActionPlateShape,
+        action: GestureAction,
+        isDark: Boolean,
+    ) {
+        val plateRect = RectF(0f, 0f, sizePx.toFloat(), sizePx.toFloat())
+        val cornerRadius = sizePx * 0.22f
+        val center = sizePx / 2f
+        val plateRadius = center
+
+        val (topColor, bottomColor) = plateColorsForAction(
+            action,
+            dark = isDark,
+        )
+        val shader = LinearGradient(
+            0f, 0f, 0f, sizePx.toFloat(),
+            topColor, bottomColor,
+            Shader.TileMode.CLAMP,
+        )
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.shader = shader
+        }
+        when (plateShape) {
+            GestureActionPlateShape.ROUNDED_RECT ->
+                canvas.drawRoundRect(plateRect, cornerRadius, cornerRadius, bgPaint)
+            GestureActionPlateShape.CIRCLE ->
+                canvas.drawCircle(center, center, plateRadius, bgPaint)
+        }
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = (sizePx / 64f).coerceIn(1f, 2.5f)
+            color = if (isDark) 0x33FFFFFF.toInt() else 0x1A000000.toInt()
+        }
+        val inset = strokePaint.strokeWidth / 2f
+        when (plateShape) {
+            GestureActionPlateShape.ROUNDED_RECT -> {
+                plateRect.inset(inset, inset)
+                canvas.drawRoundRect(plateRect, cornerRadius - inset, cornerRadius - inset, strokePaint)
+            }
+            GestureActionPlateShape.CIRCLE ->
+                canvas.drawCircle(center, center, plateRadius - inset, strokePaint)
+        }
+    }
+
+    /** 只画字形（不动底板），底板内边距按 0.54 / 0.66 / 0.75 三档。 */
+    private fun drawGlyph(
+        canvas: Canvas,
+        imageVector: ImageVector,
+        sizePx: Int,
+        tintArgb: Int,
+        withPlate: Boolean,
+        plateShape: GestureActionPlateShape,
+    ) {
         val contentScale = when {
             !withPlate -> CONTENT_SCALE_BARE
             plateShape == GestureActionPlateShape.CIRCLE -> CONTENT_SCALE_CIRCLE_PLATE
             else -> CONTENT_SCALE_PLATE
         }
-        // 浅色底板必须配深色线条，否则白线画在浅底上会灰蒙蒙
-        val effectiveTint = if (withPlate) {
-            val isDark = com.slideindex.app.ui.IconPlateModeState.currentDark()
-            if (!isDark) {
-                android.graphics.Color.BLACK
-            } else {
-                android.graphics.Color.WHITE
-            }
-        } else {
-            tintArgb
-        }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = effectiveTint
+            color = tintArgb
         }
         val scale = minOf(
             sizePx / imageVector.viewportWidth,
@@ -246,7 +262,6 @@ object GestureActionIconBitmap {
             scale(scale, scale)
             drawGroup(this, paint, imageVector.root)
         }
-        return bitmap
     }
 
     private fun drawGroup(

@@ -43,8 +43,11 @@ internal object HubLeadingIcons {
     fun honeycombLauncher(outlined: Boolean) =
         if (outlined) gestureActionTypeOutlinedIcon(GestureActionType.HONEYCOMB_LAUNCHER) else Icons.Default.Hive
 
-    fun ringLauncher(outlined: Boolean) =
-        if (outlined) gestureActionTypeOutlinedIcon(GestureActionType.APP_RING_LAUNCHER) else Icons.Default.Apps
+    /**
+     * 圆环启动器：只有一张线稿（半圆 + 两道环 + 外带槽位格），没有填充版，
+     * 所以 filled/outlined 两种状态共用同一张图，避免退回 [Icons.Default.Apps] 那个九宫格。
+     */
+    fun ringLauncher(@Suppress("UNUSED_PARAMETER") outlined: Boolean) = ThinActionIcons.RingLauncher
 
     fun holographicLauncher(outlined: Boolean) =
         if (outlined) gestureActionTypeOutlinedIcon(GestureActionType.HOLOGRAPHIC_LAUNCHER) else Icons.Default.Apps

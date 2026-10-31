@@ -29,7 +29,9 @@ Exemptions, only when the Chinese is genuinely data rather than UI text:
     val keyword = "验证码" // i18n-ignore        on one line
     // i18n-ignore-file                          anywhere in the file's first five lines
 
-`Log.*` calls are always exempt: developer logs never reach a locale.
+`Log.*` calls are always exempt: developer logs never reach a locale. `src/test/` and
+`src/androidTest/` sources are exempt too: their Chinese is fixture data and assertions, never
+rendered — in `--all` and `--diff` mode alike.
 """
 from __future__ import annotations
 
@@ -57,6 +59,15 @@ SKIPPED_SEGMENTS = ("/src/test/", "/src/androidTest/")
 SKIPPED_DIRS = {".git", ".gradle", "build", ".tmp", "node_modules"}
 
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+
+def is_test_source(path: Path) -> bool:
+    """True for JVM/Android test source sets, whose Chinese is fixture data rather than UI.
+
+    Both modes must agree on this: `iter_sources()` skips these directories, so a diff scan that
+    did not would report a brand-new test fixture as a shipped Chinese literal and turn CI red.
+    """
+    return any(segment in "/" + path.as_posix() + "/" for segment in SKIPPED_SEGMENTS)
 
 
 def repo_root() -> Path:
@@ -193,7 +204,7 @@ def iter_sources(root: Path):
         for path in base.rglob("*.kt"):
             if any(part in SKIPPED_DIRS for part in path.parts):
                 continue
-            if any(segment in path.as_posix() + "/" for segment in SKIPPED_SEGMENTS):
+            if is_test_source(path):
                 continue
             yield path
 
@@ -249,6 +260,8 @@ def main() -> int:
             path = root / rel
             if not path.is_file():
                 continue  # deleted or renamed away by a later commit
+            if is_test_source(path):
+                continue  # test fixtures and assertions, never rendered
             hits = collect_hits(path, numbers)
             if hits:
                 per_file[path] = hits

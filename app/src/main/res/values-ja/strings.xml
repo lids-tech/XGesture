@@ -2635,10 +2635,10 @@
     <string name="notification_rule_keywords_exclude_hint">除外キーワード（1 行に 1 つ）</string>
     <string name="notification_rule_regex_hint">正規表現</string>
     <string name="notification_rule_advanced_hint">詳細フィルター JSON</string>
-    <string name="notification_rule_advanced_schema">{"match":"ANY|ALL|NONE","node":[{"field":"title","regex":"…","invert":false}]}\nfield: packageName, title, text, subText, channelId, category, key\nmatch は ANY（いずれかのノードが成立）、ALL（すべて成立）、NONE（すべて不成立）。invert は1つのノードを反転します。正規表現は部分一致・大文字小文字無視・DOTALL です。全体一致には ^…$ を付けてください。</string>
+    <string name="notification_rule_advanced_schema">{"match":"ANY|ALL|NONE","node":[{"field":"title","regex":"…","invert":false}]}\nfield: packageName, title, text, subText, channelId, category, key\nmatch は ANY（いずれかのノードが成立）、ALL（すべて成立）、NONE（すべて不成立）。invert は1つのノードを反転します。正規表現は部分一致・大文字小文字無視・DOTALL です。全体一致には ^…$ を付けてください。match を省略した場合は ALL として扱います。</string>
     <string name="notification_rule_advanced_error_invalid_json">有効な JSON ではないか、JSON オブジェクトではありません</string>
     <string name="notification_rule_advanced_error_empty_nodes">node は空でない配列である必要があります</string>
-    <string name="notification_rule_advanced_error_invalid_match_type">match は ANY または NONE のみ対応（現在“%1$s”）</string>
+    <string name="notification_rule_advanced_error_invalid_match_type">match は ANY・ALL・NONE のみ対応（現在“%1$s”）</string>
     <string name="notification_rule_advanced_error_unknown_key">不明なキー“%1$s”</string>
     <string name="notification_rule_advanced_error_unsupported_field">未対応の通知フィールド“%1$s”</string>
     <string name="notification_rule_advanced_error_empty_regex">regex を空にできません</string>
@@ -3525,6 +3525,7 @@
     <string name="search_panel_app_quick_action_share">共有</string>
     <string name="search_panel_app_quick_action_freeze">凍結</string>
     <string name="search_panel_app_quick_action_details">詳細</string>
+    <string name="search_panel_app_share_failed">このアプリを共有できません</string>
     <string name="search_panel_contact_search_desc">連絡先を名前のピンインまたは電話番号で検索して発信</string>
     <string name="search_panel_contact_permission_title">連絡先の権限</string>
     <string name="search_panel_contact_permission_granted">連絡先の権限が付与されました</string>

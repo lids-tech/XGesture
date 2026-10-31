@@ -112,6 +112,8 @@ fun findMatchingNotificationFilterRule(
                 channelId = NotificationChannelSupport.resolveChannelId(item),
                 title = item.title,
                 text = item.text,
+                // 时间条件按通知自己的到达时间判定，不能用「现在」（见 matches 的 KDoc）。
+                timestampMs = item.postedAtMs,
             )
     }
 }

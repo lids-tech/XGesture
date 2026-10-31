@@ -218,6 +218,8 @@ class NotificationFilterRepository @Inject constructor(
                 channelId = NotificationChannelSupport.resolveChannelId(item),
                 title = item.title,
                 text = item.text,
+                // 与历史列表分类保持一致：按通知的到达时间判定时间条件。
+                timestampMs = item.postedAtMs,
             )
         }
     }

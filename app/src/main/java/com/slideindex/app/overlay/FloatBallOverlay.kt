@@ -2454,6 +2454,8 @@ object FloatBallOverlay {
         actionExecutor: ActionExecutor,
         hostContext: Context,
         panelSide: PanelSide? = null,
+        touchRawX: Float = anchorX,
+        touchRawY: Float = anchorY,
     ) {
         cancelCursorPickPreview()
         clearSplitIdleChrome()
@@ -2493,6 +2495,10 @@ object FloatBallOverlay {
                 // 长按呼出（按住跟手）时，可自动选中悬浮球正下方的第一个槽位，松手即启动。
                 // 其它方式打开的圆环由手指/点击决定，不预设高亮。
                 initialHighlightSlot = if (externalTracking && settings.floatBallLongPressAutoSelectRingSlot) 0 else -1,
+                // 自动选中的"手指动过没有"以**按下那一刻的手指位置**为基准（不是锚点/球心）：
+                // 球触摸区 48dp 见方，锚点却固定在贴边 20dp，拿锚点算会让按在球边天生超阈值。
+                autoSelectOriginX = touchRawX,
+                autoSelectOriginY = touchRawY,
             )
             GestureAction.HoneycombLauncher -> HoneycombAppPickerOverlayWindow.show(
                 context = hostContext,
@@ -2650,6 +2656,10 @@ object FloatBallOverlay {
                 actionExecutor = actionExecutor,
                 hostContext = hostContext,
                 panelSide = panelSide,
+                // 长按成立时手指没动过（检测器一有 MOVE 就撤掉长按计时器），所以这里拿
+                // 抬手坐标 / 按下坐标都等于"圆环弹出那一刻手指的位置"。
+                touchRawX = touchDownRawX ?: rawX,
+                touchRawY = touchDownRawY ?: rawY,
             )
             return
         }

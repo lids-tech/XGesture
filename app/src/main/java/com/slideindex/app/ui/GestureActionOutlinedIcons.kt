@@ -1,11 +1,5 @@
 package com.slideindex.app.ui
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Handyman
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.overlay.PanelSide
@@ -33,7 +27,7 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.OPEN_INDEX -> ThinActionIcons.SortByAlpha
     GestureActionType.QUICK_LAUNCHER -> ThinActionIcons.Apps
     GestureActionType.HONEYCOMB_LAUNCHER -> ThinActionIcons.Hive
-    GestureActionType.APP_RING_LAUNCHER -> ThinActionIcons.Apps
+    GestureActionType.APP_RING_LAUNCHER -> ThinActionIcons.RingLauncher
     GestureActionType.FINGERTIP_RING -> ThinActionIcons.MenuOpen
     GestureActionType.APP_CAROUSEL_SWITCHER -> ThinActionIcons.AppCarouselSwitcher
     GestureActionType.HOLOGRAPHIC_LAUNCHER -> ThinActionIcons.Globe
@@ -41,7 +35,7 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.SHELL_COMMAND_PANEL -> ThinActionIcons.Code
     GestureActionType.EXECUTE_SHELL_COMMAND -> ThinActionIcons.PlayCircle
     GestureActionType.RUN_MACRO -> ThinActionIcons.PlayCircle
-    GestureActionType.QUICK_TOOLS_OVERLAY -> Icons.Outlined.Handyman
+    GestureActionType.QUICK_TOOLS_OVERLAY -> MaterialSymbolThinIcons.Handyman
     GestureActionType.QUICK_MENU -> ThinActionIcons.QuickMenu
     GestureActionType.WIDGET_POPUP_OVERLAY -> ThinActionIcons.Widgets
     GestureActionType.OPEN_STASH_PANEL -> ThinActionIcons.Inventory
@@ -57,17 +51,17 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.CLOSE_CURRENT_APP -> ThinActionIcons.Close
     GestureActionType.FORCE_STOP_CURRENT_APP -> ThinActionIcons.ForceStopApp
     GestureActionType.FREE_WINDOW_CURRENT_APP -> ThinActionIcons.FreeWindow
-    GestureActionType.CLICK_PASSTHROUGH -> ThinActionIcons.ClickPassthrough
+    GestureActionType.CLICK_PASSTHROUGH -> MaterialSymbolThinIcons.TouchApp
     GestureActionType.FLASHLIGHT -> ThinActionIcons.Flashlight
     GestureActionType.ADJUST_VOLUME -> ThinActionIcons.VolumeUp
     GestureActionType.VOLUME_UP -> ThinActionIcons.VolumeIncrease
     GestureActionType.VOLUME_DOWN -> ThinActionIcons.VolumeDecrease
     GestureActionType.ADJUST_BRIGHTNESS -> ThinActionIcons.Brightness
-    GestureActionType.TOGGLE_AUTO_BRIGHTNESS -> ThinActionIcons.BrightnessAuto
+    GestureActionType.TOGGLE_AUTO_BRIGHTNESS -> MaterialSymbolThinIcons.BrightnessAuto
     GestureActionType.LAUNCH_ASSISTANT -> ThinActionIcons.Assistant
     GestureActionType.VOICE_SEARCH -> ThinActionIcons.VoiceSearch
     GestureActionType.VOICE_ASSISTANT -> ThinActionIcons.VoiceAssistant
-    GestureActionType.TOGGLE_AUTO_ROTATE -> ThinActionIcons.ToggleAutoRotate
+    GestureActionType.TOGGLE_AUTO_ROTATE -> MaterialSymbolThinIcons.MobileRotate
     GestureActionType.FORCE_PORTRAIT -> ThinActionIcons.ForcePortrait
     GestureActionType.FORCE_LANDSCAPE -> ThinActionIcons.ForceLandscape
     GestureActionType.TOGGLE_MUTE -> ThinActionIcons.VolumeOff
@@ -84,7 +78,7 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.FULLSCREEN_SCREENSHOT_PICK -> ThinActionIcons.TextFields
     GestureActionType.REGIONAL_SCREENSHOT_PICK -> ThinActionIcons.ScreenshotRegion
     GestureActionType.SEARCH_PANEL -> ThinActionIcons.Search
-    GestureActionType.FILE_BROWSER -> Icons.Outlined.Folder
+    GestureActionType.FILE_BROWSER -> MaterialSymbolThinIcons.Folder
     GestureActionType.VOLUME_PANEL -> ThinActionIcons.VolumeUp
     GestureActionType.SCREEN_TRANSLATE -> ThinActionIcons.TextFields
     GestureActionType.SCREEN_SEARCH -> ThinActionIcons.Search
@@ -93,23 +87,23 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.REMIND_10M, GestureActionType.REMIND_15M -> ThinActionIcons.Alarm
     GestureActionType.UNIVERSAL_COPY -> ThinActionIcons.ContentPaste
     GestureActionType.FREEZER_PANEL -> ThinActionIcons.Fridge
-    GestureActionType.REFREEZE -> ThinActionIcons.Snowflake
+    GestureActionType.REFREEZE -> MaterialSymbolThinIcons.AcUnit
     GestureActionType.POWER_MENU -> ThinActionIcons.Power
     GestureActionType.KEEP_SCREEN_ON -> ThinActionIcons.KeepScreenOn
     GestureActionType.SCROLL_TO_TOP -> ThinActionIcons.ScrollToTop
     GestureActionType.SCROLL_TO_BOTTOM -> ThinActionIcons.ScrollToBottom
-    GestureActionType.PAGE_SCROLL -> Icons.Outlined.SwapVert
+    GestureActionType.PAGE_SCROLL -> MaterialSymbolThinIcons.SwapVert
     GestureActionType.TOGGLE_DND -> ThinActionIcons.DoNotDisturb
     GestureActionType.TIMED_DND -> ThinActionIcons.DoNotDisturb
     GestureActionType.SCREEN_RECORD -> ThinActionIcons.ScreenRecord
     GestureActionType.TOGGLE_WIFI -> ThinActionIcons.Wifi
     GestureActionType.TOGGLE_SHAKE_GESTURE -> ThinActionIcons.Gesture
-    GestureActionType.TOGGLE_FLOAT_BALL -> HomeLeadingIcons.floatBall(true)
+    GestureActionType.TOGGLE_FLOAT_BALL -> ThinActionIcons.FloatBall
     GestureActionType.TOGGLE_MOBILE_DATA -> ThinActionIcons.Cellular
     GestureActionType.SWITCH_INPUT_METHOD -> ThinActionIcons.Keyboard
     GestureActionType.OPEN_INTERNET_PANEL -> ThinActionIcons.Wifi
     GestureActionType.OPEN_VOLUME_PANEL -> ThinActionIcons.VolumeUp
-    GestureActionType.OPEN_LINK -> Icons.Outlined.Link
+    GestureActionType.OPEN_LINK -> MaterialSymbolThinIcons.Link
     GestureActionType.CURRENT_APP_INFO -> ThinActionIcons.Assistant
     GestureActionType.SCREEN_OFF_KEEP_AWAKE -> ThinActionIcons.ScreenOffKeepAwake
     GestureActionType.TOUCH_BLOCK -> ThinActionIcons.TouchApp
@@ -126,8 +120,8 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.FOREGROUND_ACTIVITY_INSPECTOR -> ThinActionIcons.Search
     GestureActionType.SMART_SCREENSHOT -> ThinActionIcons.Screenshot
     GestureActionType.SCREEN_DRAW -> ThinActionIcons.PenTablet
-    GestureActionType.GALLERY_IMAGE_EDIT -> Icons.Outlined.PhotoLibrary
-    GestureActionType.SCREEN_CONTROL -> ThinActionIcons.RemoteControl2
+    GestureActionType.GALLERY_IMAGE_EDIT -> MaterialSymbolThinIcons.PhotoLibrary
+    GestureActionType.SCREEN_CONTROL -> MaterialSymbolThinIcons.RemoteGen
     GestureActionType.WECHAT_SCAN -> PayQrActionIcons.WechatScan
     GestureActionType.WECHAT_PAY_CODE -> PayQrActionIcons.WechatPayCode
     GestureActionType.ALIPAY_PAY_CODE -> PayQrActionIcons.AlipayPayCode
@@ -141,7 +135,7 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.OPEN_INDEX -> ThinActionIcons.SortByAlpha
     GestureActionType.QUICK_LAUNCHER -> ThinActionIcons.Apps
     GestureActionType.HONEYCOMB_LAUNCHER -> ThinActionIcons.Hive
-    GestureActionType.APP_RING_LAUNCHER -> ThinActionIcons.Apps
+    GestureActionType.APP_RING_LAUNCHER -> ThinActionIcons.RingLauncher
     GestureActionType.FINGERTIP_RING -> ThinActionIcons.MenuOpen
     GestureActionType.APP_CAROUSEL_SWITCHER -> ThinActionIcons.AppCarouselSwitcher
     GestureActionType.HOLOGRAPHIC_LAUNCHER -> ThinActionIcons.Globe
@@ -149,7 +143,7 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.SHELL_COMMAND_PANEL -> ThinActionIcons.Code
     GestureActionType.EXECUTE_SHELL_COMMAND -> ThinActionIcons.Code
     GestureActionType.RUN_MACRO -> ThinActionIcons.PlayCircle
-    GestureActionType.QUICK_TOOLS_OVERLAY -> Icons.Outlined.Handyman
+    GestureActionType.QUICK_TOOLS_OVERLAY -> MaterialSymbolThinIcons.Handyman
     GestureActionType.QUICK_MENU -> ThinActionIcons.QuickMenu
     GestureActionType.WIDGET_POPUP_OVERLAY -> ThinActionIcons.Widgets
     GestureActionType.OPEN_STASH_PANEL -> ThinActionIcons.Inventory
@@ -165,17 +159,17 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.CLOSE_CURRENT_APP -> ThinActionIcons.Close
     GestureActionType.FORCE_STOP_CURRENT_APP -> ThinActionIcons.ForceStopApp
     GestureActionType.FREE_WINDOW_CURRENT_APP -> ThinActionIcons.FreeWindow
-    GestureActionType.CLICK_PASSTHROUGH -> ThinActionIcons.ClickPassthrough
+    GestureActionType.CLICK_PASSTHROUGH -> MaterialSymbolThinIcons.TouchApp
     GestureActionType.FLASHLIGHT -> ThinActionIcons.Flashlight
     GestureActionType.ADJUST_VOLUME -> ThinActionIcons.VolumeUp
     GestureActionType.VOLUME_UP -> ThinActionIcons.VolumeIncrease
     GestureActionType.VOLUME_DOWN -> ThinActionIcons.VolumeDecrease
     GestureActionType.ADJUST_BRIGHTNESS -> ThinActionIcons.Brightness
-    GestureActionType.TOGGLE_AUTO_BRIGHTNESS -> ThinActionIcons.BrightnessAuto
+    GestureActionType.TOGGLE_AUTO_BRIGHTNESS -> MaterialSymbolThinIcons.BrightnessAuto
     GestureActionType.LAUNCH_ASSISTANT -> ThinActionIcons.Assistant
     GestureActionType.VOICE_SEARCH -> ThinActionIcons.VoiceSearch
     GestureActionType.VOICE_ASSISTANT -> ThinActionIcons.VoiceAssistant
-    GestureActionType.TOGGLE_AUTO_ROTATE -> ThinActionIcons.ToggleAutoRotate
+    GestureActionType.TOGGLE_AUTO_ROTATE -> MaterialSymbolThinIcons.MobileRotate
     GestureActionType.FORCE_PORTRAIT -> ThinActionIcons.ForcePortrait
     GestureActionType.FORCE_LANDSCAPE -> ThinActionIcons.ForceLandscape
     GestureActionType.TOGGLE_MUTE -> ThinActionIcons.VolumeOff
@@ -192,7 +186,7 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.FULLSCREEN_SCREENSHOT_PICK -> ThinActionIcons.TextFields
     GestureActionType.REGIONAL_SCREENSHOT_PICK -> ThinActionIcons.ScreenshotRegion
     GestureActionType.SEARCH_PANEL -> ThinActionIcons.Search
-    GestureActionType.FILE_BROWSER -> Icons.Outlined.Folder
+    GestureActionType.FILE_BROWSER -> MaterialSymbolThinIcons.Folder
     GestureActionType.VOLUME_PANEL -> ThinActionIcons.VolumeUp
     GestureActionType.SCREEN_TRANSLATE -> ThinActionIcons.TextFields
     GestureActionType.SCREEN_SEARCH -> ThinActionIcons.Search
@@ -201,23 +195,23 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.REMIND_10M, GestureActionType.REMIND_15M -> ThinActionIcons.Alarm
     GestureActionType.UNIVERSAL_COPY -> ThinActionIcons.ContentPaste
     GestureActionType.FREEZER_PANEL -> ThinActionIcons.Fridge
-    GestureActionType.REFREEZE -> ThinActionIcons.Snowflake
+    GestureActionType.REFREEZE -> MaterialSymbolThinIcons.AcUnit
     GestureActionType.POWER_MENU -> ThinActionIcons.Power
     GestureActionType.KEEP_SCREEN_ON -> ThinActionIcons.KeepScreenOn
     GestureActionType.SCROLL_TO_TOP -> ThinActionIcons.ScrollToTop
     GestureActionType.SCROLL_TO_BOTTOM -> ThinActionIcons.ScrollToBottom
-    GestureActionType.PAGE_SCROLL -> Icons.Outlined.SwapVert
+    GestureActionType.PAGE_SCROLL -> MaterialSymbolThinIcons.SwapVert
     GestureActionType.TOGGLE_DND -> ThinActionIcons.DoNotDisturb
     GestureActionType.TIMED_DND -> ThinActionIcons.DoNotDisturb
     GestureActionType.SCREEN_RECORD -> ThinActionIcons.ScreenRecord
     GestureActionType.TOGGLE_WIFI -> ThinActionIcons.Wifi
     GestureActionType.TOGGLE_SHAKE_GESTURE -> ThinActionIcons.Gesture
-    GestureActionType.TOGGLE_FLOAT_BALL -> HomeLeadingIcons.floatBall(true)
+    GestureActionType.TOGGLE_FLOAT_BALL -> ThinActionIcons.FloatBall
     GestureActionType.TOGGLE_MOBILE_DATA -> ThinActionIcons.Cellular
     GestureActionType.SWITCH_INPUT_METHOD -> ThinActionIcons.Keyboard
     GestureActionType.OPEN_INTERNET_PANEL -> ThinActionIcons.Wifi
     GestureActionType.OPEN_VOLUME_PANEL -> ThinActionIcons.VolumeUp
-    GestureActionType.OPEN_LINK -> Icons.Outlined.Link
+    GestureActionType.OPEN_LINK -> MaterialSymbolThinIcons.Link
     GestureActionType.CURRENT_APP_INFO -> ThinActionIcons.Assistant
     GestureActionType.SCREEN_OFF_KEEP_AWAKE -> ThinActionIcons.ScreenOffKeepAwake
     GestureActionType.TOUCH_BLOCK -> ThinActionIcons.TouchApp
@@ -234,8 +228,8 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.FOREGROUND_ACTIVITY_INSPECTOR -> ThinActionIcons.Search
     GestureActionType.SMART_SCREENSHOT -> ThinActionIcons.Screenshot
     GestureActionType.SCREEN_DRAW -> ThinActionIcons.PenTablet
-    GestureActionType.GALLERY_IMAGE_EDIT -> Icons.Outlined.PhotoLibrary
-    GestureActionType.SCREEN_CONTROL -> ThinActionIcons.RemoteControl2
+    GestureActionType.GALLERY_IMAGE_EDIT -> MaterialSymbolThinIcons.PhotoLibrary
+    GestureActionType.SCREEN_CONTROL -> MaterialSymbolThinIcons.RemoteGen
     GestureActionType.WECHAT_SCAN -> PayQrActionIcons.WechatScan
     GestureActionType.WECHAT_PAY_CODE -> PayQrActionIcons.WechatPayCode
     GestureActionType.ALIPAY_PAY_CODE -> PayQrActionIcons.AlipayPayCode

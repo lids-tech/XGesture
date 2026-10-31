@@ -12,6 +12,72 @@ Release pages are published with the English notes first, then the Chinese ones.
 notes follow the system language: `notesEn` is shown to non-Chinese locales and `notes` to
 Chinese ones, each falling back to the other when a version is missing.
 
+## [1.55.0] - 2026-10-31
+
+### Added
+- New file browser overlay, opened from the quick menu, with three read tiers: Root, Shizuku and all-files access
+- Tabs, favourites and a quick bar in the file browser, with per-tab sessions and the last path restored automatically
+- Multi-select, copy, move, batch delete and new folder in the file browser, with a choice of overwrite or keep on name conflicts
+- Deleted files go to a cache trash and can be undone from the hint bar, restoring them to their original location (latest batch only)
+- Recursive search in the current folder, folder details, long-press rename and jump-to-path in the file browser
+- Multiple storage volumes plus Android/obb entry points, with on-demand thumbnails for images, videos, APKs and PDFs
+- An album-style media grid and image viewer with GIF playback, previous/next switching and an entry to the image editor
+- Long-press a file in the file browser and drag it to another app to share it
+- New global icon packs: pick an icon pack installed on the phone and override app icons across the launcher and all running screens
+- New icon theme settings page to manage which screens an icon pack applies to and its override switch
+- The floating share sheet now uses the built-in panel: grid layout, pinnable targets, drag and drop plus search-result drops, off by default
+- New share panel settings page to reorder targets and manage pinned entries
+- System share entries for OCR text, image search and image editing
+- The floating ball and its touch window now share one window for smoother dragging, and the line lives in its own narrow window
+- New idle hiding and idle GIF pausing for the floating ball, with 38% idle opacity by default
+- New "Toggle floating ball" action, bindable to gestures, external calls and a desktop long press
+- New separate vibration switch for the back gesture, on by default
+- Colour picking from a frozen full-screen frame, with an adjustable cursor speed
+- New "Actions" hub on the transfer bar: long press for 400 ms to open the action menu, and image sharing starts right from the bar
+- Long-press a search result to drag it into the transfer bar
+- Shake gesture modes now split into always, unlocked only, screen-on locked only and screen-off only, with locked-screen actions routed as one
+- Direction animations and press warm-up for the touch buttons, starting at 3 dp with a 100 ms entrance
+- The red-cross text-picking cursor now enters from off-screen, with a speed-up start zone
+- The bottom-edge transition zone is now a closable "upper limit release area", off by default
+- New vivo small-window sharing mode, using the system small-window share shell
+- A yellow clone badge on clone entries in the freezer grid
+
+### Changed
+- Action icons now use the Material Symbols thin weight, aligned to a 1.5 stroke
+- The ring launcher uses its own half-ring double icon, and the extensions page entry matches
+- The share target list keeps a process-wide cache and loads icons for visible items only, so it opens faster
+- The app picker grid drops the grey backing and enlarges icons to 58 dp
+- Favourites in the file browser dodge live while dragging and settle with a spring animation
+- The file browser quick bar scrolls horizontally, so reordering no longer moves the viewport
+- The liquid-glass bottom bar is back to a single driver, so the slider no longer snaps back when switching tabs
+- Shake icon strokes are unified at 2 dp to match the rest of the bottom bar
+- Edge cards size their height to the body line limit, and settings changes apply at once
+- The recording dock is smaller, and a saved video can be opened directly
+- Content panels now close before going home or to recents
+- File details drop the copy-path button; tapping the path copies it
+
+### Fixed
+- Long-pressing the ring launcher now auto-selects by the touch-down point
+- Vertical swipes on edge cards were treated as taps, so up/down swipe actions never fired
+- Edge card badges counted the whole notification bundle, and now count this conversation only
+- Edge cards were misplaced after rotation, unlock and multi-card restacking
+- Notification rule edits could be lost, historical timestamps were judged wrongly, and advanced matching defaults did not match their documented meaning
+- Shortcut targets missing the intent: prefix made the tap engine report "action failed"
+- In-app global copy skipped the current app and left the previous app's selection behind
+- The share panel still showed an app after it was uninstalled
+- Sharing an app failed the FileProvider grant; the package is now copied into the cache first
+- While the ring took over touches, slots fired by mistake and the ball jumped to the top-left corner
+- Releasing after a continuous ring trigger let the session take the hosted panel away
+- The floating toolbar covered text after selecting all in the text picker
+- Full-screen text picking missed QR codes, and text arriving late showed an out-of-sync copy
+- File browser dialogs crashed inside the overlay window
+- Trailing spaces in file names were stripped, so folders with spaces would not open
+- Moving across volumes could lose the source file; it is now copied first, then deleted
+- The quick bar stayed visible when favourites were empty
+- Root folder size probing could hang; sizes are now computed on demand
+- The last path and display preferences were not restored after a cold start
+- Missing Japanese and Arabic strings in the file browser, share entries and the actions hub were filled in
+
 ## [1.52.0] - 2026-10-27
 
 ### Added
