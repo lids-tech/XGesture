@@ -47,6 +47,8 @@ import com.slideindex.app.overlay.OverlayWindowTypes
 import com.slideindex.app.overlay.PickResultContentOrigin
 import com.slideindex.app.overlay.PickResultTextSource
 import com.slideindex.app.overlay.pickresult.PickResultTextMode
+import com.slideindex.app.overlay.share.ShareSheetLauncher
+import com.slideindex.app.overlay.share.ShareSheetPayload
 import com.slideindex.app.overlay.searchpanel.SearchPanelOverlayWindow
 import com.slideindex.app.overlay.searchpanel.SearchPanelQueryBridge
 import com.slideindex.app.overlay.searchpanel.SearchPanelSessionState
@@ -700,12 +702,12 @@ class DragDropFlowController(
                         if (bitmap != null) {
                             val shareUri = FloatBallTextPick.createShareImageUri(context, bitmap)
                             if (shareUri != null) {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "image/*"
-                                    putExtra(Intent.EXTRA_STREAM, shareUri)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(intent, context.getString(R.string.drag_drop_flow_target_share_image)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                ShareSheetLauncher.share(
+                                    context = context,
+                                    payload = ShareSheetPayload.Image(shareUri, "image/*"),
+                                    // 流转载具是全屏浮窗：不收起的话目标 App 会被它盖住。
+                                    dismissSource = { collapseToAnchor() },
+                                )
                             }
                         }
                     }
@@ -772,12 +774,11 @@ class DragDropFlowController(
                         FloatBallTextPick.translateText(context, text, "zh-CN")
                     }
                     targetId == "system_share_text" && !text.isNullOrBlank() -> {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, text)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.drag_drop_flow_target_share_text)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        ShareSheetLauncher.share(
+                            context = context,
+                            payload = ShareSheetPayload.Text(text),
+                            dismissSource = { collapseToAnchor() },
+                        )
                     }
                 }
             }
