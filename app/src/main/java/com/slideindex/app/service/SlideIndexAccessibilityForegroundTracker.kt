@@ -9,6 +9,7 @@ import android.view.inputmethod.InputMethodManager
 import android.view.accessibility.AccessibilityEvent
 import com.slideindex.app.overlay.EdgeOverlayHost
 import com.slideindex.app.util.AccessibilityForegroundResolver
+import com.slideindex.app.util.SelfAppForeground
 
 internal class SlideIndexAccessibilityForegroundTracker(
     private val service: SlideIndexAccessibilityService,
@@ -46,13 +47,18 @@ internal class SlideIndexAccessibilityForegroundTracker(
         val selfPackage = service.applicationContext.packageName
         val resolvedPackage = AccessibilityForegroundResolver.resolveHostPackage(service)
         val eventPackage = event.packageName?.toString()?.takeIf { it.isNotBlank() }
+        val selfAppForeground = isSelfAppForeground()
+        // 本包事件只有一种情况该进历史：本应用页面真的在前台。
+        // 本应用浮层盖在别的应用上时，主进程不在前台，仍按“非本包宿主”处理。
+        val allowSelfPackage = eventPackage == selfPackage && selfAppForeground
         val packageName = resolveForegroundPackageForTracking(
             resolvedPackage = resolvedPackage,
             eventPackage = eventPackage,
             selfPackage = selfPackage,
-            hasLaunchIntent = ::hasLaunchIntent
+            hasLaunchIntent = ::hasLaunchIntent,
+            allowSelfPackage = allowSelfPackage
         )
-        if (packageName.isNullOrBlank() || packageName == selfPackage) {
+        if (packageName.isNullOrBlank() || (packageName == selfPackage && !allowSelfPackage)) {
             overlayHost()?.refreshOverlaySuppression()
             return
         }
@@ -73,7 +79,7 @@ internal class SlideIndexAccessibilityForegroundTracker(
         // 注意：必须确认"我们自己的界面也不在前台"才允许自愈。
         // 进编辑页的那一瞬间，前台事件里先到的是过渡态的"非本应用"包名，
         // 若不加这层判断，会把刚挂起的圆环立刻恢复出来（真机：第一次进自定义图标页圆环不收起）。
-        if (!isSelfAppForeground()) {
+        if (!selfAppForeground) {
             runCatching { com.slideindex.app.overlay.ringlauncher.RingLauncherOverlayWindow.selfHealAfterExternalActivity() }
             runCatching { com.slideindex.app.overlay.corner.CornerGestureHost.selfHealAfterExternalActivity() }
         }
@@ -83,6 +89,7 @@ internal class SlideIndexAccessibilityForegroundTracker(
                 prevPackageName = prevPackageName,
                 currPackageName = currPackageName,
                 hasLaunchIntent = hasLaunchIntent(packageName),
+                allowSelfPackage = allowSelfPackage,
                 excludedPackages = excludedPackages()
             )) {
             null,
@@ -104,15 +111,8 @@ internal class SlideIndexAccessibilityForegroundTracker(
      * 一个非本应用的包名，这时不能当成"外部编辑页已经离开"，否则会把刚挂起的
      * 圆环 / 轮盘立刻恢复出来。
      */
-    private fun isSelfAppForeground(): Boolean = runCatching {
-        val manager = service.getSystemService(android.app.ActivityManager::class.java)
-            ?: return@runCatching false
-        val selfPackage = service.applicationContext.packageName
-        manager.runningAppProcesses?.any { info ->
-            info.processName == selfPackage &&
-                info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-        } ?: false
-    }.getOrDefault(false)
+    private fun isSelfAppForeground(): Boolean =
+        SelfAppForeground.isForeground(service.applicationContext)
 
     /**
      * `TYPE_WINDOWS_CHANGED` 的处理入口。
@@ -144,7 +144,15 @@ internal class SlideIndexAccessibilityForegroundTracker(
         lastWindowChangeWorkAtMs = SystemClock.uptimeMillis()
 
         syncLockScreenThrottled()
-        val resolvedPackage = AccessibilityForegroundResolver.resolveHostPackage(service)
+        val selfPackage = service.applicationContext.packageName
+        val activeRootPackage = service.rootInActiveWindow?.packageName?.toString()
+        // 本应用页面在前台时，resolver 的兜底可能还停在上一个外部应用；
+        // 这里只在 activeRoot 指向本包时确认一次主进程状态，避免把前台又写回外部应用。
+        val resolvedPackage = if (activeRootPackage == selfPackage && isSelfAppForeground()) {
+            selfPackage
+        } else {
+            AccessibilityForegroundResolver.resolveHostPackage(service)
+        }
         if (resolvedPackage != null) {
             overlayHost()?.updateForegroundPackage(resolvedPackage)
             com.slideindex.app.overlay.OverlayStatePort.publish(service, "windowsChanged")
@@ -182,7 +190,8 @@ internal class SlideIndexAccessibilityForegroundTracker(
                 resolvedHostPackage = AccessibilityForegroundResolver.resolveHostPackage(service),
                 rootActivePackage = service.rootInActiveWindow?.packageName?.toString(),
                 selfPackage = service.applicationContext.packageName,
-                hasLaunchIntent = ::hasLaunchIntent
+                hasLaunchIntent = ::hasLaunchIntent,
+                allowSelfPackage = isSelfAppForeground()
             ),
             excludedPackages = excludedPackages()
         ) ?: return false
@@ -283,9 +292,11 @@ internal fun computeWindowStatePackageUpdate(
     prevPackageName: String?,
     currPackageName: String?,
     hasLaunchIntent: Boolean,
+    allowSelfPackage: Boolean = false,
     excludedPackages: Set<String> = emptySet()
 ): WindowStatePackageUpdate? {
-    if (packageName.isBlank() || packageName == selfPackageName) return null
+    if (packageName.isBlank()) return null
+    if (packageName == selfPackageName && !allowSelfPackage) return null
     if (packageName in excludedPackages) return null
     if (!hasLaunchIntent) {
         return WindowStatePackageUpdate.ForegroundOnly(packageName)
@@ -318,31 +329,53 @@ internal fun resolveForegroundPackageForTracking(
     resolvedPackage: String?,
     eventPackage: String?,
     selfPackage: String,
-    hasLaunchIntent: (String) -> Boolean
+    hasLaunchIntent: (String) -> Boolean,
+    allowSelfPackage: Boolean = false
 ): String? {
     val resolved = resolvedPackage
-        ?.takeIf { it.isNotBlank() && it != selfPackage && hasLaunchIntent(it) }
+        ?.takeIf {
+            it.isNotBlank() &&
+                (allowSelfPackage || it != selfPackage) &&
+                hasLaunchIntent(it)
+        }
     val event = eventPackage
-        ?.takeIf { it.isNotBlank() && it != selfPackage && hasLaunchIntent(it) }
+        ?.takeIf {
+            it.isNotBlank() &&
+                (allowSelfPackage || it != selfPackage) &&
+                hasLaunchIntent(it)
+        }
     // 全屏 overlay（如小组件面板）仍显示时，resolveHostPackage 可能滞后于真实前台；
     // WINDOW_STATE_CHANGED 的 event 反映最新切换，与 resolved 冲突时以 event 为准。
     if (event != null && resolved != null && event != resolved) {
         return event
     }
-    return resolved ?: eventPackage?.takeUnless { it.isBlank() || it == selfPackage }
+    return resolved ?: eventPackage?.takeUnless {
+        it.isBlank() || (!allowSelfPackage && it == selfPackage)
+    }
 }
 
 internal fun resolveActivePackageForPreviousApp(
     resolvedHostPackage: String?,
     rootActivePackage: String?,
     selfPackage: String,
-    hasLaunchIntent: (String) -> Boolean
+    hasLaunchIntent: (String) -> Boolean,
+    allowSelfPackage: Boolean = false
 ): String? {
     val resolved = resolvedHostPackage
-        ?.takeIf { it.isNotBlank() && it != selfPackage && hasLaunchIntent(it) }
+        ?.takeIf {
+            it.isNotBlank() &&
+                (allowSelfPackage || it != selfPackage) &&
+                hasLaunchIntent(it)
+        }
     val root = rootActivePackage
-        ?.takeIf { it.isNotBlank() && it != selfPackage && hasLaunchIntent(it) }
-    // 全屏 overlay 会使 rootInActiveWindow 指向本应用；此时以 resolveHostPackage 的底层宿主为准。
+        ?.takeIf {
+            it.isNotBlank() &&
+                (allowSelfPackage || it != selfPackage) &&
+                hasLaunchIntent(it)
+        }
+    // 主进程在前台且 activeRoot 就是本应用：此时 root 是真实页面，不能被滞后的底层宿主覆盖。
+    if (allowSelfPackage && root == selfPackage) return root
+    // 本应用浮层盖在第三方应用上时，rootInActiveWindow 指向本应用，应以 resolveHostPackage 的底层宿主为准。
     return when {
         resolved != null && root != null && resolved != root -> resolved
         resolved != null -> resolved

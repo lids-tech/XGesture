@@ -21,6 +21,57 @@ class SlideIndexAccessibilityForegroundTrackerTest {
     }
 
     @Test
+    fun computeWindowStatePackageUpdate_tracksSelfPackageWhenItIsReallyForeground() {
+        val result = computeWindowStatePackageUpdate(
+            packageName = "com.slideindex.app",
+            selfPackageName = "com.slideindex.app",
+            prevPackageName = "com.old.app",
+            currPackageName = "com.old.app",
+            hasLaunchIntent = true,
+            allowSelfPackage = true,
+        )
+
+        assertTrue(result is WindowStatePackageUpdate.Tracked)
+        val tracked = result as WindowStatePackageUpdate.Tracked
+        assertEquals("com.old.app", tracked.prevPackageName)
+        assertEquals("com.slideindex.app", tracked.currPackageName)
+    }
+
+    @Test
+    fun previousAppHistory_keepsSelfBetweenTwoForeignApps() {
+        val enterSelf = computeWindowStatePackageUpdate(
+            packageName = "com.slideindex.app",
+            selfPackageName = "com.slideindex.app",
+            prevPackageName = "com.app.a",
+            currPackageName = "com.app.a",
+            hasLaunchIntent = true,
+            allowSelfPackage = true,
+        ) as WindowStatePackageUpdate.Tracked
+
+        val enterB = computeWindowStatePackageUpdate(
+            packageName = "com.app.b",
+            selfPackageName = "com.slideindex.app",
+            prevPackageName = enterSelf.prevPackageName,
+            currPackageName = enterSelf.currPackageName,
+            hasLaunchIntent = true,
+        ) as WindowStatePackageUpdate.Tracked
+
+        assertEquals("com.slideindex.app", enterB.prevPackageName)
+
+        val plan = computeLaunchPreviousAppPlan(
+            prevPackageName = enterB.prevPackageName,
+            currPackageName = enterB.currPackageName,
+            activePackageName = "com.app.b",
+        )
+
+        assertTrue(plan is LaunchPreviousAppPlan.SwapToPrevious)
+        assertEquals(
+            "com.slideindex.app",
+            (plan as LaunchPreviousAppPlan.SwapToPrevious).targetPackage,
+        )
+    }
+
+    @Test
     fun computeWindowStatePackageUpdate_foregroundOnlyWhenNoLaunchIntent() {
         val result = computeWindowStatePackageUpdate(
             packageName = "com.example.app",
@@ -157,6 +208,32 @@ class SlideIndexAccessibilityForegroundTrackerTest {
     }
 
     @Test
+    fun resolveActivePackageForPreviousApp_returnsSelfWhenAllowed() {
+        val active = resolveActivePackageForPreviousApp(
+            resolvedHostPackage = null,
+            rootActivePackage = "com.slideindex.app",
+            selfPackage = "com.slideindex.app",
+            hasLaunchIntent = { true },
+            allowSelfPackage = true,
+        )
+
+        assertEquals("com.slideindex.app", active)
+    }
+
+    @Test
+    fun resolveActivePackageForPreviousApp_prefersSelfRootOverStaleResolved() {
+        val active = resolveActivePackageForPreviousApp(
+            resolvedHostPackage = "com.old.host",
+            rootActivePackage = "com.slideindex.app",
+            selfPackage = "com.slideindex.app",
+            hasLaunchIntent = { true },
+            allowSelfPackage = true,
+        )
+
+        assertEquals("com.slideindex.app", active)
+    }
+
+    @Test
     fun resolveActivePackageForPreviousApp_prefersResolvedWhenRootDisagrees() {
         val active = resolveActivePackageForPreviousApp(
             resolvedHostPackage = "com.old.app",
@@ -178,6 +255,19 @@ class SlideIndexAccessibilityForegroundTrackerTest {
         )
 
         assertEquals("com.new.app", pkg)
+    }
+
+    @Test
+    fun resolveForegroundPackageForTracking_keepsSelfEventWhenAllowed() {
+        val pkg = resolveForegroundPackageForTracking(
+            resolvedPackage = null,
+            eventPackage = "com.slideindex.app",
+            selfPackage = "com.slideindex.app",
+            hasLaunchIntent = { true },
+            allowSelfPackage = true,
+        )
+
+        assertEquals("com.slideindex.app", pkg)
     }
 
     @Test
