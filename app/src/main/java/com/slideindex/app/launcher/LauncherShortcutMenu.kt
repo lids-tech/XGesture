@@ -9,6 +9,7 @@ import com.slideindex.app.overlay.StashPanelInitialTab
 import com.slideindex.app.service.SearchPanelTrampolineActivity
 import com.slideindex.app.service.ShellCommandPanelTrampolineActivity
 import com.slideindex.app.service.StashClipboardTrampolineActivity
+import com.slideindex.app.service.ToggleFloatBallTrampolineActivity
 import com.slideindex.app.service.ToggleGestureTrampolineActivity
 
 /**
@@ -21,6 +22,7 @@ enum class LauncherShortcutMenuEntry(
     @StringRes val labelRes: Int,
 ) {
     TOGGLE_GESTURE("toggle_gesture", R.string.shortcut_toggle_gesture),
+    TOGGLE_FLOAT_BALL("toggle_float_ball", R.string.shortcut_toggle_float_ball),
     NOTIFICATION_HUB("notification_hub", R.string.shortcut_notification_hub),
     SHELL_PANEL("shell_panel", R.string.shortcut_shell_panel),
     STASH_PANEL("stash_panel", R.string.shortcut_stash_panel),
@@ -58,6 +60,10 @@ object LauncherShortcutMenu {
         LauncherShortcutMenuEntry.TOGGLE_GESTURE ->
             Intent(context, ToggleGestureTrampolineActivity::class.java)
                 .setAction(ACTION_TOGGLE_GESTURE)
+
+        LauncherShortcutMenuEntry.TOGGLE_FLOAT_BALL ->
+            Intent(context, ToggleFloatBallTrampolineActivity::class.java)
+                .setAction(ToggleFloatBallTrampolineActivity.ACTION_TOGGLE_FLOAT_BALL)
 
         LauncherShortcutMenuEntry.NOTIFICATION_HUB ->
             Intent(context, MainActivity::class.java)

@@ -85,6 +85,16 @@ class GestureActionNormalizedTest {
     }
 
     @Test
+    fun toggleFloatBall_roundTripsThroughId() {
+        // 108 = 「切换悬浮球」：id 是持久化 ABI，新动作只能往后追加（见上一条测试）。
+        assertEquals(GestureActionType.TOGGLE_FLOAT_BALL, GestureActionType.fromId(108))
+        assertEquals(
+            GestureAction.ToggleFloatBall,
+            GestureAction.from(GestureActionType.TOGGLE_FLOAT_BALL, ""),
+        )
+    }
+
+    @Test
     fun gestureRuleCodec_decodeAll_migratesLegacyRemindActions() {
         val rule = GestureRule.slot(
             side = com.slideindex.app.overlay.PanelSide.LEFT,

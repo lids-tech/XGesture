@@ -24,6 +24,7 @@ import com.slideindex.app.launcher.QuickLauncherItem
 import com.slideindex.app.macro.MacroActionRunner
 import com.slideindex.app.pagescroll.PageScrollActionRunner
 import com.slideindex.app.overlay.FloatBallStashPanel
+import com.slideindex.app.overlay.FloatBallVisibilityToggle
 import com.slideindex.app.overlay.PickResultFromHistoryCoordinator
 import com.slideindex.app.overlay.StashPanelInitialTab
 import com.slideindex.app.overlay.FloatingPointerOverlayWindow
@@ -406,6 +407,11 @@ class ActionExecutor(
                     val enabled = repository.settings.first().shakeGestureSettings.enabled
                     repository.setShakeGesturesEnabled(!enabled)
                 }
+                true
+            }
+            // 「切换悬浮球」：只翻悬浮球总开关，边缘手势与触钮不受影响；状态落盘、跨重启保持。
+            GestureAction.ToggleFloatBall -> {
+                FloatBallVisibilityToggle.toggle(context)
                 true
             }
             GestureAction.ToggleAutoBrightness ->

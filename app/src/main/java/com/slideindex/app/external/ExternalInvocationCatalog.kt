@@ -2,6 +2,7 @@ package com.slideindex.app.external
 
 import android.content.Context
 import com.slideindex.app.R
+import com.slideindex.app.service.ToggleFloatBallTrampolineActivity
 
 object ExternalInvocationCatalog {
     const val PACKAGE_NAME = "com.slideindex.app"
@@ -92,6 +93,13 @@ object ExternalInvocationCatalog {
             descriptionRes = R.string.external_invocation_action_toggle_gesture_desc,
             action = "com.slideindex.app.action.TOGGLE_GESTURE",
             componentClass = "com.slideindex.app.service.ToggleGestureTrampolineActivity",
+            supportsQuery = false
+        ),
+        ActionEntry(
+            titleRes = R.string.external_invocation_entry_toggle_float_ball,
+            descriptionRes = R.string.external_invocation_action_toggle_float_ball_desc,
+            action = ToggleFloatBallTrampolineActivity.ACTION_TOGGLE_FLOAT_BALL,
+            componentClass = "com.slideindex.app.service.ToggleFloatBallTrampolineActivity",
             supportsQuery = false
         ),
         ActionEntry(

@@ -104,6 +104,7 @@ internal fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector
     GestureActionType.SCREEN_RECORD -> ThinActionIcons.ScreenRecord
     GestureActionType.TOGGLE_WIFI -> ThinActionIcons.Wifi
     GestureActionType.TOGGLE_SHAKE_GESTURE -> ThinActionIcons.Gesture
+    GestureActionType.TOGGLE_FLOAT_BALL -> HomeLeadingIcons.floatBall(true)
     GestureActionType.TOGGLE_MOBILE_DATA -> ThinActionIcons.Cellular
     GestureActionType.SWITCH_INPUT_METHOD -> ThinActionIcons.Keyboard
     GestureActionType.OPEN_INTERNET_PANEL -> ThinActionIcons.Wifi
@@ -211,6 +212,7 @@ internal fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = w
     GestureActionType.SCREEN_RECORD -> ThinActionIcons.ScreenRecord
     GestureActionType.TOGGLE_WIFI -> ThinActionIcons.Wifi
     GestureActionType.TOGGLE_SHAKE_GESTURE -> ThinActionIcons.Gesture
+    GestureActionType.TOGGLE_FLOAT_BALL -> HomeLeadingIcons.floatBall(true)
     GestureActionType.TOGGLE_MOBILE_DATA -> ThinActionIcons.Cellular
     GestureActionType.SWITCH_INPUT_METHOD -> ThinActionIcons.Keyboard
     GestureActionType.OPEN_INTERNET_PANEL -> ThinActionIcons.Wifi

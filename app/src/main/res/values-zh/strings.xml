@@ -1533,6 +1533,13 @@
     <string name="gesture_action_toggle_wifi">Wi-Fi 开关</string>
     <string name="gesture_action_toggle_shake">切换晃动手势</string>
     <string name="gesture_action_toggle_shake_desc">打开或关闭「晃动」页的总开关</string>
+    <string name="gesture_action_toggle_float_ball">切换悬浮球显示</string>
+    <string name="gesture_action_toggle_float_ball_desc">隐藏或重新显示悬浮球；状态保持，不影响边缘手势</string>
+    <string name="gesture_action_toggle_float_ball_hidden">悬浮球已隐藏；再次执行或从设置恢复</string>
+    <string name="gesture_action_toggle_float_ball_shown">悬浮球已显示</string>
+    <string name="gesture_action_toggle_float_ball_service_off">悬浮球已开启，但边缘手势总开关是关的</string>
+    <string name="gesture_action_toggle_float_ball_snoozed">悬浮球已开启，悬浮层暂停中，稍后显示</string>
+    <string name="gesture_action_toggle_float_ball_suppressed">悬浮球已开启，但当前界面按规则不显示</string>
     <string name="gesture_action_toggle_mobile_data">移动数据开关</string>
     <string name="gesture_action_switch_input_method">切换输入法</string>
     <string name="gesture_action_screen_record_permission">需要“显示在其他应用上层”权限</string>
@@ -2858,6 +2865,7 @@
     <string name="external_invocation_entry_clipboard">剪贴板</string>
     <string name="external_invocation_entry_search_panel">搜索面板</string>
     <string name="external_invocation_entry_toggle_gesture">切换手势开关</string>
+    <string name="external_invocation_entry_toggle_float_ball">切换悬浮球开关</string>
     <string name="external_invocation_entry_shell_panel">Shell 命令面板</string>
     <string name="external_invocation_entry_notification_history_desc">打开通知滤盒</string>
     <string name="external_invocation_entry_stash_desc">打开侧边面板</string>
@@ -2868,6 +2876,7 @@
     <string name="external_invocation_action_clipboard_desc">打开剪贴板面板</string>
     <string name="external_invocation_action_search_panel_desc">打开搜索面板</string>
     <string name="external_invocation_action_toggle_gesture_desc">切换边缘手势总开关</string>
+    <string name="external_invocation_action_toggle_float_ball_desc">隐藏或重新显示悬浮球（状态保持）</string>
     <string name="external_invocation_action_shell_panel_desc">打开 Shell 命令面板（未对外导出，仅供应用内快捷方式）</string>
     <string name="activity_shortcut_title">应用内直达</string>
     <string name="activity_shortcut_hint">此处列表可绑到手势与启动器；点击条目打开。加入目录的快捷会显示原生/自定义图标。非 exported 的 Activity 需要 Shizuku。</string>
@@ -3550,6 +3559,7 @@
     <string name="shell_panel_history_exit_code">退出码 %1$d</string>
     <string name="tile_gesture_switch">X手势</string>
     <string name="shortcut_toggle_gesture">开关手势</string>
+    <string name="shortcut_toggle_float_ball">切换悬浮球</string>
     <string name="shortcut_notification_hub">通知滤盒</string>
     <string name="shortcut_shell_panel">Shell 面板</string>
     <string name="shortcut_stash_panel">打开闪念</string>
@@ -4541,6 +4551,8 @@ adb 模式应返回 uid=2000。
     <string name="gesture_search_force_stop_3">结束进程</string>
     <string name="gesture_search_keyevent_1">模拟按键</string>
     <string name="gesture_search_keyevent_2">按键模拟</string>
+    <string name="gesture_search_float_ball_hide">隐藏悬浮球</string>
+    <string name="gesture_search_float_ball_show">显示悬浮球</string>
     <string name="ring_launcher_slot_title">圆环启动器 · 槽位 %1$d</string>
     <string name="ring_launcher_slot_bound">已绑定: %1$s</string>
     <string name="ring_launcher_slot_unconfigured">未配置（自动填充最近任务）</string>
