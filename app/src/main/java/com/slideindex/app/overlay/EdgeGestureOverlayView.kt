@@ -649,7 +649,16 @@ class EdgeGestureOverlayView(
     fun pinnedQuickLauncherWindowRect(): RectF? =
         quickLauncherController.pinnedWindowRect(logicalWidthPx().toFloat(), logicalHeightPx().toFloat())
 
+    /** 图标库里改了应用图标：索引 / 任务切换器是 Canvas 绘制，必须主动重绘。 */
+    private val iconChangeListener: () -> Unit = { invalidate() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        com.slideindex.app.ui.GlobalIconStore.addIconChangeListener(iconChangeListener)
+    }
+
     override fun onDetachedFromWindow() {
+        com.slideindex.app.ui.GlobalIconStore.removeIconChangeListener(iconChangeListener)
         gestureAnimationCoordinator.hide()
         adjustPanelController.onDetachedFromWindow()
         GestureActionIconBitmap.clear()
@@ -818,6 +827,8 @@ class EdgeGestureOverlayView(
      */
     private fun iconFor(app: AppInfo): Bitmap {
         val size = iconSizePx.toInt().coerceAtLeast(1)
+        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+        com.slideindex.app.ui.AppIconOverride.bitmap(context, app.packageName, size)?.let { return it }
         appRepository.peekLaunchIconBitmap(app.packageName, size)?.let { return it }
         appRepository.requestLaunchIconBitmapAsync(app.packageName, size) {
             if (panelMode() != OverlayPanelMode.NONE) invalidate()

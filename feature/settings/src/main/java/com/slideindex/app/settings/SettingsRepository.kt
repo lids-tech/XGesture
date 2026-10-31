@@ -617,8 +617,8 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallLineHeightFraction(value: Float) =
         overlay.setFloatBallLineHeightFraction(value)
 
-    suspend fun setFloatBallLineWidthFraction(value: Float) =
-        overlay.setFloatBallLineWidthFraction(value)
+    suspend fun setFloatBallLineWidthDp(value: Float) =
+        overlay.setFloatBallLineWidthDp(value)
 
     suspend fun setFloatBallLineOpacity(value: Float) =
         overlay.setFloatBallLineOpacity(value)

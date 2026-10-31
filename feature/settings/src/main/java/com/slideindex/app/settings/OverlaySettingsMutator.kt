@@ -953,8 +953,11 @@ class OverlaySettingsMutator @Inject constructor(
         it[SettingsPreferenceKeys.FLOAT_BALL_LINE_HEIGHT_FRACTION] = value.coerceIn(0.04f, 0.4f)
     }
 
-    suspend fun setFloatBallLineWidthFraction(value: Float) = editor.edit {
-        it[SettingsPreferenceKeys.FLOAT_BALL_LINE_WIDTH_FRACTION] = value.coerceIn(0.01f, 0.50f)
+    suspend fun setFloatBallLineWidthDp(value: Float) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_LINE_WIDTH_DP] = value.coerceIn(
+            FloatBallSettings.MIN_LINE_WIDTH_DP,
+            FloatBallSettings.MAX_LINE_WIDTH_DP,
+        )
     }
 
     suspend fun setFloatBallLineOpacity(value: Float) = editor.edit {

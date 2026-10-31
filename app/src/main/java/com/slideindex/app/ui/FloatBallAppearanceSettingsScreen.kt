@@ -12,6 +12,7 @@ import com.slideindex.app.R
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.settings.FloatBallPositionFractions
 import com.slideindex.app.settings.FloatBallPositionMode
+import com.slideindex.app.settings.FloatBallSettings
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.SETTINGS_SLIDER_PERCENT_KEY_POINTS_01
 import com.slideindex.app.ui.settings.components.SettingDropdownRow
@@ -25,7 +26,8 @@ import kotlin.math.roundToInt
 private val floatBallOpacityRange = 0f..1f
 private val floatBallIdleDelayRange = 0f..10f
 private val floatBallLineHeightRange = 0.04f..0.4f
-private val floatBallLineWidthRange = 0.01f..0.50f
+private val floatBallLineWidthRange =
+    FloatBallSettings.MIN_LINE_WIDTH_DP..FloatBallSettings.MAX_LINE_WIDTH_DP
 private val floatBallVisibleFractionRange =
     FloatBallPositionFractions.MIN_VISIBLE..FloatBallPositionFractions.MAX_VISIBLE
 
@@ -79,7 +81,7 @@ fun FloatBallAppearanceSettingsScreen(
         opacity: Float?,
         visibleFraction: Float?,
         lineHeightFraction: Float?,
-        lineWidthFraction: Float?,
+        lineWidthDp: Float?,
         lineOpacity: Float?
     ) -> Unit = { _, _, _, _, _, _ -> },
     onAppearancePreviewCommit: () -> Unit = {},
@@ -90,6 +92,7 @@ fun FloatBallAppearanceSettingsScreen(
     val positionXyHint = stringResource(R.string.float_ball_position_xy_hint)
     val lineSectionTitle = stringResource(R.string.float_ball_section_line)
     val lineWidthPreviewHint = stringResource(R.string.float_ball_line_width_preview_hint)
+    val lineWidthValueFormat = stringResource(R.string.float_ball_line_width_value)
     val idleDelayValueFormat = stringResource(R.string.float_ball_idle_delay_value)
 
     val positionMode = settings.floatBallPositionMode
@@ -326,12 +329,21 @@ fun FloatBallAppearanceSettingsScreen(
                         settingsCardScopeItem("line-width") {
                             SettingsSliderRow(
                                 title = stringResource(R.string.float_ball_line_width),
-                                value = settings.floatBallLineWidthFraction,
+                                value = settings.floatBallLineWidthDp,
                                 valueRange = floatBallLineWidthRange,
                                 enabled = true,
-                                label = fractionPercentLabel(settings.floatBallLineWidthFraction),
-                                formatLabel = ::fractionPercentLabel,
-                                snapValue = fractionPercentSnap(floatBallLineWidthRange),
+                                label = String.format(
+                                    Locale.US,
+                                    lineWidthValueFormat,
+                                    settings.floatBallLineWidthDp
+                                ),
+                                formatLabel = { value ->
+                                    String.format(Locale.US, lineWidthValueFormat, value)
+                                },
+                                snapValue = { value ->
+                                    value.roundToInt().toFloat()
+                                        .coerceIn(floatBallLineWidthRange.start, floatBallLineWidthRange.endInclusive)
+                                },
                                 triggersLayoutPreview = true,
                                 onLayoutPreviewStart = onStripZonePreviewStart,
                                 onLayoutPreviewStop = onStripZonePreviewStop,

@@ -34,8 +34,14 @@ internal object HoneycombTargetResolver {
             val label = QuickLauncherLabels.resolveLabel(context, item, appsByPackage)
             val target = item.appTarget
             val icon = when {
-                appRepository != null && item.type == QuickLauncherItemType.APP ->
-                    appRepository.peekLaunchIconDrawable(target?.packageName ?: item.payload)
+                appRepository != null && item.type == QuickLauncherItemType.APP -> {
+                    val packageName = target?.packageName ?: item.payload
+                    // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）。
+                    // 这里必须查：target.icon 会被渲染方当成 resolvedIcon 直接用，
+                    // 预填成系统原图后再也走不到覆盖分支（圆环 / 蜂窝的真机表现）。
+                    com.slideindex.app.ui.AppIconOverride.drawable(context, packageName, 128)
+                        ?: appRepository.peekLaunchIconDrawable(packageName)
+                }
                 appRepository == null || item.type == QuickLauncherItemType.SHORTCUT ||
                     item.type == QuickLauncherItemType.ACTION ->
                     QuickLauncherIconResolver.iconDrawable(

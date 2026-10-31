@@ -219,11 +219,6 @@ internal fun overlaySelectionToolbarPlacement(
     } else {
         fieldCenterSelectionRect(fieldCoordinates)
     } ?: return null
-    // 没有 textLayoutResult 时（搜索面板的 TextField 不暴露文本布局）退回用**整个输入框矩形**
-    // 当"要避开的区域"：否则遮挡检测拿到 null 会直接放行，工具条被夹回框内、正好压住文字。
-    val selectionRect = layoutResult?.let {
-        selectionBoundsInWindow(it, selection, fieldCoordinates)
-    } ?: fieldCoordinates.boundsInWindow()
     val viewportRect = viewportCoordinates?.boundsInWindow()
         ?: Rect(
             left = 0f,
@@ -231,6 +226,21 @@ internal fun overlaySelectionToolbarPlacement(
             right = windowSize.width.toFloat(),
             bottom = windowSize.height.toFloat()
         )
+    // 没有 textLayoutResult 时（搜索面板的 TextField 不暴露文本布局）退回用**整个输入框矩形**
+    // 当"要避开的区域"：否则遮挡检测拿到 null 会直接放行，工具条被夹回框内、正好压住文字。
+    val selectionRect = (
+        layoutResult?.let { selectionBoundsInWindow(it, selection, fieldCoordinates) }
+            ?: fieldCoordinates.boundsInWindow()
+        )?.let { rect ->
+        // 选区先裁到可视区内：长文本全选时包围盒会超出视口、铺满整个窗口，
+        // 不裁的话工具条探到视口外也会被判成"压住文字"，全选场景就无解了。
+        Rect(
+            left = max(rect.left, viewportRect.left),
+            top = max(rect.top, viewportRect.top),
+            right = min(rect.right, viewportRect.right),
+            bottom = min(rect.bottom, viewportRect.bottom),
+        ).takeIf { it.right > it.left && it.bottom > it.top }
+    }
     return OverlaySelectionToolbarPlacement(
         anchorRect = anchorRect,
         selectionRect = selectionRect,
@@ -522,7 +532,7 @@ private fun OverlaySelectionToolbarIcon(
     }
 }
 
-private class OverlaySelectionToolbarPositionProvider(
+internal class OverlaySelectionToolbarPositionProvider(
     private val placementProvider: (IntSize) -> OverlaySelectionToolbarPlacement?,
     private val gapPx: Int
 ) : PopupPositionProvider {
@@ -571,6 +581,17 @@ private class OverlaySelectionToolbarPositionProvider(
 
         for (candidate in candidateYs) {
             val clamped = clampY(candidate)
+            if (!toolbarOverlapsSelection(clamped.toFloat())) {
+                return IntOffset(centerX, clamped)
+            }
+        }
+
+        // 视口内已经全是选中区时（点词关闭的取词面板点「全选」：视口=正文区、选区=整个正文），
+        // 在视口里怎么摆都压字。放宽到整个窗口再试一次——正文可视区之外没有文字，工具条可以探出去。
+        // 搜索面板的视口本来就是整窗，这一轮等价于原地重试一次，行为不变。
+        val windowMaxY = (windowSize.height - toolbarHeight).roundToInt().coerceAtLeast(0)
+        for (candidate in candidateYs) {
+            val clamped = candidate.roundToInt().coerceIn(0, windowMaxY)
             if (!toolbarOverlapsSelection(clamped.toFloat())) {
                 return IntOffset(centerX, clamped)
             }

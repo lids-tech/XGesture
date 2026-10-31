@@ -70,6 +70,9 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
 
     private var currentOpacityValue = 1f
 
+    /** 「闲置时停止动图」的冻结状态：setDragging 等路径不能把它顶掉。 */
+    private var gifFrozen = false
+
     /** 闲置隐身：非 null 时覆盖根 View 的 alpha（null = 跟随设置不透明度）。 */
     private var alphaOverride: Float? = null
 
@@ -175,12 +178,14 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
     /** 闲置定格：停止 GIF 出帧但保留当前画面；false 恢复播放。 */
     fun setGifFrozen(frozen: Boolean) {
         if (contentMode != ContentMode.GIF) return
+        gifFrozen = frozen
         gifPlayer.setPaused(frozen)
     }
 
     fun setDragging(dragging: Boolean) {
         when (contentMode) {
-            ContentMode.GIF -> gifPlayer.setPaused(false)
+            // 冻结期间不能被布局刷新顺手解冻（否则「闲置时停止动图」会被每帧顶掉）。
+            ContentMode.GIF -> if (!gifFrozen) gifPlayer.setPaused(false)
             ContentMode.BUILTIN -> builtinAnimView.setPaused(false)
             ContentMode.STATIC -> Unit
         }
@@ -271,8 +276,33 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
         // 不再经过 HWUI 的 Vulkan 提交与逐帧纹理上传（对齐 FV 的做法）。
         val token = ++gifDecodeToken
         Thread {
-            // 共享缓存：同一 (uri, 尺寸) 只解码一份，不再每次进 GIF 样式都解一整只。
+            // 策略：小 GIF（能全帧缓存）走“预解码帧 + tick”——实测运行成本最低；
+            // 大 GIF（只能流式）或解码失败才用 ImageDecoder / AnimatedImageDrawable。
             val handle = FloatBallGifSequenceCache.acquire(context, uri, decodePx)
+            val cachedSequence = handle?.sequence
+            if (cachedSequence !is FloatBallGifFrameDecoder.Sequence.Cached) {
+                val animated = runCatching {
+                    val source = android.graphics.ImageDecoder.createSource(
+                        context.contentResolver,
+                        android.net.Uri.parse(uri),
+                    )
+                    android.graphics.ImageDecoder.decodeDrawable(source) { decoder, _, _ ->
+                        decoder.setTargetSize(decodePx.coerceAtLeast(1), decodePx.coerceAtLeast(1))
+                    }
+                }.getOrNull()
+                if (animated is android.graphics.drawable.AnimatedImageDrawable) {
+                    runCatching {
+                        animated.repeatCount =
+                            android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE
+                    }
+                    handle?.close()
+                    mainHandler.post {
+                        if (token != gifDecodeToken) return@post
+                        gifPlayer.setAnimatedDrawable(animated)
+                    }
+                    return@Thread
+                }
+            }
             mainHandler.post {
                 if (token != gifDecodeToken) {
                     handle?.close()
@@ -282,7 +312,8 @@ internal class FloatBallIconView(context: Context) : FrameLayout(context) {
                     retainGifSequence(handle)
                     FloatBallGifDragSnapshot.update(uri, decodePx, handle.sequence)
                     gifPlayer.setSequence(handle.sequence)
-                    gifPlayer.setPaused(false)
+                    // 重新绑定后仍要尊重冻结状态（否则改设置/重建视图会把冻结顶掉）。
+                    gifPlayer.setPaused(gifFrozen)
                     gifPlayer.start()
                 } else {
                     showStaticBitmap(FloatBallDragVisualRenderer.render(context, settings), owns = true)

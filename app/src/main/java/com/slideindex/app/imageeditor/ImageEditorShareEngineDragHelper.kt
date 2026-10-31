@@ -528,7 +528,11 @@ class ImageEditorShareEngineDragHelper(
                             FrameLayout.LayoutParams.MATCH_PARENT,
                         )
                         scaleType = ImageView.ScaleType.FIT_CENTER
-                        setImageDrawable(context.packageManager.getApplicationIcon(pkg))
+                        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                        setImageDrawable(
+                            com.slideindex.app.ui.AppIconOverride.drawable(context, pkg, 128)
+                                ?: context.packageManager.getApplicationIcon(pkg),
+                        )
                     },
                 )
             }

@@ -105,8 +105,12 @@ object TakeoverExtraRects {
     }
 
     return buildList {
-      nearestEdgeGroup(ballRect, screenWidthPx, screenHeightPx, density)?.let { group ->
-        add(ballRect.toExtraRect(ModuleHookBridgeContract.TARGET_FLOAT_BALL, group, strip = 0, screenWidthPx, screenHeightPx))
+      // 触发区允许被用户调到 0dp（只显示线、不接收触摸）：这种空矩形不下发，
+      // 否则模块拿到的是永远命不中的 rect，白白多一次 binder 复核。
+      if (ballRect.width() > 0 && ballRect.height() > 0) {
+        nearestEdgeGroup(ballRect, screenWidthPx, screenHeightPx, density)?.let { group ->
+          add(ballRect.toExtraRect(ModuleHookBridgeContract.TARGET_FLOAT_BALL, group, strip = 0, screenWidthPx, screenHeightPx))
+        }
       }
       if (FloatBallLayout.shouldShowLine(settings)) {
         val inactiveSide = FloatBallSide.opposite(activeSide)
@@ -121,7 +125,9 @@ object TakeoverExtraRects {
         val lineGroup = when (inactiveSide) {
           FloatBallSide.LEFT, FloatBallSide.RIGHT -> ModuleHookBridgeContract.GROUP_SIDES
         }
-        add(lineRect.toExtraRect(ModuleHookBridgeContract.TARGET_FLOAT_LINE, lineGroup, strip = 0, screenWidthPx, screenHeightPx))
+        if (lineRect.width() > 0 && lineRect.height() > 0) {
+          add(lineRect.toExtraRect(ModuleHookBridgeContract.TARGET_FLOAT_LINE, lineGroup, strip = 0, screenWidthPx, screenHeightPx))
+        }
       }
     }
   }

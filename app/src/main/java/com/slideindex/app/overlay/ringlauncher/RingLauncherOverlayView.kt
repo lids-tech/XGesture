@@ -172,6 +172,14 @@ internal class RingLauncherOverlayView(
         isFocusable = true
     }
 
+    /** 图标库里改了应用图标：圆环是 Canvas 绘制，必须主动重绘。 */
+    private val iconChangeListener: () -> Unit = { invalidate() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        com.slideindex.app.ui.GlobalIconStore.addIconChangeListener(iconChangeListener)
+    }
+
     fun configure(
         settings: AppSettings,
         fvSettings: FvRingLauncherSettings,
@@ -860,6 +868,7 @@ internal class RingLauncherOverlayView(
     }
 
     override fun onDetachedFromWindow() {
+        com.slideindex.app.ui.GlobalIconStore.removeIconChangeListener(iconChangeListener)
         super.onDetachedFromWindow()
         composeDialogHost.dismiss()
     }

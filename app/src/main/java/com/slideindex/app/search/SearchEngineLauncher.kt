@@ -18,8 +18,10 @@ import com.slideindex.app.privilege.PrivilegeUiStrings
 import com.slideindex.app.service.LaunchTrampolineActivity
 import com.slideindex.app.service.SlideIndexAccessibilityService
 import com.slideindex.app.settings.AppSettings
+import com.slideindex.app.settings.FreeWindowMode
 import com.slideindex.app.settings.SearchEngineConfig
 import com.slideindex.app.settings.SearchEngineType
+import com.slideindex.app.settings.resolvedFreeWindowMode
 import com.slideindex.app.settings.shouldLaunchFullscreen
 import com.slideindex.app.util.FreeWindowLauncher
 import com.slideindex.app.util.PackageActivityResolver
@@ -414,12 +416,21 @@ object SearchEngineLauncher {
         return runCatching {
             val fullscreen = fullscreenOverride ?: settings.shouldLaunchFullscreen(longPressTriggered)
             if (useTrampoline) {
-                val launchOptions = if (!fullscreen && settings.freeWindowEnabled) {
+                val freeform = !fullscreen && settings.freeWindowEnabled
+                // vivo / OriginOS：小窗由系统的「小窗分享」开出，ActivityOptions 在这里不起作用，
+                // 改由 trampoline（已经有前台上下文）在内部发这次分享。
+                val shareProxy = freeform && settings.resolvedFreeWindowMode() == FreeWindowMode.ORIGINOS
+                val launchOptions = if (freeform && !shareProxy) {
                     FreeWindowLauncher.launchOptionsBundle(context, settings)
                 } else {
                     null
                 }
-                val launchIntent = LaunchTrampolineActivity.createIntent(context, intent, launchOptions)
+                val launchIntent = LaunchTrampolineActivity.createIntent(
+                    context = context,
+                    launchIntent = intent,
+                    launchOptions = launchOptions,
+                    shareProxy = shareProxy,
+                )
                 context.startActivity(launchIntent)
             } else {
                 FreeWindowLauncher.launch(context, intent, settings, fullscreen)

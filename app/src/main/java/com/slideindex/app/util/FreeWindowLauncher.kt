@@ -24,6 +24,14 @@ import com.slideindex.app.settings.FreeWindowMode
 import kotlin.math.roundToInt
 
 object FreeWindowLauncher {
+    /**
+     * "这次分享请求来自本应用"的标识。
+     *
+     * 壳 Activity 是导出的（系统分享流程才能拉起来），所以它必然也会收到别的应用发来的真实分享。
+     * 没有这个标识就不处理——不然后果是把别人分享的正文当包名去启动。
+     */
+    const val EXTRA_FREEWINDOW_REQUEST = "com.slideindex.app.extra.FREEWINDOW_REQUEST"
+
     private const val TAG = "FreeWindowLauncher"
     private const val KEY_WINDOWING_MODE = "android.activity.windowingMode"
     private const val NUBIA_FREEFORM_INTENT_IDENTIFIER = "_WindowReply"
@@ -136,24 +144,62 @@ object FreeWindowLauncher {
 
     private fun launchOriginOsShareProxy(context: Context, targetIntent: Intent): Boolean {
         return runCatching {
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                component = ComponentName(context, FreeWindowShareProxyActivity::class.java)
-                type = "text/plain"
-                putExtra(Intent.EXTRA_INTENT, Intent(targetIntent))
-                val pkgName = targetIntent.`package` ?: targetIntent.component?.packageName.orEmpty()
-                putExtra(Intent.EXTRA_TEXT, pkgName)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            val chooser = Intent.createChooser(shareIntent, null).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(chooser)
+            context.startActivity(buildOriginOsShareChooser(context, targetIntent))
             true
-        }.getOrElse { e ->
-            android.util.Log.e("FreeWindowLauncher", "OriginOS share proxy launch failed", e)
+        }.getOrElse { error ->
+            android.util.Log.e(TAG, "OriginOS share proxy launch failed", error)
             false
         }
     }
+
+    /**
+     * 构造"假分享"：接收方是本应用的透明壳，真正的目标应用藏在 [Intent.EXTRA_INTENT] 里。
+     *
+     * 这一步不申请任何窗口参数。OriginOS 的「小窗分享」会把**这次分享的接收方**开成小窗，
+     * 壳再从小窗里把目标拉起来，目标于是继续落在小窗里——窗口形态完全交给系统决定。
+     *
+     * 发送方必须是**系统分享流程**（`Intent.createChooser`），直接 `startActivity` 一条 SEND
+     * 不算分享目标，系统不会套用「小窗分享」。
+     */
+    fun buildOriginOsShareChooser(context: Context, targetIntent: Intent): Intent {
+        val forwarded = normalizeForwardedIntent(targetIntent)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            component = ComponentName(context, FreeWindowShareProxyActivity::class.java)
+            type = "text/plain"
+            putExtra(EXTRA_FREEWINDOW_REQUEST, true)
+            putExtra(Intent.EXTRA_INTENT, forwarded)
+            // 形状上像一次真分享：EXTRA_TEXT 带目标包名。系统/壳都靠它做兜底解析。
+            putExtra(
+                Intent.EXTRA_TEXT,
+                forwarded.`package` ?: forwarded.component?.packageName
+                    ?: resolveTargetPackage(context, forwarded).orEmpty(),
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return Intent.createChooser(shareIntent, null).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    /**
+     * 转发给目标的 Intent 只保留"普通启动"的形状：`NEW_TASK` + `SINGLE_TOP`。
+     *
+     * 去掉 `REORDER_TO_FRONT`（会把已有任务直接提到前台，等于明确要求"不要新窗口"）与
+     * `MULTIPLE_TASK`；其余 flag 原样保留（深链、URI 授权一类都还要用）。
+     */
+    private fun normalizeForwardedIntent(source: Intent): Intent = Intent(source).apply {
+        flags = (flags or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP) and
+            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT.inv() and
+            Intent.FLAG_ACTIVITY_MULTIPLE_TASK.inv()
+    }
+
+    /** 没有显式包名时（例如纯 URL 的 VIEW）用解析结果补一个，只用于填充 EXTRA_TEXT 与壳的校验。 */
+    private fun resolveTargetPackage(context: Context, intent: Intent): String? = runCatching {
+        context.packageManager
+            .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo
+            ?.packageName
+    }.getOrNull()
 
     private fun launchNubiaFreeform(context: Context, intent: Intent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

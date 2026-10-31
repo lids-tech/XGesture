@@ -157,6 +157,12 @@ class FreeWindowAppLaunchPort @Inject constructor(
 abstract class AppPortsModule {
     @Binds
     @Singleton
+    abstract fun bindAppIconOverrideProvider(
+        impl: AppIconOverrideProviderImpl,
+    ): com.slideindex.app.data.AppIconOverrideProvider
+
+    @Binds
+    @Singleton
     abstract fun bindNotificationListenerPort(impl: MediaNotificationListenerPort): NotificationListenerPort
 
     @Binds

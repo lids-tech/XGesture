@@ -33,6 +33,7 @@ class AppRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val appLaunchPort: AppLaunchPort,
     private val launchIconCache: AppLaunchIconCache,
+    private val appIconOverride: AppIconOverrideProvider,
     private val applicationScope: CoroutineScope,
 ) {
     private val _apps = MutableStateFlow<List<AppInfo>>(emptyList())
@@ -285,20 +286,35 @@ class AppRepository @Inject constructor(
         _appsForSearch.value = emptyList()
     }
 
+    /**
+     * 应用图标的四个入口都先问一次「全局覆盖」。
+     *
+     * 这样索引 / 任务切换器 / 圆环 / 蜂窝 / 全息 / 轮盘这些走 AppRepository 的渲染路径
+     * 不用各自判断；图标库里改完图标，靠 key 里的 revision 自动失效。
+     */
     fun launchIconBitmap(packageName: String, sizePx: Int): android.graphics.Bitmap =
-        launchIconCache.bitmapFor(packageName, sizePx)
+        appIconOverride.bitmap(context, packageName, sizePx)
+            ?: launchIconCache.bitmapFor(packageName, sizePx)
 
     fun peekLaunchIconDrawable(packageName: String): android.graphics.drawable.Drawable? =
-        launchIconCache.peekDrawable(packageName)
+        appIconOverride.peekDrawable(context, packageName, DRAWABLE_ICON_PX)
+            ?: launchIconCache.peekDrawable(packageName)
 
     fun peekLaunchIconBitmap(packageName: String, sizePx: Int): android.graphics.Bitmap? =
-        launchIconCache.peekBitmap(packageName, sizePx)
+        appIconOverride.peekBitmap(context, packageName, sizePx)
+            ?: launchIconCache.peekBitmap(packageName, sizePx)
 
     fun launchIconDrawable(packageName: String): android.graphics.drawable.Drawable? =
-        launchIconCache.drawableFor(packageName)
+        appIconOverride.drawable(context, packageName, DRAWABLE_ICON_PX)
+            ?: launchIconCache.drawableFor(packageName)
 
     fun warmLaunchIconBitmapsAsync(packageNames: Collection<String>, sizePx: Int) {
         launchIconCache.warmBitmapsAsync(packageNames, sizePx)
+        // 主题层不落盘，必须提前把 drawable 解好，否则面板首帧会在主线程解码
+        val names = packageNames.toList()
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching { appIconOverride.preload(context, names, sizePx) }
+        }
     }
 
     /** 后台补一个图标，完成后回主线程通知重绘（浮层绘制路径专用，替代同步 [launchIconBitmap]）。 */
@@ -551,6 +567,9 @@ class AppRepository @Inject constructor(
 
     companion object {
         private const val REFRESH_DEBOUNCE_MS = 400L
+
+        /** 只接受 Drawable 的渲染路径用这个尺寸（覆盖图落盘是 128px）。 */
+        private const val DRAWABLE_ICON_PX = 128
     }
 }
 

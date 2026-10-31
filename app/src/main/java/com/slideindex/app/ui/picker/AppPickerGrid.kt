@@ -1,6 +1,7 @@
 package com.slideindex.app.ui.picker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,29 +89,32 @@ private fun AppPickerGridCell(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {
+            // 58dp 只是图标与选中勾共用的占位，不画底色：真实图标直接展示，
+            // 一屏几十个应用不会有满屏浅灰格子把内容压扁（与冰箱网格、搜索结果一致）。
             Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .clip(RoundedCornerShape(17.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainerHigh),
+                modifier = Modifier.size(58.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Md3PickerAppLeading(app)
+                // 图标铺满 58dp 格位：与「动作」tab 的 58dp 卡片、冰箱网格的 64dp 图标
+                // 保持同一视觉密度（约占列宽 75%），否则应用页会比动作页稀一截。
+                Md3PickerAppLeading(app, sizeDp = 58)
             }
             if (selected) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .size(16.dp)
+                        .size(18.dp)
                         .clip(CircleShape)
-                        .background(MiuixTheme.colorScheme.primary),
+                        .background(MiuixTheme.colorScheme.primary)
+                        // 勾直接压在彩色图标上，描一圈页面底色才不会和图标糊在一起。
+                        .border(1.dp, MiuixTheme.colorScheme.surface, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Check,
                         contentDescription = null,
                         tint = MiuixTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(10.dp),
+                        modifier = Modifier.size(11.dp),
                     )
                 }
             }

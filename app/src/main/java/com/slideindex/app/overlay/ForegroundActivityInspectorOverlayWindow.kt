@@ -206,7 +206,9 @@ object ForegroundActivityInspectorOverlayWindow {
                 runCatching {
                     val appInfo = pm.getApplicationInfo(packageName, 0)
                     resolvedLabel = pm.getApplicationLabel(appInfo).toString()
-                    resolvedIcon = pm.getApplicationIcon(appInfo)
+                    // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                    resolvedIcon = com.slideindex.app.ui.AppIconOverride.drawable(app, packageName, 128)
+                        ?: pm.getApplicationIcon(appInfo)
                 }
                 appInfoCache.put(packageName, Pair(resolvedLabel, resolvedIcon))
 
@@ -302,7 +304,9 @@ object ForegroundActivityInspectorOverlayWindow {
                 runCatching {
                     val appInfo = pm.getApplicationInfo(packageName, 0)
                     resolvedLabel = pm.getApplicationLabel(appInfo).toString()
-                    resolvedIcon = pm.getApplicationIcon(appInfo)
+                    // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                    resolvedIcon = com.slideindex.app.ui.AppIconOverride.drawable(app, packageName, 128)
+                        ?: pm.getApplicationIcon(appInfo)
                 }
                 appInfoCache.put(packageName, Pair(resolvedLabel, resolvedIcon))
 

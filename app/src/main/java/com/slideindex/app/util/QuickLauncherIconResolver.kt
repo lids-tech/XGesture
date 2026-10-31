@@ -158,6 +158,12 @@ object QuickLauncherIconResolver {
             }
             QuickLauncherItemType.APP -> {
                 val packageName = item.appTarget?.packageName ?: item.payload
+                // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+                if (context != null) {
+                    com.slideindex.app.ui.AppIconOverride
+                        .drawable(context, packageName, 128)
+                        ?.let { return it }
+                }
                 getIconSafe(appsByPackage[packageName], context)
                     ?: getIconSafe(packageName, context)
             }

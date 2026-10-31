@@ -24,6 +24,21 @@ enum class FreeWindowMode(
     ;
 
     companion object {
+        /**
+         * vivo 系（含 iQOO、Funtouch / OriginOS）的系统属性。
+         *
+         * 只看 `MANUFACTURER/BRAND` 会漏判：部分 iQOO 机型的 BRAND 是 `iQOO`，
+         * 而 `ro.vivo.os.version` 在 vivo 全系上都有，是同一套 ROM 判定口径
+         * （GestureEVO 也是用它识别 vivo 的）。
+         */
+        private val vivoOsVersion: String by lazy { readSystemProperty("ro.vivo.os.version") }
+
+        private fun readSystemProperty(name: String): String = runCatching {
+            val clazz = Class.forName("android.os.SystemProperties")
+            val get = clazz.getMethod("get", String::class.java, String::class.java)
+            get.invoke(null, name, "") as? String
+        }.getOrNull().orEmpty()
+
         fun fromId(id: Int): FreeWindowMode =
             entries.firstOrNull { it.id == id } ?: detectDefault()
 
@@ -37,7 +52,9 @@ enum class FreeWindowMode(
                 manufacturer.contains("xiaomi") || brand.contains("redmi") -> STANDARD
                 manufacturer.contains("oppo") || manufacturer.contains("realme") ||
                     brand.contains("oppo") || brand.contains("realme") -> COLOROS
-                manufacturer.contains("vivo") || brand.contains("vivo") -> ORIGINOS
+                manufacturer.contains("vivo") || brand.contains("vivo") ||
+                    manufacturer.contains("iqoo") || brand.contains("iqoo") ||
+                    vivoOsVersion.isNotEmpty() -> ORIGINOS
                 manufacturer.contains("honor") || manufacturer.contains("huawei") ||
                     brand.contains("honor") || brand.contains("huawei") -> MAGICOS
                 else -> STANDARD

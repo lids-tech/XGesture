@@ -71,6 +71,15 @@ internal object RingLauncherSlotIconBitmap {
                 sizePx = sizePx,
             )?.let { return it }
         }
+        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）。
+        // 必须在 resolvedIcon 之前：圆环的 target.icon 在 show 时就被预填成系统原图，
+        // 先走 resolvedIcon 的话覆盖永远不生效（真机实测）。
+        if (item.type == QuickLauncherItemType.APP && item.payload.isNotBlank()) {
+            val packageName = item.appTarget?.packageName ?: item.payload
+            com.slideindex.app.ui.AppIconOverride
+                .bitmap(context, packageName, sizePx)
+                ?.let { return it }
+        }
         resolvedIcon?.let { return drawableToBitmap(it, sizePx) }
         if (item.type == QuickLauncherItemType.APP && item.payload.isNotBlank() && appRepository != null) {
             val packageName = item.appTarget?.packageName ?: item.payload

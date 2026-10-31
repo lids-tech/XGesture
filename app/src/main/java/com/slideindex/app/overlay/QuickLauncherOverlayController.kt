@@ -43,6 +43,13 @@ internal class QuickLauncherOverlayController(
             OverlayIconLoader.clear()
             host.invalidate()
         }
+        // 图标库里改了某个应用的图标：面板格子是 Canvas 绘制，没人观察 Compose 的 revision，
+        // 必须主动清缓存 + 重绘，否则要退出再进才看得到。
+        com.slideindex.app.ui.GlobalIconStore.addIconChangeListener {
+            invalidateQuickLauncherDerivedCaches()
+            OverlayIconLoader.clear()
+            host.invalidate()
+        }
     }
 
     private val motionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

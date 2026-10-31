@@ -187,13 +187,15 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
                 pm.defaultActivityIcon
             }
             val iconSizePx = (48f * density).roundToInt().coerceAtLeast(32)
-            val bitmap = try {
-                iconDrawable.toBitmap(iconSizePx, iconSizePx, Bitmap.Config.ARGB_8888)
-            } catch (_: Exception) {
-                createBitmap(iconSizePx, iconSizePx).apply {
-                    eraseColor(Color.GRAY)
+            // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
+            val bitmap = com.slideindex.app.ui.AppIconOverride.bitmap(context, pkg, iconSizePx)
+                ?: try {
+                    iconDrawable.toBitmap(iconSizePx, iconSizePx, Bitmap.Config.ARGB_8888)
+                } catch (_: Exception) {
+                    createBitmap(iconSizePx, iconSizePx).apply {
+                        eraseColor(Color.GRAY)
+                    }
                 }
-            }
             val colors = AppCarouselPaletteResolver.resolveCardColors(pkg, bitmap)
             loaded.add(AppCarouselItem(pkg, label, bitmap, colors))
         }

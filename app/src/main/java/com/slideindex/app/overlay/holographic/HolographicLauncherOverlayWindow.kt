@@ -111,6 +111,7 @@ object HolographicLauncherOverlayWindow {
         // 图标一律后台补：resolveApps 只取内存缓存里已有的，缺图的节点在球面上先不画，
         // 补齐后再重排一次（同一个列表 → 位置不变，只是多了图）。
         HolographicLauncherIconLoader.loadMissingIconsAsync(
+            context = hostContext,
             appRepository = appRepository,
             apps = apps,
             onIconsReady = {
@@ -202,10 +203,16 @@ object HolographicLauncherOverlayWindow {
                 HolographicLauncherApp(
                     packageName = info.packageName,
                     label = info.label,
-                    icon = com.slideindex.app.util.CloneBadge.wrap(
-                        appRepository.peekLaunchIconDrawable(info.packageName),
-                        info.cloneUserId > 0,
-                    ),
+                    icon = run {
+                        // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）。
+                        // 预填成系统原图后渲染方不会再查覆盖（真机实测）。
+                        val base = com.slideindex.app.ui.AppIconOverride
+                            .drawable(context, info.packageName, 128)
+                            ?: appRepository.peekLaunchIconDrawable(info.packageName)
+                        base?.let {
+                            com.slideindex.app.util.CloneBadge.wrap(it, info.cloneUserId > 0)
+                        }
+                    },
                     cloneUserId = info.cloneUserId,
                 )
             }

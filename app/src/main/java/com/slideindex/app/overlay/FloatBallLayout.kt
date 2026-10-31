@@ -29,7 +29,6 @@ internal data class FloatBallSize(val widthPx: Int, val heightPx: Int) {
 
 internal object FloatBallLayout {
     private const val EDGE_MARGIN_DP = 8f
-    private const val MIN_CAPTURE_WIDTH_DP = 24f
     private const val MIN_STRIP_HEIGHT_DP = 48f
     private const val MIN_POSITION_Y_FRACTION = FloatBallPositionFractions.MIN_Y
     private const val MAX_POSITION_Y_FRACTION = FloatBallPositionFractions.MAX_Y
@@ -111,10 +110,18 @@ internal object FloatBallLayout {
 
     fun marginPx(density: Float): Int = (EDGE_MARGIN_DP * density).roundToInt()
 
-    fun lineTriggerWidthPx(settings: AppSettings, screenWidth: Int, density: Float): Int {
-        val fractionWidth = (screenWidth * settings.floatBallLineWidthFraction.coerceIn(0.01f, 0.50f)).roundToInt()
-        val minWidth = (MIN_CAPTURE_WIDTH_DP * density).roundToInt()
-        return max(fractionWidth, minWidth)
+    /**
+     * 触发带宽度（px）。
+     *
+     * 由设置里的 dp 值换算，**不再乘屏宽**：横屏 / 折叠展开时窗口变宽，触发带保持同一物理宽度。
+     * 0dp 表示该侧线条只显示、不接收触摸，因此这里允许返回 0（窗口层另有 1px 兜底）。
+     */
+    fun lineTriggerWidthPx(settings: AppSettings, density: Float): Int {
+        val dpWidth = settings.floatBallLineWidthDp.coerceIn(
+            FloatBallSettings.MIN_LINE_WIDTH_DP,
+            FloatBallSettings.MAX_LINE_WIDTH_DP,
+        )
+        return (dpWidth * density).roundToInt().coerceAtLeast(0)
     }
 
     fun lineTriggerHeightPx(settings: AppSettings, screenHeight: Int, density: Float): Int {
@@ -183,7 +190,7 @@ internal object FloatBallLayout {
         screenHeightPx: Int = metrics.heightPixels
     ): Rect {
         val density = metrics.density
-        val width = lineTriggerWidthPx(settings, screenWidthPx, density)
+        val width = lineTriggerWidthPx(settings, density)
         val height = lineTriggerHeightPx(settings, screenHeightPx, density)
         val centerY = dockCenterY(settings, screenHeightPx).roundToInt()
         val top = (centerY - height / 2).coerceIn(0, screenHeightPx - height)

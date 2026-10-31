@@ -528,7 +528,8 @@ class DragDropFlowController(
                 val pkg = engine.targetPackage?.takeIf { it.isNotBlank() } ?: continue
                 val icon = (!engine.iconPath.isNullOrBlank()).let { hasPath ->
                     if (hasPath) runCatching { android.graphics.BitmapFactory.decodeFile(engine.iconPath) }.getOrNull() else null
-                } ?: runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
+                } ?: com.slideindex.app.ui.AppIconOverride.bitmap(context, pkg, 96)
+                ?: runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
                 if (icon != null) {
                     list.add(
                         DragDropFlowItem(
@@ -546,7 +547,8 @@ class DragDropFlowController(
                 val pkg = engine.targetPackage ?: continue
                 val icon = (!engine.iconPath.isNullOrBlank()).let { hasPath ->
                     if (hasPath) runCatching { android.graphics.BitmapFactory.decodeFile(engine.iconPath) }.getOrNull() else null
-                } ?: runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
+                } ?: com.slideindex.app.ui.AppIconOverride.bitmap(context, pkg, 96)
+                ?: runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
                 if (icon != null) {
                     list.add(
                         DragDropFlowItem(
@@ -572,7 +574,8 @@ class DragDropFlowController(
             // 复制、翻译、分享、分词都在「操作」菜单里，不再重复铺到栏上。
             for (engine in latestSettings.dragFlowTextEngines.sortedBy { it.sortOrder }) {
                 val pkgIcon = engine.targetPackage?.let { pkg ->
-                    runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
+                    com.slideindex.app.ui.AppIconOverride.bitmap(context, pkg, 96)
+                        ?: runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96) }.getOrNull()
                 }
                 list.add(
                     DragDropFlowItem(

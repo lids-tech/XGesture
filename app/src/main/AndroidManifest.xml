@@ -247,12 +247,20 @@
             android:taskAffinity=""
             android:theme="@style/Theme.SlideIndex.Transparent" />
 
+        <!--
+            vivo / OriginOS 小窗的启动壳。必须是**导出的、真正的系统分享目标**，并且独占一个任务：
+            系统的「小窗分享」只对这次分享的接收方生效，壳被开成小窗后立刻转发给目标应用。
+            - exported=true：拉起它的是系统分享流程（别的进程），非导出拉不起来，也不出现在分享目标里。
+            - singleInstance + clearTaskOnLaunch：小窗要对应一个独立任务，和调用方挤在一起不成立。
+            - 不能加 noHistory：一创建就销毁的话，小窗容器撑不到目标应用接手。
+            - 透明主题：这一帧不能被看见。
+        -->
         <activity
             android:name=".service.FreeWindowShareProxyActivity"
+            android:clearTaskOnLaunch="true"
             android:excludeFromRecents="true"
-            android:exported="false"
-            android:noHistory="true"
-            android:taskAffinity=""
+            android:exported="true"
+            android:launchMode="singleInstance"
             android:theme="@style/Theme.SlideIndex.Transparent">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -399,6 +407,13 @@
 
         <activity
             android:name=".service.IconLibraryPickerTrampolineActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SlideIndex" />
+
+        <activity
+            android:name=".service.IconPackPickerTrampolineActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:taskAffinity=""

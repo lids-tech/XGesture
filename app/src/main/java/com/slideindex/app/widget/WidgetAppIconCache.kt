@@ -41,6 +41,12 @@ internal object WidgetAppIconCache {
     }
     val appContext = context.applicationContext
     scope.launch {
+      // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）；覆盖图不写 LruCache，
+      // 否则改完图标后这个按包名缓存的旧图会一直返回。
+      com.slideindex.app.ui.AppIconOverride.bitmap(appContext, packageName, ICON_PX)?.let { override ->
+        mainHandler.post { onLoaded(override) }
+        return@launch
+      }
       val bitmap = runCatching {
         appContext.packageManager.getApplicationIcon(packageName)
           .toBitmap(width = ICON_PX, height = ICON_PX)

@@ -30,7 +30,7 @@ class FloatBallBothLinesHitRectTest {
       FloatBallSettings(
         floatBallPositionMode = FloatBallPositionMode.BOTH_LINES,
         floatBallActiveSide = FloatBallSide.RIGHT,
-        floatBallLineWidthFraction = 0.10f,
+        floatBallLineWidthDp = 40f,
         floatBallLineHeightFraction = 0.20f,
         floatBallPositionYFraction = 0.5f,
       ),

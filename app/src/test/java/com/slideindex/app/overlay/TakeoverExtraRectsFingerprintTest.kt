@@ -90,6 +90,13 @@ class TakeoverExtraRectsFingerprintTest {
     }
 
     @Test
+    fun changingLineWidthDp_changesFingerprint() {
+        val base = bothEdges()
+        val wider = base.withBall { copy(floatBallLineWidthDp = floatBallLineWidthDp + 24f) }
+        assertNotEquals(fingerprint(base), fingerprint(wider))
+    }
+
+    @Test
     fun leavingBothEdgesMode_changesFingerprint() {
         val base = bothEdges()
         val single = base.withBall { copy(floatBallPositionMode = FloatBallPositionMode.LEFT) }
