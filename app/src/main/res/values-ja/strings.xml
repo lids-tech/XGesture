@@ -4325,6 +4325,9 @@
     <string name="float_ball_pick_image_toolbar_position">画像エリアのツールバーの位置</string>
     <string name="float_ball_pick_image_toolbar_position_left">左側</string>
     <string name="float_ball_pick_image_toolbar_position_right">右側</string>
+    <string name="float_ball_drag_pick_enabled">フローティングボールのドラッグで単語抽出</string>
+    <string name="float_ball_drag_pick_enabled_desc">オフにすると、ドラッグしても抽出の十字カーソルやテキスト選択が表示されません。位置を移動するには、ボールを長押ししてリングツールバーの「移動」を使用します</string>
+    <string name="float_ball_drag_paste_requires_pick">上の「フローティングボールのドラッグで単語抽出」をオンにしてください</string>
     <string name="float_ball_drag_paste_enabled">フローティングボールをドラッグしてペースト</string>
     <string name="float_ball_drag_paste_enabled_desc">入力欄にカーソルを合わせてマウスボタンを離すと、クリップボード履歴の最新の項目がその入力欄に貼り付けられます（単語抽出パネルは開きません）。</string>
     <string name="widget_panel_add_page">パネルの追加</string>
@@ -4413,6 +4416,7 @@
     <string name="settings_app_language_label_en">English</string>
     <string name="settings_app_language_label_ja">日本語</string>
     <string name="settings_app_language_label_ar">العربية</string>
+    <string name="settings_app_language_label_ru">Русский</string>
     <string name="otp_autofill_reason_paste_fallback">キー注入に失敗したため、Ctrl+V 貼り付けにフォールバックしました</string>
     <string name="otp_autofill_reason_a11y_not_connected">アクセシビリティサービスが接続されておらず、システム注入でもコードを入力できませんでした</string>
     <string name="otp_autofill_reason_no_result">入力結果が返ってきませんでした（オーバーレイプロセスが起動していない、またはリクエストが失われた可能性があります）</string>

@@ -2962,8 +2962,11 @@ object FloatBallOverlay {
             line.visibility = if (visible) View.VISIBLE else View.GONE
         }
         // 单线模式：线由条带窗画；线窗只在双线模式下画"球所在那一侧"。
-        val showLeft = visible && bothLines && activeSide == FloatBallSide.RIGHT
-        val showRight = visible && bothLines && activeSide == FloatBallSide.LEFT
+        // 双线模式：左窗画左边那条、右窗画右边那条；球所在侧那条由"球侧窗"负责。
+        // ⚠ 之前两个条件写反了：球在右侧时反而让左窗再画一次左边，
+        //    结果球侧（右）那条永远不画 —— 表现就是"一侧有线、对侧没有线但能触发"。
+        val showLeft = visible && bothLines && activeSide == FloatBallSide.LEFT
+        val showRight = visible && bothLines && activeSide == FloatBallSide.RIGHT
         val leftStrip = FloatBallLayout.lineStripBounds(
             settings, metrics, FloatBallSide.LEFT, screenW, screenH,
         )
@@ -3025,7 +3028,10 @@ object FloatBallOverlay {
             }
             return
         }
-        state.ballVisible.value = true
+        // 「两侧都是线」空闲时只画线、不画球（球在开始拖动时才浮现）。
+        // 以前这条规则由空闲层里的 FloatBallIdleBallChrome 提前 return 保证；
+        // 现在球由独立小窗常显，必须在这里把球隐掉，否则会变成"一边球一边线"。
+        state.ballVisible.value = !FloatBallLayout.isBothLines(settings)
         state.lineVisible.value = FloatBallLayout.shouldShowLine(settings)
         touchHost?.ballStripTouchable = true
         lineTouchHost?.stripTouchable = true
@@ -3609,6 +3615,29 @@ object FloatBallOverlay {
             flushDragChromeLayout()
             return
         }
+        // 关闭「拖动悬浮球取词」：这条拖动不进取词链路 —— 不显示十字/预览/选区，松手也不弹面板。
+        // 与移动模式的区别：球照旧跟手，滑动手势与线条换边照旧，只是不取词。
+        if (!settings.floatBallDragPickEnabled) {
+            cancelDragChromeLayoutFrame()
+            cancelCursorCommitFrame()
+            pendingPickAnchor = null
+            selectionStartState?.value = null
+            selectionPreviewBoundsState?.value = null
+            cursorVisibleState?.value = false
+            cursorPausedState?.value = false
+            dragScreenBounds = FloatBallScreenMetrics.bounds(view.context, windowManager)
+            setCursorLayersVisible(false)
+            flushDragChromeLayout()
+            if (!promotingFromSlop) {
+                applyImmediateDragStartVisual(
+                    deferBallWindowMutation || fromEdgeGesture,
+                    showCursorLayers = false,
+                )
+            } else {
+                settingsState?.value?.let { updateChromeVisibility(it) }
+            }
+            return
+        }
         cancelDragChromeLayoutFrame()
         cancelCursorCommitFrame()
         pendingPickAnchor = null
@@ -3721,6 +3750,8 @@ object FloatBallOverlay {
     private fun onDragMoved() {
         // 移动模式：只挪球，不调度取词那一套（暂停计时、预览缓存）。
         if (moveModeActive) return
+        // 关掉「拖动悬浮球取词」后同理：拖动期间不排悬停计时、不刷预览缓存。
+        if (settingsState?.value?.floatBallDragPickEnabled == false) return
         val start = selectionStartState?.value
         if (start != null) {
             val anchor = currentPickAnchor()
