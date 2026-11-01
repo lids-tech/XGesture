@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -38,6 +39,7 @@ import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.launcher.showsShellActivityShortcutBadge
 import com.slideindex.app.overlay.ShellCommandBadgeOverlay
 import com.slideindex.app.overlay.ShortcutBadgeOverlay
+import com.slideindex.app.overlay.layout.QuickWheelLayoutEngine
 import com.slideindex.app.overlay.layout.QuickWheelStyleSpec
 import com.slideindex.app.settings.QuickWheelIconSource
 import com.slideindex.app.settings.QuickWheelSlot
@@ -46,6 +48,9 @@ import com.slideindex.app.ui.gestureActionIcon
 private val ContainerSurface = Color(0xFFFFFFFF)
 private val ContainerIconTint = Color(0xDE000000)
 private val ContainerLabel = Color(0xCC000000)
+/** 深色容器底上的图标 / 文字颜色（用户把容器调成深色时自动切换）。 */
+private val ContainerIconTintOnDark = Color(0xDEFFFFFF)
+private val ContainerLabelOnDark = Color(0xCCFFFFFF)
 private val ContainerHighlight = Color(0xFF3478F6)
 /**
  * 用户主动留出的空位（「空白占位」）在**预览 / 配置**里的"空白阴影"外观。
@@ -57,11 +62,17 @@ private val ContainerAddBorder = Color(0x1F000000)
 private val ContainerEmptyIcon = Color(0x99000000)
 private const val PLUS_STROKE_DP = 1.8f
 
+/** 高亮（拖动 / 悬停）时在原阴影上额外加的高度（dp）。 */
+private const val HIGHLIGHT_SHADOW_BOOST_DP = 6f
+
 /**
  * 单个轮盘容器的视觉实现（浮层 / 画布 / 配置页预览复用）。
  *
- * 手势由调用方通过 [modifier] 施加；本组件只负责圆角、图标、文字标签与选中高亮。
+ * 手势由调用方通过 [modifier] 施加；本组件只负责圆角、背景色/透明度/阴影、图标、文字标签与选中高亮。
  * 图标解析顺序：内置图标库矢量 → 应用图标 / 图库位图 → 回退到该容器单击动作的图标。
+ *
+ * 背景色 / 不透明度 / 阴影高度取自 [style]（一级、二级各一套，见 `QuickWheelStyleSpec`）。
+ * 背景偏暗时图标与标签自动转白，避免"调成黑底后什么都看不见"。
  */
 @Composable
 fun QuickWheelContainer(
@@ -87,6 +98,16 @@ fun QuickWheelContainer(
     }.coerceIn(6f, 16f).sp
     val shape = RoundedCornerShape(cornerDp)
 
+    // 容器外观：颜色 / 不透明度 / 阴影高度（一级、二级各一套，来自 QuickWheelStyleSpec）。
+    val containerColor = Color(style.containerColorArgb).copy(
+        alpha = QuickWheelLayoutEngine.clampContainerAlphaPercent(style.containerAlphaPercent) / 100f,
+    )
+    val shadowDp = QuickWheelLayoutEngine.clampContainerShadowDp(style.containerShadowDp)
+    // 深色底自动转白，避免"调成黑底后图标看不见"。
+    val darkSurface = containerColor.luminance() <= 0.5f
+    val iconTint = if (darkSurface) ContainerIconTintOnDark else ContainerIconTint
+    val labelColor = if (darkSurface) ContainerLabelOnDark else ContainerLabel
+
     // placeholder：用户主动留出的空位（预览 / 配置显示"空白阴影"，运行时由 PlacedContainer 跳过）。
     // 其余容器一律是真实容器——哪怕点击 / 长按都没设动作，也渲染成"全白空图标"。
     val isEmptyGap = !slot.isConfigured && slot.placeholder
@@ -104,9 +125,16 @@ fun QuickWheelContainer(
                         .border(width = 1.dp, color = ContainerPlaceholderBorder, shape = shape)
                 } else {
                     Modifier
-                        .shadow(elevation = if (highlighted) 10.dp else 4.dp, shape = shape)
+                        .shadow(
+                            elevation = (if (highlighted) {
+                                shadowDp + HIGHLIGHT_SHADOW_BOOST_DP
+                            } else {
+                                shadowDp
+                            }).dp,
+                            shape = shape,
+                        )
                         .clip(shape)
-                        .background(ContainerSurface)
+                        .background(containerColor)
                         // 普通态不再描边：图标贴满时那 1dp 会压在图标边缘上，看着像图标自带一圈边框。
                         // 只保留"高亮"（拖动 / 悬停）时的 2dp 蓝框作为选中提示。
                         .then(
@@ -147,12 +175,13 @@ fun QuickWheelContainer(
                 slot = slot,
                 builtinDp = builtinIconDp * badgeShrink,
                 rasterDp = rasterIconDp * badgeShrink,
+                tint = iconTint,
             )
             if (style.showLabels && slot.name.isNotBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = slot.name,
-                    color = ContainerLabel,
+                    color = labelColor,
                     fontSize = labelSize,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -214,7 +243,7 @@ fun QuickWheelAddContainer(
  *
  * @param builtinDp 矢量 / 文字图标边长（受「内置图标大小系数」影响）
  * @param rasterDp 位图（应用图标 / 图库 / 动作真实图标）边长
- * @param tint 矢量 / 文字图标颜色。默认深色（白底容器上用）；深色背景（HUD）传浅色即可，
+ * @param tint 矢量 / 文字图标颜色。默认深色（白底容器上用）；深色背景时由调用方传浅色，
  *   位图图标不受 tint 影响
  * @param badgeAction 角标依据的动作；默认 = 单击动作（图标只跟单击动作走；HUD 在「按满」时传长按动作）
  */

@@ -502,6 +502,14 @@ object QuickWheelCodec {
             // 第 12 段（索引 11）为矩形列数；旧记录没有这段 → 用默认列数（向后兼容）。
             columnCount = parts.getOrNull(11)?.toIntOrNull()
                 ?: QuickWheelLayoutEngine.DEFAULT_COLUMN_COUNT,
+            // 第 13–15 段（索引 12–14）：容器颜色 / 不透明度 / 阴影。
+            // 旧记录没有这几段 → 一律回落到默认值（白 / 100% / 4dp），外观与升级前完全一致。
+            containerColorArgb = parts.getOrNull(12)?.toLongOrNull()
+                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB,
+            containerAlphaPercent = parts.getOrNull(13)?.toIntOrNull()
+                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_ALPHA_PERCENT,
+            containerShadowDp = parts.getOrNull(14)?.toFloatOrNull()
+                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_SHADOW_DP,
         )
     }
 
@@ -752,7 +760,10 @@ object QuickWheelCodec {
 
     /** 编码一套样式，并在末尾追加矩形列数。 */
     private fun encodeStyleWithColumn(style: QuickWheelStyleSpec): String =
-        encodeStyle(style) + STYLE_SEP + style.columnCount
+        encodeStyle(style) + STYLE_SEP + style.columnCount +
+            STYLE_SEP + style.containerColorArgb +
+            STYLE_SEP + style.containerAlphaPercent +
+            STYLE_SEP + style.containerShadowDp
 
     /**
      * 解码"当前形态样式 + 另一形态样式"。

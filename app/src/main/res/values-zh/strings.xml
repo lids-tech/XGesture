@@ -4832,4 +4832,9 @@ adb 模式应返回 uid=2000。
     <string name="share_sheet_toggle_title">内置分享面板</string>
     <string name="share_sheet_toggle_desc">用网格面板代替系统分享面板：可钉住常用目标、跳过系统界面</string>
     <string name="share_sheet_settings_pin_tip">提示：钉住的目标保存在本地，再长按一次即可取消。</string>
-</resources>
+    <string name="quick_wheel_container_color">容器颜色</string>
+    <string name="quick_wheel_container_color_desc">容器背景色；深色底时图标与文字会自动转白</string>
+    <string name="quick_wheel_container_alpha">容器不透明度</string>
+    <string name="quick_wheel_container_alpha_desc">0% = 完全透明（只剩图标），100% = 不透明</string>
+    <string name="quick_wheel_container_shadow">容器阴影</string>
+    <string name="quick_wheel_container_shadow_desc">0 = 无阴影；越大悬浮感越强</string></resources>

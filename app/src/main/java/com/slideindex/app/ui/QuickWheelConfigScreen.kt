@@ -5,6 +5,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -805,6 +810,50 @@ fun QuickWheelConfigScreen(
                         // 背景模糊 / 遮罩也属于外观：放在外观设置最底下，拖动同样会浮出实时预览
                         // （遮罩页内可见；模糊是跨窗口效果，请看「轮盘预览」）。
                         add(
+                            settingsCardScopeItem("container-color") {
+                                QuickWheelColorRow(
+                                    title = stringResource(R.string.quick_wheel_container_color),
+                                    description = stringResource(R.string.quick_wheel_container_color_desc),
+                                    argb = levelStyle.containerColorArgb,
+                                    onPick = { color ->
+                                        updateStyle { it.copy(containerColorArgb = color) }
+                                    },
+                                )
+                            }
+                        )
+                        add(
+                            settingsCardScopeItem("container-alpha") {
+                                QuickWheelSliderRow(
+                                    title = stringResource(R.string.quick_wheel_container_alpha),
+                                    description = stringResource(R.string.quick_wheel_container_alpha_desc),
+                                    value = levelStyle.containerAlphaPercent.toFloat(),
+                                    range = QuickWheelLayoutEngine.MIN_CONTAINER_ALPHA_PERCENT.toFloat()..
+                                        QuickWheelLayoutEngine.MAX_CONTAINER_ALPHA_PERCENT.toFloat(),
+                                    unit = "%",
+                                    onValueChange = { value ->
+                                        updateStyle {
+                                            it.copy(containerAlphaPercent = value.roundToInt())
+                                        }
+                                    },
+                                )
+                            }
+                        )
+                        add(
+                            settingsCardScopeItem("container-shadow") {
+                                QuickWheelSliderRow(
+                                    title = stringResource(R.string.quick_wheel_container_shadow),
+                                    description = stringResource(R.string.quick_wheel_container_shadow_desc),
+                                    value = levelStyle.containerShadowDp,
+                                    range = QuickWheelLayoutEngine.MIN_CONTAINER_SHADOW_DP..
+                                        QuickWheelLayoutEngine.MAX_CONTAINER_SHADOW_DP,
+                                    unit = "dp",
+                                    onValueChange = { value ->
+                                        updateStyle { it.copy(containerShadowDp = value) }
+                                    },
+                                )
+                            }
+                        )
+                        add(
                             settingsCardScopeItem("backdrop-blur") {
                                 QuickWheelSliderRow(
                                     title = stringResource(R.string.quick_wheel_backdrop_blur),
@@ -1226,3 +1275,139 @@ private fun previewBlurSigmaDp(blurDp: Int, density: Float): Float {
     val radiusPx = (blurDp * safeDensity).coerceIn(1f, OVERLAY_BLUR_MAX_RADIUS_PX)
     return radiusPx / 2f / safeDensity
 }
+
+
+// ── 容器颜色 / 不透明度 / 阴影 ──────────────────────────────
+
+/** 容器颜色行：右侧色块，点击打开 HSV 取色弹窗。 */
+@Composable
+private fun QuickWheelColorRow(
+    title: String,
+    description: String,
+    argb: Long,
+    onPick: (Long) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showPicker = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(argb))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(8.dp),
+                ),
+        )
+    }
+    if (showPicker) {
+        QuickWheelColorPickerDialog(
+            initial = argb,
+            onDismiss = { showPicker = false },
+            onConfirm = { picked ->
+                onPick(picked)
+                showPicker = false
+            },
+        )
+    }
+}
+
+/** HSV 取色弹窗：色相 / 饱和度 / 明度三条滑条 + 预览块（不引第三方控件）。 */
+@Composable
+private fun QuickWheelColorPickerDialog(
+    initial: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (Long) -> Unit,
+) {
+    val start = Color(initial)
+    var hue by remember { mutableStateOf(start.toHsvHue()) }
+    var saturation by remember { mutableStateOf(start.toHsvSaturation()) }
+    var brightness by remember { mutableStateOf(start.toHsvValue()) }
+    val picked = Color.hsv(hue, saturation, brightness)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.quick_wheel_container_color)) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(picked)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(12.dp),
+                        ),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                QuickWheelSliderRow(
+                    title = "H",
+                    description = "",
+                    value = hue,
+                    range = 0f..360f,
+                    unit = "°",
+                    onValueChange = { hue = it },
+                )
+                QuickWheelSliderRow(
+                    title = "S",
+                    description = "",
+                    value = saturation * 100f,
+                    range = 0f..100f,
+                    unit = "%",
+                    onValueChange = { saturation = it / 100f },
+                )
+                QuickWheelSliderRow(
+                    title = "V",
+                    description = "",
+                    value = brightness * 100f,
+                    range = 0f..100f,
+                    unit = "%",
+                    onValueChange = { brightness = it / 100f },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(picked.toArgb().toLong() and 0xFFFFFFFFL) },
+            ) {
+                Text(stringResource(R.string.quick_wheel_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+private fun Color.toHsvHue(): Float = FloatArray(3).also {
+    android.graphics.Color.colorToHSV(toArgb(), it)
+}[0]
+
+private fun Color.toHsvSaturation(): Float = FloatArray(3).also {
+    android.graphics.Color.colorToHSV(toArgb(), it)
+}[1]
+
+private fun Color.toHsvValue(): Float = FloatArray(3).also {
+    android.graphics.Color.colorToHSV(toArgb(), it)
+}[2]

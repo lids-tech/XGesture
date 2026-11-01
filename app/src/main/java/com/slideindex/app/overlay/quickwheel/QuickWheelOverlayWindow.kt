@@ -301,6 +301,16 @@ object QuickWheelOverlayWindow {
                 marginPx = QuickWheelLayoutEngine.ADAPTIVE_MARGIN_DP * density,
             )
         }
+        // 横向偏移（primaryStyle.offsetXDp）应当是「向内收」的语义：
+        // 从右侧呼出时 -7 = 往左收、远离右边缘；但同一个 -7 从左侧呼出会把轮盘推出左边缘。
+        // 这里按呼出侧把它镜像：左侧呼出等价于 +7。
+        // 引擎内部固定按 +offsetX 平移整组容器，所以镜像后的锚点要先补偿 2*offset。
+        val offsetXPx = wheel.primaryStyle.offsetXDp * density
+        val renderAnchorX = if (anchorX < screenWidthPx / 2f) {
+            anchorX - 2f * offsetXPx
+        } else {
+            anchorX
+        }
 
         activeExecutor = actionExecutor
         activeSettings = settings
@@ -362,7 +372,7 @@ object QuickWheelOverlayWindow {
                         } else {
                             QuickWheelOverlayContent(
                                 wheel = editorWheel,
-                                anchorX = anchorX,
+                                anchorX = renderAnchorX,
                                 anchorY = anchorY,
                                 screenWidthPx = screenWidthPx,
                                 screenHeightPx = screenHeightPx,
