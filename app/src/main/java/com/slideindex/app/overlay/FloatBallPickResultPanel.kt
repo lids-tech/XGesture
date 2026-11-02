@@ -35,6 +35,7 @@ import com.slideindex.app.overlay.compositor.OverlaySceneController
 import com.slideindex.app.imageeditor.ImageEditorPickReturnContext
 import com.slideindex.app.imageeditor.ImageEditorSavedImageDeleteScheduler
 import com.slideindex.app.overlay.pickresult.FloatBallPickResultContent
+import com.slideindex.app.overlay.pickresult.PickResultQrOverlayWindow
 import com.slideindex.app.overlay.pickresult.PickResultTextMode
 import com.slideindex.app.overlay.pickresult.PickResultTextModeStore
 import com.slideindex.app.overlay.pickresult.preloadPickResultSearchEngineIcons
@@ -1206,6 +1207,15 @@ object FloatBallPickResultPanel {
                         // 分享面板点中目标前会调这个 lambda 收起本面板，避免目标 App 被它盖住。
                         FloatBallTextPick.shareText(context, it) { dismiss() }
                     },
+                    onProcessText = { value, target ->
+                        // 同分享：切出去之前先收面板，目标 App 才不会被浮窗盖住。
+                        FloatBallTextPick.processText(
+                            context = context,
+                            text = value,
+                            targetPackage = target.packageName,
+                            targetActivity = target.activityName,
+                        ) { dismiss() }
+                    },
                     onTranslate = { FloatBallTranslateCoordinator.translate(context, it) },
                     onRemoveSpaces = { value, removeAll ->
                         textHolder.value = if (removeAll) {
@@ -1331,9 +1341,7 @@ object FloatBallPickResultPanel {
                             )
                         }
                         if (launched) {
-                            if (engine.engineType != SearchEngineType.SHARE_TO_APP) {
-                                SearchPanelQueryBridge.rememberQuery(context, query)
-                            }
+                            SearchPanelQueryBridge.rememberQuery(context, query)
                             dismiss()
                         }
                     },
@@ -1356,9 +1364,7 @@ object FloatBallPickResultPanel {
                                 )
                             }
                             if (launched) {
-                                if (engine.engineType != SearchEngineType.SHARE_TO_APP) {
-                                    SearchPanelQueryBridge.rememberQuery(context, query)
-                                }
+                                SearchPanelQueryBridge.rememberQuery(context, query)
                                 dismiss()
                             }
                         }
@@ -1378,6 +1384,13 @@ object FloatBallPickResultPanel {
                                 )
                             )
                         }
+                    },
+                    onGenerateQr = { value ->
+                        PickResultQrOverlayWindow.show(
+                            context = overlayContext,
+                            settings = settingsHolder.value,
+                            text = value,
+                        )
                     },
                     onPinImageToScreen = {
                         val bitmap = screenshotHolder.value ?: return@FloatBallPickResultContent

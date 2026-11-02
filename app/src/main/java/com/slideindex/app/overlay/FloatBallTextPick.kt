@@ -184,6 +184,44 @@ object FloatBallTextPick {
         Toast.makeText(context, R.string.float_ball_translate_app_not_found_copied, Toast.LENGTH_SHORT).show()
     }
 
+    /**
+     * 取词面板「用其他应用处理」：把文字交给用户选中的那个 `PROCESS_TEXT` 入口。
+     *
+     * 不用系统选择器：部分 ROM（实测 Flyme）会把 PROCESS_TEXT 的候选收敛成系统翻译一个，
+     * 选择器按「单候选自动启动」直接跳翻译页。这里按 component 明确启动，绕开选择器。
+     *
+     * 浮窗必须先把面板收起：取词面板是 `TYPE_APPLICATION_OVERLAY`，不收起来会压在
+     * 目标 App 上面（和分享面板的 `dismissSource` 同一个道理）。
+     */
+    fun processText(
+        context: Context,
+        text: String,
+        targetPackage: String,
+        targetActivity: String,
+        dismissSource: (() -> Unit)? = null,
+    ): Boolean {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || targetPackage.isBlank() || targetActivity.isBlank()) return false
+
+        val intent = Intent(Intent.ACTION_PROCESS_TEXT).apply {
+            type = "text/plain"
+            setClassName(targetPackage, targetActivity)
+            putExtra(Intent.EXTRA_PROCESS_TEXT, trimmed)
+            // 取词面板不是可编辑的文本框：按只读语义交出去，目标 App 不会以为要回填。
+            putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { dismissSource?.invoke() }
+        return runCatching {
+            context.startActivity(intent)
+            true
+        }.getOrElse {
+            copyText(context, trimmed)
+            Toast.makeText(context, R.string.pick_result_process_text_failed, Toast.LENGTH_SHORT).show()
+            false
+        }
+    }
+
     /** 按 [TranslateLaunchPlanner] 给出的顺序尝试把文本交给 [targetPackage]；全都失败返回 false。 */
     private fun launchToTranslateApp(context: Context, text: String, targetPackage: String): Boolean {
         val channels = TranslateLaunchPlanner.plan(
