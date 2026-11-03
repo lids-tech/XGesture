@@ -154,6 +154,19 @@ object EdgeCardOverlayWindow {
 
         val existing = entries.firstOrNull { it.matches(plan.data) && !it.preview }
         if (existing != null) {
+            // 窗口可能在上一次锁屏挂起 / 建窗失败后变成空壳：这里必须重建，否则该会话后续
+            // 每条消息都只更新内容、永远不再建窗（表现为「日志一直打 autoCollapse，但屏幕没卡」）。
+            val rebuilt = if (existing.view == null || existing.params == null) {
+                if (!ensureWindow(existing, hostContext)) {
+                    Log.w(TAG, "rebuild window failed, dropping entry key=${existing.key}")
+                    removeEntry(existing, notifyDismiss = false)
+                    return
+                }
+                relayout()
+                true
+            } else {
+                false
+            }
             val changed = NotificationContentGate.signature(existing.plan.data) != NotificationContentGate.signature(plan.data)
             // 角标按“本会话收到的条数”累计，不再取通知的 number：微信/QQ 把 number 设成
             // 整个 App 的未读总数，混进来会显示成 99+ 并且永远减不下来。
@@ -173,7 +186,7 @@ object EdgeCardOverlayWindow {
             if (changed) moveToTop(existing)
             // 同会话来新消息：窗口直接瞬移到展开位，再播一次“从屏外滑入”的入场动画。
             applyEntry(existing, animated = false)
-            if (changed) {
+            if (changed || rebuilt) {
                 existing.view?.playEntrance(1f)
                 scheduleAutoCollapse(existing)
             }
@@ -191,7 +204,11 @@ object EdgeCardOverlayWindow {
         entry.dismissCallback = onDismiss
         entries.add(0, entry)
         trimToCount(plan.settings)
-        ensureWindow(entry, hostContext)
+        if (!ensureWindow(entry, hostContext)) {
+            Log.w(TAG, "create window failed, dropping entry key=${entry.key}")
+            removeEntry(entry, notifyDismiss = false)
+            return
+        }
         relayout()
         // 先挂计时器再展开：展开会启动滚动，滚动启动时会把计时器取消掉（内容溢出场景）。
         scheduleAutoCollapse(entry)
@@ -251,7 +268,10 @@ object EdgeCardOverlayWindow {
         entry.actionCallback = {}
         entry.dismissCallback = {}
         entries.add(entry)
-        ensureWindow(entry, hostContext)
+        if (!ensureWindow(entry, hostContext)) {
+            entries.remove(entry)
+            return
+        }
         Log.d(
             TAG,
             "installPreview done entries=${entries.size} view=${entry.view != null} " +
@@ -342,8 +362,14 @@ object EdgeCardOverlayWindow {
         trimToCount(entries.first().plan.settings)
         entries.toList().forEach { entry ->
             if (entry.view == null) {
-                ensureWindow(entry, hostContext)
-                applyEntry(entry, animated = false)
+                if (ensureWindow(entry, hostContext)) {
+                    applyEntry(entry, animated = false)
+                } else {
+                    // 重建失败：丢掉空壳，避免留下永远不显示的卡。
+                    cancelAutoCollapse(entry)
+                    entries.remove(entry)
+                    Log.w(TAG, "replay drop entry key=${entry.key}")
+                }
             }
         }
         relayout()
@@ -583,7 +609,8 @@ object EdgeCardOverlayWindow {
         params.gravity = Gravity.TOP or Gravity.START
     }
 
-    private fun ensureWindow(entry: EdgeCardEntry, hostContext: Context) {
+    /** 建窗口。返回 false 表示这次没挂上，调用方必须丢弃该 entry，避免留下永远不显示的僵尸卡。 */
+    private fun ensureWindow(entry: EdgeCardEntry, hostContext: Context): Boolean {
         val settings = entry.plan.settings
         val view = EdgeCardView(hostContext).apply {
             exclusionEdge = settings.edgeCardHorizontalEdge
@@ -664,16 +691,16 @@ object EdgeCardOverlayWindow {
 
         val wm = windowManager
         if (wm == null) {
-            Log.d(TAG, "ensureWindow skipped: windowManager null")
-            return
+            Log.d(TAG, "ensureWindow skipped: windowManager null key=${entry.key}")
+            return false
         }
         val added = runCatching { wm.addView(view, params) }
-            .onFailure { Log.e(TAG, "addView failed", it) }
+            .onFailure { Log.e(TAG, "addView failed key=${entry.key}", it) }
             .isSuccess
         if (!added) {
             entry.view = null
             entry.params = null
-            return
+            return false
         }
         Log.d(
             TAG,
@@ -682,6 +709,7 @@ object EdgeCardOverlayWindow {
                 "screenW=${screenWidth()}",
         )
         view.post { relayout() }
+        return true
     }
 
     private fun computeTops(settings: MessageSettings, count: Int): List<Int> {
@@ -783,12 +811,10 @@ object EdgeCardOverlayWindow {
                     scheduleAutoCollapse(entry)
                     applyEntry(entry, animated = true)
                 } else {
-                    val action = settings.singleTapAction
-                    if (action == MessageAction.Ignore) {
-                        openConversation(entry)
-                    } else {
-                        dispatch(entry, action)
-                    }
+                    // 展开态单击严格按「手势动作 → 单击」执行：Ignore 就是忽略（关卡片、不跳转）。
+                    // 以前把 Ignore 当"没配过"的哨兵直接打开会话，而它恰好也是默认值，
+                    // 于是设置页显示"忽略"、实际却跳转 APP。
+                    dispatch(entry, settings.singleTapAction)
                 }
             }
             EdgeCardSwipe.Expand -> {
@@ -842,12 +868,6 @@ object EdgeCardOverlayWindow {
         if (view.isAttachedToWindow) {
             runCatching { windowManager?.updateViewLayout(view, params) }
         }
-    }
-
-    private fun openConversation(entry: EdgeCardEntry) {
-        val action = entry.actionCallback
-        mainHandler.post { removeEntry(entry, notifyDismiss = false) }
-        action?.invoke(MessageAction.Read)
     }
 
     private fun dispatchOrKeep(entry: EdgeCardEntry, action: MessageAction) {
@@ -1197,6 +1217,9 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
     private val fallbackView = TextView(context)
     private val badgeView = TextView(context)
     private val titleView = TextView(context)
+    private val senderView = TextView(context)
+    /** 标题行：群名（左，可截断）+ 发言人（右，灰色小字）。 */
+    private val headerRow = LinearLayout(context)
     private val contentView = TextView(context)
     /** 38dp 头像容器：图标 30dp 缩进 4dp，角标也挂在这一层，正好压在圆形图标左上角。 */
     private val avatarContainer = FrameLayout(context)
@@ -1232,6 +1255,13 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         titleView.setTypeface(titleView.typeface, android.graphics.Typeface.BOLD)
         titleView.includeFontPadding = false
+        // 群聊时在标题右侧显示发言人（来自 MessagingStyle 的 sender，不用标题里的冒号猜）。
+        senderView.maxLines = 1
+        senderView.ellipsize = TextUtils.TruncateAt.END
+        senderView.setTextColor(Color.parseColor("#9AA0A6"))
+        senderView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        senderView.includeFontPadding = false
+        senderView.visibility = View.GONE
         contentView.maxLines = 1
         contentView.isSingleLine = true
         contentView.ellipsize = TextUtils.TruncateAt.MARQUEE
@@ -1242,7 +1272,17 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
 
         textLayer.orientation = LinearLayout.VERTICAL
         textLayer.gravity = Gravity.CENTER_VERTICAL
-        textLayer.addView(titleView, LinearLayout.LayoutParams(-1, -2))
+        headerRow.orientation = LinearLayout.HORIZONTAL
+        headerRow.gravity = Gravity.CENTER_VERTICAL
+        headerRow.addView(
+            titleView,
+            LinearLayout.LayoutParams(0, -2, 1f),
+        )
+        headerRow.addView(
+            senderView,
+            LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(4) },
+        )
+        textLayer.addView(headerRow, LinearLayout.LayoutParams(-1, -2))
         textLayer.addView(
             contentView,
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) },
@@ -1326,6 +1366,9 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
             fallbackView.visibility = View.VISIBLE
         }
         titleView.text = title
+        val sender = NotificationData.overlaySenderName(data)
+        senderView.text = sender
+        senderView.visibility = if (sender.isEmpty()) View.GONE else View.VISIBLE
         contentView.text = data.content
         val badge = state.badgeText()
         if (badge != null) {
@@ -1381,8 +1424,15 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         // 宽度按内容算：图标区固定，文字区取标题/正文里较宽的那个，限制在 40..120dp。
         val maxText = dp(120)
         val minText = dp(40)
+        // 群聊时把发言人宽度一起算进去，避免标题把发送者挤没。
+        val senderW = if (senderView.visibility == View.VISIBLE) {
+            measureTextWidth(senderView, dp(60))
+        } else {
+            0
+        }
+        val titleAvail = (maxText - senderW - dp(4)).coerceAtLeast(dp(24))
         val textW = maxOf(
-            measureTextWidth(titleView, maxText),
+            measureTextWidth(titleView, titleAvail) + senderW + dp(4),
             measureTextWidth(contentView, maxText),
         ).coerceIn(minText, maxText)
         val totalW = dp(48) + textW + dp(8)
@@ -1409,7 +1459,8 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
                 contentView.layoutParams = it
             }
         }
-        val textHeight = titleView.measuredHeight + dp(2) + contentHeight
+        val textHeight = maxOf(titleView.measuredHeight, senderView.measuredHeight) +
+            dp(2) + contentHeight
         val cardHeight = maxOf(textHeight + dp(8), dp(42))
         val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.AT_MOST) {
             minOf(cardHeight, MeasureSpec.getSize(heightMeasureSpec).takeIf { it > 0 } ?: cardHeight)

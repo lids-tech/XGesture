@@ -1,5 +1,6 @@
 package com.slideindex.app.overlay.carousel
 
+import android.accessibilityservice.AccessibilityService
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.usage.UsageStatsManager
@@ -13,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -20,11 +22,14 @@ import android.view.animation.DecelerateInterpolator
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import com.slideindex.app.R
+import com.slideindex.app.service.SlideIndexAccessibilityService
 import com.slideindex.app.settings.AppCarouselSwitcherSettings
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.util.HapticHelper
 import com.slideindex.app.util.PermissionHelper
+import com.slideindex.app.util.RecentTasksLoader
 import com.slideindex.app.util.TaskManagerUtil
+import com.slideindex.app.util.TaskSwitcherMenuActions
 import kotlin.math.roundToInt
 
 data class AppCarouselItem(
@@ -32,16 +37,24 @@ data class AppCarouselItem(
     val label: String,
     val iconBitmap: Bitmap,
     val cardColors: AppCarouselCardColors,
+    val isCloseAll: Boolean = false,
 )
 
+enum class CarouselVerticalAction {
+    NONE,
+    SPLIT_SCREEN,
+    FLOATING,
+    CLOSE_APP,
+}
+
 /**
- * 全新独立应用切换器视图（MyGesture 风格）：
- * 1. 最多显示 8 个最新使用过的 app；
+ * 独立应用切换器视图（扩展支持分屏、小窗、关闭应用及全部关闭）：
+ * 1. 最多显示 8 个最新使用过的 app，末尾固定为 ×（全部关闭）；
  * 2. 卡片行固定显示在屏幕纵向正中央；
- * 3. 手指在全屏任意位置滑动即可控制轮播，无需手指点在卡片上；
- * 4. 手指向左滑动时卡片行向右平移展现历史应用；
- * 5. 手指移至屏幕顶部或底部边缘区域时淡化并判定取消，松手不启动；
- * 6. 自适应 Palette 主色调 Squircle 卡片大图标 + 触感反馈。
+ * 3. 手指在全屏任意位置左右滑动即可控制轮播，无需点在卡片上；
+ * 4. 手指向上滑动依次激活：分屏（Split screen）、小窗（Floating）、关闭（Close app）；
+ * 5. 向上越过关闭项或向下滑动均进入取消状态，松手关闭面板；
+ * 6. 自适应 Palette 主色调 Squircle 卡片大图标 + 触感震动反馈。
  */
 @SuppressLint("ViewConstructor")
 class AppCarouselSwitcherView @JvmOverloads constructor(
@@ -66,7 +79,10 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
     private var initialTouchY = 0f
     private var currentTouchX = 0f
     private var currentTouchY = 0f
-    private var isVerticalCancelled = false
+    private var isCancelled = false
+    private var isDownCancelled = false
+    private var isUpOvershootCancelled = false
+    private var selectedVerticalAction = CarouselVerticalAction.NONE
     private var scrollOffset = 0f
     private var targetScrollOffset = 0f
     private var scrollAnimator: ValueAnimator? = null
@@ -87,13 +103,31 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
     }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xAAFFFFFF.toInt()
-        textSize = 12f * density
+        textSize = 13f * density
         textAlign = Paint.Align.CENTER
+    }
+
+    private val optionPlatePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val optionStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+    }
+    private val optionTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 13f * density
+        textAlign = Paint.Align.LEFT
+    }
+    private val optionIconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 1.8f * density
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
     }
 
     private val cardRect = RectF()
     private val iconRect = RectF()
     private val strokeRect = RectF()
+    private val optionRect = RectF()
     private val clipPath = Path()
 
     init {
@@ -111,17 +145,35 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
         this.initialTouchY = anchorY
         this.currentTouchX = anchorX
         this.currentTouchY = anchorY
-        this.isVerticalCancelled = false
+        this.isCancelled = false
+        this.isDownCancelled = false
+        this.isUpOvershootCancelled = false
+        this.selectedVerticalAction = CarouselVerticalAction.NONE
         val screenW = resources.displayMetrics.widthPixels.toFloat()
         this.isRightTrigger = anchorX > screenW / 2f
         alpha = 1.0f
         loadCandidateApps()
         // 默认预选上一应用（index 1）或当前应用（index 0）
-        selectedIndex = if (items.size > 1) 1 else 0
+        selectedIndex = if (items.size > 2) 1 else 0
         lastHapticIndex = selectedIndex
         targetScrollOffset = computeScrollOffsetForIndex(selectedIndex)
         scrollOffset = targetScrollOffset
         invalidate()
+    }
+
+    private fun createCloseAllBitmap(sizePx: Int): Bitmap {
+        val bitmap = createBitmap(sizePx, sizePx)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            strokeWidth = sizePx * 0.12f
+            strokeCap = Paint.Cap.ROUND
+            style = Paint.Style.STROKE
+        }
+        val pad = sizePx * 0.28f
+        canvas.drawLine(pad, pad, sizePx - pad, sizePx - pad, paint)
+        canvas.drawLine(sizePx - pad, pad, pad, sizePx - pad, paint)
+        return bitmap
     }
 
     private fun loadCandidateApps() {
@@ -187,7 +239,6 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
                 pm.defaultActivityIcon
             }
             val iconSizePx = (48f * density).roundToInt().coerceAtLeast(32)
-            // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
             val bitmap = com.slideindex.app.ui.AppIconOverride.bitmap(context, pkg, iconSizePx)
                 ?: try {
                     iconDrawable.toBitmap(iconSizePx, iconSizePx, Bitmap.Config.ARGB_8888)
@@ -197,8 +248,27 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
                     }
                 }
             val colors = AppCarouselPaletteResolver.resolveCardColors(pkg, bitmap)
-            loaded.add(AppCarouselItem(pkg, label, bitmap, colors))
+            loaded.add(AppCarouselItem(pkg, label, bitmap, colors, isCloseAll = false))
         }
+
+        // 4. 末尾追加 ×（关闭所有应用）卡片
+        val closeAllIconSizePx = (48f * density).roundToInt().coerceAtLeast(32)
+        val closeAllBitmap = createCloseAllBitmap(closeAllIconSizePx)
+        val closeAllColors = AppCarouselCardColors(
+            baseCardColor = 0x33E53935.toInt(),
+            highlightCardColor = 0xDDE53935.toInt(),
+            strokeColor = 0xFFFF5252.toInt(),
+            titleTextColor = Color.WHITE,
+        )
+        loaded.add(
+            AppCarouselItem(
+                packageName = "action.close_all",
+                label = context.getString(R.string.app_carousel_close_all),
+                iconBitmap = closeAllBitmap,
+                cardColors = closeAllColors,
+                isCloseAll = true,
+            )
+        )
 
         items.clear()
         items.addAll(loaded)
@@ -208,25 +278,77 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
         currentTouchX = rawX
         currentTouchY = rawY
 
-        val shouldCancel = isCancelDistanceExceeded(rawY)
-        if (shouldCancel != isVerticalCancelled) {
-            isVerticalCancelled = shouldCancel
-            animate().alpha(if (isVerticalCancelled) 0.35f else 1.0f).setDuration(120L).start()
+        // 以手指落点 initialTouchY 为相对基准，向上为正，向下为正
+        val upDist = initialTouchY - rawY
+        val downDist = rawY - initialTouchY
+
+        val downThreshold = (carouselSettings.cancelDistanceDownPx(density) * 0.75f)
+            .coerceIn(60f * density, 110f * density)
+
+        // 1. 向下滑动取消判定
+        val shouldDownCancel = downDist > downThreshold
+
+        // 2. 向上各档位区间与超出取消判定（界限放宽）
+        val selectedItem = items.getOrNull(selectedIndex)
+        val d1 = 20f * density   // Split screen 起点
+        val d2 = 65f * density   // Floating 起点
+        val d3 = 110f * density  // Close 起点
+        val dCancel = 165f * density // 超出 Close 后的取消起点
+
+        val (newAction, shouldUpCancel) = if (!shouldDownCancel && selectedItem != null) {
+            if (!selectedItem.isCloseAll) {
+                when {
+                    upDist >= dCancel -> CarouselVerticalAction.NONE to true
+                    upDist >= d3 -> CarouselVerticalAction.CLOSE_APP to false
+                    upDist >= d2 -> CarouselVerticalAction.FLOATING to false
+                    upDist >= d1 -> CarouselVerticalAction.SPLIT_SCREEN to false
+                    else -> CarouselVerticalAction.NONE to false
+                }
+            } else {
+                // 针对 Close All 项，超出一定高度也允许向上甩出取消
+                if (upDist >= 110f * density) {
+                    CarouselVerticalAction.NONE to true
+                } else {
+                    CarouselVerticalAction.NONE to false
+                }
+            }
+        } else {
+            CarouselVerticalAction.NONE to false
         }
 
-        if (!isVerticalCancelled && items.isNotEmpty()) {
+        val shouldCancel = shouldDownCancel || shouldUpCancel
+        if (shouldCancel != isCancelled) {
+            isCancelled = shouldCancel
+            isDownCancelled = shouldDownCancel
+            isUpOvershootCancelled = shouldUpCancel
+            animate().alpha(if (isCancelled) 0.35f else 1.0f).setDuration(120L).start()
+            if (isCancelled) {
+                appSettings?.let { HapticHelper.appTick(this, it) }
+            }
+        } else {
+            isDownCancelled = shouldDownCancel
+            isUpOvershootCancelled = shouldUpCancel
+        }
+
+        if (newAction != selectedVerticalAction) {
+            selectedVerticalAction = newAction
+            appSettings?.let { HapticHelper.appTick(this, it) }
+        }
+
+        // 3. 水平滑动切换应用（方向锁定）：
+        // 当向上抬升达到 15dp 或者已经处于取消状态时，锁定横向滚动，避免斜向上滑时误切应用
+        val isVerticalGestureActive = upDist >= 15f * density || isCancelled
+        if (!isVerticalGestureActive && items.isNotEmpty()) {
             val deltaX = rawX - initialTouchX
-            val baseIndex = if (items.size > 1) 1 else 0
+            val baseIndex = if (items.size > 2) 1 else 0
             val screenW = resources.displayMetrics.widthPixels.toFloat()
             val edgeMargin = 12f * density
-            val maxComfortTravel = 130f * density
+            val maxComfortTravel = 140f * density
             val maxSteps = items.lastIndex - baseIndex
-            val deadZone = 0.06f
+            val deadZone = 0.05f
 
             val newIndex = if (!isRightTrigger) {
-                // 左侧触发：
-                // 手指往左滑 (deltaX < 0)：浏览更早的历史应用 (卡片行向右平移展现历史)
-                // 手指往右滑 (deltaX > 0)：回退至当前应用 (index 0)
+                // 左侧触发：手指向左滑浏览历史，手指向右滑回退至当前
                 if (deltaX <= 0f) {
                     if (maxSteps <= 0) baseIndex else {
                         val availableTravel = (initialTouchX - edgeMargin).coerceIn(60f * density, maxComfortTravel)
@@ -243,9 +365,7 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
                     if (progress > 0.08f) 0 else baseIndex
                 }
             } else {
-                // 右侧触发对称：
-                // 手指往右滑 (deltaX > 0)：浏览更早的历史应用 (卡片行向左平移展现历史)
-                // 手指往左滑 (deltaX < 0)：回退至当前应用 (index 0)
+                // 右侧触发对称：手指向右滑浏览历史，手指向左滑回退至当前
                 if (deltaX >= 0f) {
                     if (maxSteps <= 0) baseIndex else {
                         val availableTravel = (screenW - edgeMargin - initialTouchX).coerceIn(60f * density, maxComfortTravel)
@@ -276,20 +396,88 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
     }
 
     fun onExternalUp(rawX: Float, rawY: Float, cancelled: Boolean) {
-        if (cancelled || isVerticalCancelled) {
+        if (cancelled || isCancelled) {
             onDismissRequest()
             return
         }
         val target = items.getOrNull(selectedIndex)
-        if (target != null) {
+        if (target == null) {
+            onDismissRequest()
+            return
+        }
+
+        // 1. 点击末尾 × 执行全部关闭
+        if (target.isCloseAll) {
             appSettings?.let { HapticHelper.confirmLaunch(this, it) }
-            launchPackage(target.packageName)
+            executeCloseAll()
+            onDismissRequest()
+            return
+        }
+
+        // 2. 执行对应操作
+        appSettings?.let { HapticHelper.confirmLaunch(this, it) }
+        when (selectedVerticalAction) {
+            CarouselVerticalAction.NONE -> {
+                launchPackage(target.packageName)
+            }
+            CarouselVerticalAction.SPLIT_SCREEN -> {
+                executeSplitScreen(target.packageName)
+            }
+            CarouselVerticalAction.FLOATING -> {
+                executeFloating(target.packageName)
+            }
+            CarouselVerticalAction.CLOSE_APP -> {
+                executeCloseApp(target.packageName)
+            }
         }
         onDismissRequest()
     }
 
     fun onExternalCancel() {
         onDismissRequest()
+    }
+
+    private fun executeCloseAll() {
+        val packages = items.filterNot { it.isCloseAll }.map { it.packageName }
+        if (packages.isNotEmpty()) {
+            RecentTasksLoader.removePackages(packages)
+            Thread {
+                for (pkg in packages) {
+                    TaskManagerUtil.forceStopPackage(pkg)
+                }
+            }.start()
+        }
+    }
+
+    private fun executeCloseApp(packageName: String) {
+        RecentTasksLoader.removePackages(listOf(packageName))
+        Thread {
+            TaskManagerUtil.forceStopPackage(packageName)
+        }.start()
+    }
+
+    private fun executeFloating(packageName: String) {
+        val effective = appSettings ?: AppSettings()
+        TaskSwitcherMenuActions.launchFreeWindow(
+            context = context,
+            packageName = packageName,
+            settings = effective,
+            onSessionEnd = onDismissRequest,
+        )
+    }
+
+    private fun executeSplitScreen(packageName: String) {
+        val service = SlideIndexAccessibilityService.accessibilityInstance()
+        if (service != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val ok = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+            if (ok) {
+                postDelayed({
+                    launchPackage(packageName)
+                }, 350L)
+                return
+            }
+        }
+        launchPackage(packageName)
     }
 
     private fun smoothScrollToIndex(index: Int) {
@@ -310,10 +498,8 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
         val centerX = width / 2f
         val itemStep = cardBaseWidth + cardSpacing
         return if (!isRightTrigger) {
-            // 左侧触发：手指向左滑时卡片行向右平移展现历史
             centerX + index * itemStep - cardBaseWidth / 2f
         } else {
-            // 右侧触发：手指向右滑时卡片行向左平移展现历史
             centerX - index * itemStep - cardBaseWidth / 2f
         }
     }
@@ -330,10 +516,14 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
 
         if (items.isEmpty()) return
 
-        // 卡片行固定显示在屏幕垂直正中央
         val centerY = height / 2f
-
         val itemStep = cardBaseWidth + cardSpacing
+
+        var selectedCenterX = 0f
+        var selectedTopY = 0f
+        var hasSelectedItem = false
+        var selectedIsCloseAll = false
+
         for (i in items.indices) {
             val item = items[i]
             val itemCenterX = if (!isRightTrigger) {
@@ -343,7 +533,7 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
             }
             if (itemCenterX < -cardBaseWidth || itemCenterX > width + cardBaseWidth) continue
 
-            val isSelected = i == selectedIndex && !isVerticalCancelled
+            val isSelected = i == selectedIndex && !isCancelled
             val scale = if (isSelected) 1.22f else 1.0f
             val cardW = cardBaseWidth * scale
             val cardH = cardBaseHeight * scale
@@ -352,14 +542,21 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
             val right = left + cardW
             val bottom = top + cardH
 
+            if (isSelected) {
+                selectedCenterX = itemCenterX
+                selectedTopY = top
+                hasSelectedItem = true
+                selectedIsCloseAll = item.isCloseAll
+            }
+
             cardRect.set(left, top, right, bottom)
             val currentCorner = cornerRadius * scale
 
-            // 卡片底色（调色板自适应主色）
+            // 卡片底色
             cardPlatePaint.color = if (isSelected) item.cardColors.highlightCardColor else item.cardColors.baseCardColor
             canvas.drawRoundRect(cardRect, currentCorner, currentCorner, cardPlatePaint)
 
-            // 图标居中裁剪（保持 1:1 原比例不拉伸变形）
+            // 图标居中裁剪
             clipPath.reset()
             clipPath.addRoundRect(cardRect, currentCorner, currentCorner, Path.Direction.CW)
             val clipSaveCount = canvas.save()
@@ -392,23 +589,168 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
             }
         }
 
-        // 取消提示
-        if (isVerticalCancelled) {
-            val hintY = centerY - cardBaseHeight * 0.9f
-            canvas.drawText(context.getString(R.string.app_carousel_cancel_hint), width / 2f, hintY, hintPaint)
+        // 绘制上方操作选项（Close, Floating, Split screen）
+        if (hasSelectedItem && !isDownCancelled) {
+            if (!selectedIsCloseAll) {
+                val spacing1 = 16f * density
+                val spacingNext = 8f * density
+                val pillHNormal = 32f * density
+                val pillHSelected = 36f * density
+
+                // 最下：Split screen
+                val bottom1 = selectedTopY - spacing1
+                drawOptionPill(
+                    canvas = canvas,
+                    centerX = selectedCenterX,
+                    bottomY = bottom1,
+                    label = context.getString(R.string.app_carousel_action_split_screen),
+                    action = CarouselVerticalAction.SPLIT_SCREEN,
+                    isSelected = selectedVerticalAction == CarouselVerticalAction.SPLIT_SCREEN,
+                    isDimmed = isUpOvershootCancelled,
+                )
+
+                // 中间：Floating
+                val h1 = if (selectedVerticalAction == CarouselVerticalAction.SPLIT_SCREEN) pillHSelected else pillHNormal
+                val bottom2 = bottom1 - h1 - spacingNext
+                drawOptionPill(
+                    canvas = canvas,
+                    centerX = selectedCenterX,
+                    bottomY = bottom2,
+                    label = context.getString(R.string.app_carousel_action_floating),
+                    action = CarouselVerticalAction.FLOATING,
+                    isSelected = selectedVerticalAction == CarouselVerticalAction.FLOATING,
+                    isDimmed = isUpOvershootCancelled,
+                )
+
+                // 最上：Close
+                val h2 = if (selectedVerticalAction == CarouselVerticalAction.FLOATING) pillHSelected else pillHNormal
+                val bottom3 = bottom2 - h2 - spacingNext
+                drawOptionPill(
+                    canvas = canvas,
+                    centerX = selectedCenterX,
+                    bottomY = bottom3,
+                    label = context.getString(R.string.app_carousel_action_close),
+                    action = CarouselVerticalAction.CLOSE_APP,
+                    isSelected = selectedVerticalAction == CarouselVerticalAction.CLOSE_APP,
+                    isDimmed = isUpOvershootCancelled,
+                )
+
+                // 如果向上滑出超过 Close 项进入取消：在最上方显示“松手取消”
+                if (isUpOvershootCancelled) {
+                    val cancelY = bottom3 - pillHNormal - 16f * density
+                    canvas.drawText(context.getString(R.string.app_carousel_cancel_overshoot_hint), width / 2f, cancelY, hintPaint)
+                }
+            } else {
+                // 选中 Close All 时的上方提示
+                val hintY = selectedTopY - 24f * density
+                val hintText = if (isUpOvershootCancelled) {
+                    context.getString(R.string.app_carousel_cancel_overshoot_hint)
+                } else {
+                    context.getString(R.string.app_carousel_close_all_hint)
+                }
+                canvas.drawText(hintText, width / 2f, hintY, hintPaint)
+            }
+        }
+
+        // 下滑取消提示
+        if (isDownCancelled) {
+            val hintY = centerY + cardBaseHeight * 0.9f
+            canvas.drawText(context.getString(R.string.app_carousel_cancel_down_hint), width / 2f, hintY, hintPaint)
         }
     }
 
-    private fun isCancelDistanceExceeded(rawY: Float): Boolean {
-        val centerY = if (height > 0) {
-            height / 2f
+    private fun drawOptionPill(
+        canvas: Canvas,
+        centerX: Float,
+        bottomY: Float,
+        label: String,
+        action: CarouselVerticalAction,
+        isSelected: Boolean,
+        isDimmed: Boolean = false,
+    ) {
+        val pillW = (if (isSelected) 140f else 130f) * density
+        val pillH = (if (isSelected) 36f else 32f) * density
+        val pillCorner = pillH / 2f
+        val halfW = pillW / 2f
+
+        val left = (centerX - halfW).coerceIn(12f * density, width - 12f * density - pillW)
+        val right = left + pillW
+        val top = bottomY - pillH
+        val bottom = bottomY
+        optionRect.set(left, top, right, bottom)
+
+        // 背景
+        optionPlatePaint.color = if (isDimmed) {
+            0x44212121.toInt()
+        } else if (isSelected) {
+            when (action) {
+                CarouselVerticalAction.SPLIT_SCREEN -> 0xEE00897B.toInt()
+                CarouselVerticalAction.FLOATING -> 0xEE3949AB.toInt()
+                CarouselVerticalAction.CLOSE_APP -> 0xEEE53935.toInt()
+                else -> 0xCC333333.toInt()
+            }
         } else {
-            resources.displayMetrics.heightPixels / 2f
+            0x99212121.toInt()
         }
-        val offsetY = rawY - centerY
-        val downPx = carouselSettings.cancelDistanceDownPx(density)
-        val upPx = carouselSettings.cancelDistanceUpPx(density)
-        return offsetY > downPx || offsetY < -upPx
+        canvas.drawRoundRect(optionRect, pillCorner, pillCorner, optionPlatePaint)
+
+        // 描边
+        if (isDimmed) {
+            optionStrokePaint.color = 0x18FFFFFF.toInt()
+            optionStrokePaint.strokeWidth = 1f * density
+        } else if (isSelected) {
+            optionStrokePaint.color = Color.WHITE
+            optionStrokePaint.strokeWidth = 2f * density
+        } else {
+            optionStrokePaint.color = 0x33FFFFFF.toInt()
+            optionStrokePaint.strokeWidth = 1f * density
+        }
+        canvas.drawRoundRect(optionRect, pillCorner, pillCorner, optionStrokePaint)
+
+        // 图标
+        val iconSize = 14f * density
+        val iconLeft = left + 14f * density
+        val iconCenterY = (top + bottom) / 2f
+        val iconTop = iconCenterY - iconSize / 2f
+        val iconBottom = iconCenterY + iconSize / 2f
+        val iconRight = iconLeft + iconSize
+
+        optionIconPaint.color = when {
+            isDimmed -> 0x55FFFFFF.toInt()
+            isSelected -> Color.WHITE
+            else -> 0xCCFFFFFF.toInt()
+        }
+        when (action) {
+            CarouselVerticalAction.SPLIT_SCREEN -> {
+                val gap = 2f * density
+                val halfH = (iconSize - gap) / 2f
+                canvas.drawRect(iconLeft, iconTop, iconRight, iconTop + halfH, optionIconPaint)
+                canvas.drawRect(iconLeft, iconTop + halfH + gap, iconRight, iconBottom, optionIconPaint)
+            }
+            CarouselVerticalAction.FLOATING -> {
+                canvas.drawRect(iconLeft, iconTop, iconRight - 3f * density, iconBottom - 3f * density, optionIconPaint)
+                val subLeft = iconLeft + 4f * density
+                val subTop = iconTop + 4f * density
+                canvas.drawRect(subLeft, subTop, iconRight, iconBottom, optionIconPaint)
+            }
+            CarouselVerticalAction.CLOSE_APP -> {
+                val pad = 1.5f * density
+                canvas.drawLine(iconLeft + pad, iconTop + pad, iconRight - pad, iconBottom - pad, optionIconPaint)
+                canvas.drawLine(iconRight - pad, iconTop + pad, iconLeft + pad, iconBottom - pad, optionIconPaint)
+            }
+            else -> Unit
+        }
+
+        // 文字
+        optionTextPaint.color = when {
+            isDimmed -> 0x55FFFFFF.toInt()
+            isSelected -> Color.WHITE
+            else -> 0xCCFFFFFF.toInt()
+        }
+        optionTextPaint.isFakeBoldText = isSelected && !isDimmed
+        val textX = iconRight + 10f * density
+        val textY = iconCenterY - (optionTextPaint.descent() + optionTextPaint.ascent()) / 2f
+        canvas.drawText(label, textX, textY, optionTextPaint)
     }
 
     private fun launchPackage(packageName: String) {
@@ -445,4 +787,3 @@ class AppCarouselSwitcherView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 }
-

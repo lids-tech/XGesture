@@ -318,6 +318,7 @@ internal object SettingsPreferenceKeys {
     val WIDGET_PANEL_TOP = floatPreferencesKey("widget_panel_top_fraction")
     val WIDGET_PANEL_BLUR = booleanPreferencesKey("widget_panel_blur_enabled")
     val WIDGET_PANEL_BLUR_RADIUS_DP = intPreferencesKey("widget_panel_blur_radius_dp")
+    val WIDGET_PANEL_CLOSE_ON_CLICK = intPreferencesKey("widget_panel_close_on_click_mode")
     val FLOATING_POINTER_SENSITIVITY = floatPreferencesKey("floating_pointer_sensitivity_fraction")
     val FLOATING_POINTER_JOYSTICK_AREA_WIDTH = floatPreferencesKey("floating_pointer_joystick_area_width")
     val FLOATING_POINTER_JOYSTICK_AREA_HEIGHT = floatPreferencesKey("floating_pointer_joystick_area_height")
@@ -515,6 +516,9 @@ internal object SettingsPreferenceKeys {
         intPreferencesKey("message_side_bubble_auto_dismiss_seconds")
     val MESSAGE_C_NOTICE_AUTO_DISMISS_SECONDS =
         intPreferencesKey("message_c_notice_auto_dismiss_seconds")
+    val MESSAGE_RETURN_CHIP_ENABLED = booleanPreferencesKey("message_return_chip_enabled")
+    val MESSAGE_RETURN_CHIP_AUTO_DISMISS_SECONDS =
+        intPreferencesKey("message_return_chip_auto_dismiss_seconds")
     val MESSAGE_C_NOTICE_HORIZONTAL_EDGE = stringPreferencesKey("message_c_notice_horizontal_edge")
     val MESSAGE_C_NOTICE_Y_FRACTION = floatPreferencesKey("message_c_notice_y_fraction")
     val MESSAGE_C_NOTICE_EDGE_MARGIN_DP = floatPreferencesKey("message_c_notice_edge_margin_dp")
