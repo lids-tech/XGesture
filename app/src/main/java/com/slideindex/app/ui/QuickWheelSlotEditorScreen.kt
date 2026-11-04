@@ -46,7 +46,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import com.slideindex.app.ui.animationstyle.AnimationStyleColorPickerDialog
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.di.OverlayDependencyAccess
@@ -626,6 +628,24 @@ private fun QuickWheelSlotSettingsPage(
                     },
                 )
                 add(
+                    settingsCardScopeItem("container-color") {
+                        QuickWheelSlotColorRow(
+                            title = stringResource(R.string.quick_wheel_slot_container_color),
+                            argb = draft.containerColorArgb,
+                            onPick = { color -> onPatch { slot -> slot.copy(containerColorArgb = color) } },
+                        )
+                    },
+                )
+                add(
+                    settingsCardScopeItem("icon-color") {
+                        QuickWheelSlotColorRow(
+                            title = stringResource(R.string.quick_wheel_slot_icon_color),
+                            argb = draft.iconTintArgb,
+                            onPick = { color -> onPatch { slot -> slot.copy(iconTintArgb = color) } },
+                        )
+                    },
+                )
+                add(
                     settingsCardScopeItem("tap-action") {
                         QuickWheelActionRow(
                             title = stringResource(R.string.quick_wheel_function_type),
@@ -1052,3 +1072,71 @@ private fun copyIntoGalleryDir(context: Context, uri: Uri): String? = runCatchin
     }
     file.absolutePath
 }.getOrNull()
+
+/**
+ * 单格颜色行（容器背景色 / 文字图标色共用）。
+ *
+ * `argb == 0` = 跟随（容器色跟随轮盘样式；文字色按背景自动黑/白）；非 0 = 只这一格用指定色。
+ * 取色盘与轮盘配置页、「触钮设计」同一套（Miuix ColorPalette + HEX）。
+ */
+@Composable
+private fun QuickWheelSlotColorRow(
+    title: String,
+    argb: Long,
+    onPick: (Long) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val following = argb == 0L
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (following) {
+                    stringResource(R.string.quick_wheel_slot_color_follow)
+                } else {
+                    stringResource(R.string.quick_wheel_slot_color_custom)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!following) {
+            TextButton(onClick = { onPick(0L) }) {
+                Text(stringResource(R.string.quick_wheel_slot_color_follow))
+            }
+        }
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (following) MaterialTheme.colorScheme.surfaceVariant else Color(argb),
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(8.dp),
+                )
+                .clickable { showPicker = true },
+        )
+    }
+    if (showPicker) {
+        AnimationStyleColorPickerDialog(
+            initialColor = (if (following) 0xFFFFFFFFL else argb).toInt(),
+            onDismissRequest = { showPicker = false },
+            onColorPicked = { picked ->
+                onPick(picked.toLong() and 0xFFFFFFFFL)
+                showPicker = false
+            },
+        )
+    }
+}

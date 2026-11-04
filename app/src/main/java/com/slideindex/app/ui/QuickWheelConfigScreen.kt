@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.toArgb
+import com.slideindex.app.ui.animationstyle.AnimationStyleColorPickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -1275,11 +1276,9 @@ private fun previewBlurSigmaDp(blurDp: Int, density: Float): Float {
     val radiusPx = (blurDp * safeDensity).coerceIn(1f, OVERLAY_BLUR_MAX_RADIUS_PX)
     return radiusPx / 2f / safeDensity
 }
-
-
 // ── 容器颜色 / 不透明度 / 阴影 ──────────────────────────────
 
-/** 容器颜色行：右侧色块，点击打开 HSV 取色弹窗。 */
+/** 容器颜色行：右侧色块 + 点击打开取色盘（与「触钮设计」同一套 Miuix ColorPalette 弹窗）。 */
 @Composable
 private fun QuickWheelColorRow(
     title: String,
@@ -1320,94 +1319,13 @@ private fun QuickWheelColorRow(
         )
     }
     if (showPicker) {
-        QuickWheelColorPickerDialog(
-            initial = argb,
-            onDismiss = { showPicker = false },
-            onConfirm = { picked ->
-                onPick(picked)
+        AnimationStyleColorPickerDialog(
+            initialColor = argb.toInt(),
+            onDismissRequest = { showPicker = false },
+            onColorPicked = { picked ->
+                onPick(picked.toLong() and 0xFFFFFFFFL)
                 showPicker = false
             },
         )
     }
 }
-
-/** HSV 取色弹窗：色相 / 饱和度 / 明度三条滑条 + 预览块（不引第三方控件）。 */
-@Composable
-private fun QuickWheelColorPickerDialog(
-    initial: Long,
-    onDismiss: () -> Unit,
-    onConfirm: (Long) -> Unit,
-) {
-    val start = Color(initial)
-    var hue by remember { mutableStateOf(start.toHsvHue()) }
-    var saturation by remember { mutableStateOf(start.toHsvSaturation()) }
-    var brightness by remember { mutableStateOf(start.toHsvValue()) }
-    val picked = Color.hsv(hue, saturation, brightness)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.quick_wheel_container_color)) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(picked)
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = RoundedCornerShape(12.dp),
-                        ),
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                QuickWheelSliderRow(
-                    title = "H",
-                    description = "",
-                    value = hue,
-                    range = 0f..360f,
-                    unit = "°",
-                    onValueChange = { hue = it },
-                )
-                QuickWheelSliderRow(
-                    title = "S",
-                    description = "",
-                    value = saturation * 100f,
-                    range = 0f..100f,
-                    unit = "%",
-                    onValueChange = { saturation = it / 100f },
-                )
-                QuickWheelSliderRow(
-                    title = "V",
-                    description = "",
-                    value = brightness * 100f,
-                    range = 0f..100f,
-                    unit = "%",
-                    onValueChange = { brightness = it / 100f },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(picked.toArgb().toLong() and 0xFFFFFFFFL) },
-            ) {
-                Text(stringResource(R.string.quick_wheel_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
-}
-
-private fun Color.toHsvHue(): Float = FloatArray(3).also {
-    android.graphics.Color.colorToHSV(toArgb(), it)
-}[0]
-
-private fun Color.toHsvSaturation(): Float = FloatArray(3).also {
-    android.graphics.Color.colorToHSV(toArgb(), it)
-}[1]
-
-private fun Color.toHsvValue(): Float = FloatArray(3).also {
-    android.graphics.Color.colorToHSV(toArgb(), it)
-}[2]

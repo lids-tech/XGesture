@@ -141,6 +141,12 @@ internal object SettingsPreferenceKeys {
     val QUICK_WHEEL_ENTRIES = stringSetPreferencesKey("quick_wheel_entries")
     /** 快速启动轮盘：各容器（槽位）配置与单击 / 长按动作。 */
     val QUICK_WHEEL_SLOTS = stringSetPreferencesKey("quick_wheel_slots")
+
+    /** 每个容器的自定义背景色（`wheelId\u001Dpath\u001Dargb`）；缺省 = 跟随轮盘样式。 */
+    val QUICK_WHEEL_SLOT_COLORS = stringSetPreferencesKey("quick_wheel_slot_colors")
+
+    /** 每个容器的文字 / 图标颜色（`wheelId\u001Dpath\u001Dargb`）；缺省 = 按背景自动黑/白。 */
+    val QUICK_WHEEL_SLOT_ICON_COLORS = stringSetPreferencesKey("quick_wheel_slot_icon_colors")
     val HONEYCOMB_MODE = intPreferencesKey("honeycomb_mode")
     val HONEYCOMB_ICON_SIZE_DP = intPreferencesKey("honeycomb_icon_size_dp")
     val HONEYCOMB_SPACING_DP = intPreferencesKey("honeycomb_spacing_dp")

@@ -4861,4 +4861,8 @@ adb 模式应返回 uid=2000。
     <string name="quick_wheel_container_alpha">容器不透明度</string>
     <string name="quick_wheel_container_alpha_desc">0% = 完全透明（只剩图标），100% = 不透明</string>
     <string name="quick_wheel_container_shadow">容器阴影</string>
-    <string name="quick_wheel_container_shadow_desc">0 = 无阴影；越大悬浮感越强</string></resources>
+    <string name="quick_wheel_container_shadow_desc">0 = 无阴影；越大悬浮感越强</string>    <string name="quick_wheel_slot_container_color">容器颜色</string>
+    <string name="quick_wheel_slot_icon_color">文字/图标颜色</string>
+    <string name="quick_wheel_slot_color_follow">跟随</string>
+    <string name="quick_wheel_slot_color_custom">自定义颜色</string>
+</resources>

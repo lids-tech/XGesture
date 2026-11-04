@@ -4866,4 +4866,8 @@
     <string name="quick_wheel_container_alpha">Container opacity</string>
     <string name="quick_wheel_container_alpha_desc">0% = fully transparent, 100% = solid</string>
     <string name="quick_wheel_container_shadow">Container shadow</string>
-    <string name="quick_wheel_container_shadow_desc">0 = no shadow; larger feels more floating</string></resources>
+    <string name="quick_wheel_container_shadow_desc">0 = no shadow; larger feels more floating</string>    <string name="quick_wheel_slot_container_color">Container color</string>
+    <string name="quick_wheel_slot_icon_color">Text/icon color</string>
+    <string name="quick_wheel_slot_color_follow">Follow</string>
+    <string name="quick_wheel_slot_color_custom">Custom color</string>
+</resources>

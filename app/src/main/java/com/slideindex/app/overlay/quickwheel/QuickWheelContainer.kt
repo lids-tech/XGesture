@@ -98,15 +98,31 @@ fun QuickWheelContainer(
     }.coerceIn(6f, 16f).sp
     val shape = RoundedCornerShape(cornerDp)
 
-    // 容器外观：颜色 / 不透明度 / 阴影高度（一级、二级各一套，来自 QuickWheelStyleSpec）。
-    val containerColor = Color(style.containerColorArgb).copy(
-        alpha = QuickWheelLayoutEngine.clampContainerAlphaPercent(style.containerAlphaPercent) / 100f,
-    )
-    val shadowDp = QuickWheelLayoutEngine.clampContainerShadowDp(style.containerShadowDp)
+    // 容器外观：颜色 / 不透明度 / 阴影高度。
+    // 颜色优先取「本格自定义色」（slot.containerColorArgb != 0），否则跟随轮盘样式。
+    val wheelColor = Color(style.containerColorArgb)
+    val slotColor = if (slot.containerColorArgb != 0L) Color(slot.containerColorArgb) else wheelColor
+    val containerAlpha =
+        QuickWheelLayoutEngine.clampContainerAlphaPercent(style.containerAlphaPercent) / 100f
+    val containerColor = slotColor.copy(alpha = containerAlpha)
+    // ⚠️ 半透明容器一律不画阴影 —— 包括"按下高亮"额外加的那 6dp。
+    // 只把基础阴影归零时，高亮那一下仍会 +6dp，于是点击瞬间冒出方形灰影
+    //（真机反馈："点了以后格子下层出现方形区域"）。
+    val elevationDp = if (containerAlpha >= 1f) {
+        val base = QuickWheelLayoutEngine.clampContainerShadowDp(style.containerShadowDp)
+        if (highlighted) base + HIGHLIGHT_SHADOW_BOOST_DP else base
+    } else {
+        0f
+    }
     // 深色底自动转白，避免"调成黑底后图标看不见"。
     val darkSurface = containerColor.luminance() <= 0.5f
-    val iconTint = if (darkSurface) ContainerIconTintOnDark else ContainerIconTint
-    val labelColor = if (darkSurface) ContainerLabelOnDark else ContainerLabel
+    val autoTint = if (darkSurface) ContainerIconTintOnDark else ContainerIconTint
+    val autoLabel = if (darkSurface) ContainerLabelOnDark else ContainerLabel
+    // 单格「文字 / 图标颜色」：0 = 自动，非 0 = 这一格共用同一个颜色。
+    // 一处设置同时作用于：文字图标里的字、图标库矢量图标、下方的名称标签。
+    val customTint = if (slot.iconTintArgb != 0L) Color(slot.iconTintArgb) else null
+    val iconTint = customTint ?: autoTint
+    val labelColor = customTint ?: autoLabel
 
     // placeholder：用户主动留出的空位（预览 / 配置显示"空白阴影"，运行时由 PlacedContainer 跳过）。
     // 其余容器一律是真实容器——哪怕点击 / 长按都没设动作，也渲染成"全白空图标"。
@@ -125,14 +141,7 @@ fun QuickWheelContainer(
                         .border(width = 1.dp, color = ContainerPlaceholderBorder, shape = shape)
                 } else {
                     Modifier
-                        .shadow(
-                            elevation = (if (highlighted) {
-                                shadowDp + HIGHLIGHT_SHADOW_BOOST_DP
-                            } else {
-                                shadowDp
-                            }).dp,
-                            shape = shape,
-                        )
+                        .shadow(elevation = elevationDp.dp, shape = shape)
                         .clip(shape)
                         .background(containerColor)
                         // 普通态不再描边：图标贴满时那 1dp 会压在图标边缘上，看着像图标自带一圈边框。
