@@ -25,10 +25,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Shortcut
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,14 +56,17 @@ import com.slideindex.app.ui.miuix.MiuixLabeledTextField
 import com.slideindex.app.ui.settings.components.LazySettingsItem
 import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.viewmodel.ActivityShortcutPickerResult
+import com.slideindex.app.util.TaskManagerUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.GridView
@@ -311,21 +312,26 @@ fun ActivityShortcutEditScreen(
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedButton(
+                // 次操作：Miuix 没有 outlined 变体，用默认次要色（secondaryVariant）的 TextButton。
+                MiuixTextButton(
+                    text = stringResource(R.string.activity_shortcut_test),
                     onClick = {
                         onTest(draft.copy(label = draft.label.ifBlank { shortcut.label }))
                     },
                     enabled = !hasTargetError,
                     modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(R.string.activity_shortcut_test))
-                }
-                Button(
+                )
+                // 主操作：Miuix 主色按钮，禁用态由 MiuixTheme 的 disabledPrimary* 接管。
+                MiuixButton(
                     onClick = requestSave,
                     enabled = !hasError,
+                    colors = ButtonDefaults.buttonColorsPrimary(),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(stringResource(R.string.activity_shortcut_save))
+                    MiuixText(
+                        text = stringResource(R.string.activity_shortcut_save),
+                        style = MiuixTheme.textStyles.button,
+                    )
                 }
             }
         },
@@ -782,7 +788,13 @@ private fun collectIssues(context: Context, shortcut: ActivityShortcut): List<Sh
                     PackageManager.MATCH_DISABLED_COMPONENTS,
                 )
             }.getOrNull() ?: return listOf(ShortcutIssue.ACTIVITY_MISSING)
-            if (info.exported) emptyList() else listOf(ShortcutIssue.NOT_EXPORTED)
+            // 未导出目标由特权通道（Shizuku / Root）启动，见 ActivityShortcutLauncher.launchNonExported；
+            // 已授权时它并不「不可用」，保存前不该当成问题。
+            if (info.exported || TaskManagerUtil.hasPermission()) {
+                emptyList()
+            } else {
+                listOf(ShortcutIssue.NOT_EXPORTED)
+            }
         }
 
         ActivityShortcutKind.DYNAMIC -> {
