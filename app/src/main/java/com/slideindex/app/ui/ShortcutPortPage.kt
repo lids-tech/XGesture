@@ -202,6 +202,10 @@ fun ShortcutPortPage(onBack: () -> Unit) {
     }
     val tipText = stringResource(R.string.shortcut_port_tip)
     val countTitle = stringResource(R.string.shortcut_port_ready, filtered.size)
+    // 在 Composable 作用域预取文案，避免在回调里用 LocalContext 的 context.getString
+    // （Compose lint: LocalContextGetResourceValueCall 不配置感知）。
+    val execSuccessText = stringResource(R.string.shortcut_port_exec_success, "OK")
+    val execFailedText = stringResource(R.string.shortcut_port_exec_failed, "launch failed")
 
     fun copyItem(item: ShortCutItem) {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
@@ -230,11 +234,7 @@ fun ShortcutPortPage(onBack: () -> Unit) {
             onResult = { success ->
                 Toast.makeText(
                     context,
-                    if (success) {
-                        context.getString(R.string.shortcut_port_exec_success, "OK")
-                    } else {
-                        context.getString(R.string.shortcut_port_exec_failed, "launch failed")
-                    },
+                    if (success) execSuccessText else execFailedText,
                     Toast.LENGTH_LONG,
                 ).show()
             },
@@ -266,12 +266,17 @@ fun ShortcutPortPage(onBack: () -> Unit) {
             Box(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                ShellSegmentedControl(
-                    labels = listOf("Root", "Shizuku"),
-                    selectedIndex = if (activeMode == PrivilegeMode.ROOT) 0 else 1,
-                    onSelect = { index ->
-                        switchMode(if (index == 0) PrivilegeMode.ROOT else PrivilegeMode.SHIZUKU)
+                // 顺序：Shizuku 在前，与「特权执行方式」设置页保持一致。
+                SegmentedControl(
+                    items = listOf(PrivilegeMode.SHIZUKU, PrivilegeMode.ROOT),
+                    selected = activeMode,
+                    labelRes = { mode ->
+                        when (mode) {
+                            PrivilegeMode.SHIZUKU -> R.string.shell_panel_mode_shizuku
+                            PrivilegeMode.ROOT -> R.string.shell_panel_mode_root
+                        }
                     },
+                    onSelect = { mode -> switchMode(mode) },
                 )
             }
         }

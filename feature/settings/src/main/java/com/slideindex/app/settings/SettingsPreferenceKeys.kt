@@ -170,6 +170,8 @@ internal object SettingsPreferenceKeys {
     val APP_CAROUSEL_CANCEL_DISTANCE_UP_DP = intPreferencesKey("app_carousel_cancel_distance_up_dp")
     val APP_CAROUSEL_CANCEL_DISTANCE_DOWN_DP = intPreferencesKey("app_carousel_cancel_distance_down_dp")
     val APP_CAROUSEL_CANCEL_BOTH_DIRECTIONS = booleanPreferencesKey("app_carousel_cancel_both_directions")
+    val APP_CAROUSEL_SLIDE_REVERSED = booleanPreferencesKey("app_carousel_slide_reversed")
+    val APP_CAROUSEL_SLIDE_SENSITIVITY = intPreferencesKey("app_carousel_slide_sensitivity")
     val FV_RING_LAUNCHER_CIRCLE_COUNT = intPreferencesKey("fv_ring_launcher_circle_count")
     val FV_RING_LAUNCHER_ICON_SIZE_DP = floatPreferencesKey("fv_ring_launcher_icon_size_dp")
     val FV_RING_LAUNCHER_ICON_SHAPE = stringPreferencesKey("fv_ring_launcher_icon_shape")
@@ -438,12 +440,22 @@ internal object SettingsPreferenceKeys {
     /** 多选工作模式，按 [com.slideindex.app.shake.ShakeWorkMode] 的 bit 位存掩码。 */
     val SHAKE_WORK_MODES = intPreferencesKey("shake_work_modes")
     val SHAKE_GESTURE_ACTIONS = stringSetPreferencesKey("shake_gesture_actions")
-    val SHAKE_MENU_ACTIONS = stringSetPreferencesKey("shake_menu_actions")
+
+    /** 用户自建的「晃动菜单」列表，JSON 数组字符串（见 `ShakeMenuCodec`）。 */
+    val SHAKE_MENUS = stringPreferencesKey("shake_menus_json")
+
+    /** 菜单激活后的入场冷却（毫秒）；0/缺失按默认 300ms。 */
+    val SHAKE_MENU_GUARD_MS = longPreferencesKey("shake_menu_guard_ms")
+
+    /** 菜单浮层延迟显示（毫秒）；缺失按 0（立即）。 */
+    val SHAKE_MENU_DISPLAY_DELAY_MS = longPreferencesKey("shake_menu_display_delay_ms")
     val SHAKE_HOLD_SCREEN_ACTIONS = stringSetPreferencesKey("shake_hold_screen_actions")
     val SHAKE_HOLD_GESTURE_BAR_ACTIONS = stringSetPreferencesKey("shake_hold_gesture_bar_actions")
     val SHAKE_LOCK_SCREEN_ACTIONS = stringSetPreferencesKey("shake_lock_screen_actions")
     val SHAKE_PER_APP_ACTIONS = stringSetPreferencesKey("shake_per_app_actions")
     val SHAKE_PER_DIRECTION_SENSITIVITY = stringSetPreferencesKey("shake_per_direction_sensitivity")
+
+    /** 「显示菜单状态」：是否绘制晃动菜单浮层；关闭后菜单仍然生效（盲操作）。 */
     val SHAKE_MENU_ENABLED = booleanPreferencesKey("shake_menu_enabled")
     val HOLD_SHAKE_ENABLED = booleanPreferencesKey("hold_shake_enabled")
 
@@ -782,6 +794,7 @@ internal object SettingsPreferenceKeys {
     val SEARCH_ENGINE_GRID_COLUMNS = intPreferencesKey("search_engine_grid_columns")
     val SEARCH_ENGINE_GRID_ROWS = intPreferencesKey("search_engine_grid_rows")
     val SEARCH_ENGINE_SHOW_LABELS = booleanPreferencesKey("search_engine_show_labels")
+    val SEARCH_ENGINE_ICON_SHAPE = stringPreferencesKey("search_engine_icon_shape")
     val SEARCH_PANEL_DEFAULT_ENGINE_ID = stringPreferencesKey("search_panel_default_engine_id")
     val SEARCH_PANEL_INPUT_BEHAVIOR = stringPreferencesKey("search_panel_input_behavior")
     val SEARCH_PANEL_ENTER_ACTION = stringPreferencesKey("search_panel_enter_action")

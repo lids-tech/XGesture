@@ -38,6 +38,9 @@ import com.slideindex.app.otp.SmsBlacklistRuleSetCodec
 import com.slideindex.app.shake.FaceDownGestureCodec
 import com.slideindex.app.shake.FaceDownGestureSettings
 import com.slideindex.app.shake.ShakeGestureCodec
+import com.slideindex.app.shake.ShakeMenuCodec
+import com.slideindex.app.shake.ShakeMenuLimits
+import com.slideindex.app.shake.ShakeMenuRuntime
 import com.slideindex.app.shake.ShakeSensitivityScale
 import com.slideindex.app.shake.ShakeGestureSettings
 import com.slideindex.app.shake.ShakeWorkModes
@@ -747,6 +750,9 @@ internal object SettingsSnapshotReader {
             searchEngineGridColumns = prefs[SettingsPreferenceKeys.SEARCH_ENGINE_GRID_COLUMNS]?.coerceIn(3, 8) ?: 5,
             searchEngineGridRows = prefs[SettingsPreferenceKeys.SEARCH_ENGINE_GRID_ROWS]?.coerceIn(1, 4) ?: 2,
             searchEngineShowLabels = prefs[SettingsPreferenceKeys.SEARCH_ENGINE_SHOW_LABELS] ?: true,
+            searchEngineIconShape = SearchEngineIconShape.fromId(
+                prefs[SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SHAPE],
+            ),
             searchPanelDefaultEngineId = prefs[SettingsPreferenceKeys.SEARCH_PANEL_DEFAULT_ENGINE_ID],
             searchPanelInputBehavior = prefs[SettingsPreferenceKeys.SEARCH_PANEL_INPUT_BEHAVIOR]
                 ?.let { name -> runCatching { SearchPanelInputBehavior.valueOf(name) }.getOrNull() }
@@ -898,6 +904,15 @@ internal object SettingsSnapshotReader {
             animationColorArgb = prefs[SettingsPreferenceKeys.SHAKE_ANIMATION_COLOR] ?: 0xFF424242.toInt(),
             disableInLandscape = prefs[SettingsPreferenceKeys.SHAKE_DISABLE_IN_LANDSCAPE] ?: false,
             blacklistedPackages = prefs[SettingsPreferenceKeys.SHAKE_BLACKLIST_PACKAGES] ?: emptySet(),
+            menus = ShakeMenuCodec.decode(prefs[SettingsPreferenceKeys.SHAKE_MENUS]).take(ShakeMenuLimits.MAX_MENUS),
+            menuGuardMs = ShakeMenuRuntime.clampGuardMs(
+                prefs[SettingsPreferenceKeys.SHAKE_MENU_GUARD_MS] ?: ShakeMenuRuntime.DEFAULT_GUARD_MS,
+            ),
+            menuDisplayDelayMs = ShakeMenuRuntime.clampDisplayDelayMs(
+                prefs[SettingsPreferenceKeys.SHAKE_MENU_DISPLAY_DELAY_MS]
+                    ?: ShakeMenuRuntime.DEFAULT_DISPLAY_DELAY_MS,
+            ),
+            showMenuOverlay = prefs[SettingsPreferenceKeys.SHAKE_MENU_ENABLED] ?: true,
         )
     }
 

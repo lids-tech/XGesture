@@ -89,6 +89,11 @@ object TaskManagerUtil {
 
     private const val PRIVILEGED_OPS_TIMEOUT_MS = 8_000L
 
+    private const val MAIN_THREAD_SKIP_LOG_INTERVAL_MS = 5_000L
+
+    @Volatile
+    private var lastMainThreadSkipLogAtMs = 0L
+
     private val onPrivilegedOpsThread = ThreadLocal.withInitial { false }
 
     @Suppress("UNCHECKED_CAST")
@@ -117,6 +122,17 @@ object TaskManagerUtil {
             return block()
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
+            // 主线程不可能拿到结果：命令丢给特权线程后这里立刻返回「失败」。调用方若把返回值当成
+            // 真实执行结果，就会误判（写 secure 设置曾因此每拖动一次滑条弹一次 ADB 授权框）。
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastMainThreadSkipLogAtMs >= MAIN_THREAD_SKIP_LOG_INTERVAL_MS) {
+                lastMainThreadSkipLogAtMs = now
+                Log.w(
+                    TAG,
+                    "privileged op called on main thread: dispatched to PrivilegedTaskOps, " +
+                        "returning failure to caller",
+                )
+            }
             privilegedOpsExecutor.execute {
                 onPrivilegedOpsThread.set(true)
                 try {
@@ -380,8 +396,66 @@ object TaskManagerUtil {
     }
 
     fun prefetchRecentTasks(force: Boolean = false) {
-        ensureServiceBound()
+        warmRecentTasksAsync(delayMs = if (force) 0L else RECENTS_WARM_DELAY_MS)
     }
+
+    // ---- 最近任务查询的“空闲预热” ---------------------------------------------------------------
+    //
+    // 第一次真正取最近任务时，用户服务进程会做一次「探测」：把十几种候选调用各跑一遍，
+    // 挑出能覆盖全部任务的最小集合并记住（之后每次只用 1～2 条查询）。那一次注定比平时慢。
+    //
+    // 这跟“缓存任务列表”是两回事：这里只是把**查询方案的探测**挪到用户没在等的时候，
+    // 不保存、也不复用任何任务数据；面板打开时仍然现取，实时性不变。
+
+    @Volatile
+    private var recentsWarmScheduled = false
+
+    @Volatile
+    private var recentsWarmed = false
+
+    @Volatile
+    private var recentsWarmAttempts = 0
+
+    fun warmRecentTasksAsync(delayMs: Long = RECENTS_WARM_DELAY_MS) {
+        if (recentsWarmed || recentsWarmAttempts >= MAX_RECENTS_WARM_ATTEMPTS) return
+        synchronized(recentsWarmLock) {
+            if (recentsWarmScheduled || recentsWarmed) return
+            recentsWarmScheduled = true
+        }
+        val runnable = Runnable { startRecentsWarmUp() }
+        mainHandler.postDelayed(runnable, delayMs)
+    }
+
+    private fun startRecentsWarmUp() {
+        Thread({
+            var attempted = false
+            try {
+                if (!recentsWarmed && hasPrivilegedAccess()) {
+                    attempted = true
+                    val startedAt = SystemClock.elapsedRealtime()
+                    val refs = refreshRecentTasks()
+                    Log.i(
+                        TAG,
+                        "warmRecentTasks ${refs.size} tasks in ${SystemClock.elapsedRealtime() - startedAt}ms"
+                    )
+                    recentsWarmed = refs.isNotEmpty()
+                }
+            } catch (error: Throwable) {
+                Log.w(TAG, "warmRecentTasks failed", error)
+            } finally {
+                // 还没权限的情况不计入失败次数：等 Shizuku 权限/binder 到位后还会再触发一次。
+                if (attempted) recentsWarmAttempts++
+                synchronized(recentsWarmLock) { recentsWarmScheduled = false }
+            }
+        }, "RecentsWarmUp").start()
+    }
+
+    private val recentsWarmLock = Any()
+
+    private val mainHandler: Handler by lazy { Handler(Looper.getMainLooper()) }
+
+    private const val RECENTS_WARM_DELAY_MS = 8_000L
+    private const val MAX_RECENTS_WARM_ATTEMPTS = 2
 
     fun refreshRecentTaskPackages(): List<String> {
         return refreshRecentTasks().map { it.identifier }

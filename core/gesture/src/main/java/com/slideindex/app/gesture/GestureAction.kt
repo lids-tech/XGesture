@@ -207,6 +207,14 @@ enum class GestureActionType(val id: Int) {
 
     /** 「清空通知」：移除通知栏里所有可清除通知，并收起全部消息提醒。 */
     CLEAR_NOTIFICATIONS(111),
+
+    /**
+     * 「晃动菜单」：晃动后进入菜单状态（浮层按方向列出可用功能），再次按方向晃动执行该菜单里绑定的动作。
+     *
+     * payload 是菜单 id；菜单本体见 [com.slideindex.app.shake.ShakeMenu]。
+     * 一个基础晃动方向绑定本动作后，这个方向就变成「打开某个菜单」而不是直接执行动作。
+     */
+    SHAKE_MENU(112),
     ;
 
     companion object {
@@ -658,6 +666,19 @@ sealed class GestureAction {
     data object QuickMenu : GestureAction() {
         override val type = GestureActionType.QUICK_MENU
         override val payload = ""
+    }
+
+    /**
+     * 「晃动菜单」：打开一张预置的方向动作表，并进入菜单状态。
+     *
+     * payload 是菜单 id（见 `ShakeMenu`）。选中后由晃动浮层列出该菜单的各方向功能，
+     * 用户再按方向晃动一次才执行具体动作；菜单里没配置的方向什么都不做。
+     */
+    data class OpenShakeMenu(
+        val menuId: String = "",
+    ) : GestureAction() {
+        override val type = GestureActionType.SHAKE_MENU
+        override val payload = menuId
     }
 
     /**
@@ -1238,6 +1259,7 @@ sealed class GestureAction {
                 GestureActionType.OPEN_LINK -> OpenLink.fromPayload(payload)
                 GestureActionType.QUICK_TOOLS_OVERLAY -> QuickToolsOverlay
                 GestureActionType.QUICK_MENU -> QuickMenu
+                GestureActionType.SHAKE_MENU -> OpenShakeMenu(payload)
                 GestureActionType.WIDGET_POPUP_OVERLAY -> WidgetPopupOverlay
                 GestureActionType.OPEN_STASH_PANEL -> StashPanel
                 GestureActionType.OPEN_CLIPBOARD_PANEL -> ClipboardPanel
@@ -1357,6 +1379,9 @@ fun GestureAction.isContinuousTrackingKind(): Boolean =
 fun GestureAction.supportsContinuousTracking(trigger: GestureTriggerType): Boolean {
     if (!isContinuousTrackingKind()) return false
     return when (this) {
+        // 索引与面板类动作同语义：长按阈值处先打开，后续滑动继续跟手，松手按落点确认。
+        // 不加这一条时长按槽位只能「松手开面板」或「即时开面板」，选不到持续触发。
+        GestureAction.OpenIndex,
         GestureAction.RingLauncher,
         GestureAction.AppCarouselSwitcher,
         GestureAction.FingertipRing,
