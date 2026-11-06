@@ -81,6 +81,7 @@ class SettingsRepository @Inject constructor(
                 overlay.migrateFvRingLauncherPreferenceKeysOnce()
                 overlay.migrateFloatBallInstantTranslateDefaultOnOnce()
                 edge.persistOppositeGestureSlotRepairIfNeeded()
+                migrateSearchEngineIconSourcesOnce().getOrThrow()
             }.onFailure {
                 android.util.Log.w(
                     "SettingsRepository",
@@ -910,6 +911,40 @@ class SettingsRepository @Inject constructor(
     suspend fun setSearchEngines(engines: List<SearchEngineConfig>) =
         overlay.setSearchEngines(engines)
 
+    /**
+     * 引擎列表的原子「读 → 改 → 写」。
+     *
+     * 基线取自 DataStore 事务内部的原始 prefs，而不是 ViewModel 的 `settings.value`：
+     * 后者是 `stateIn(WhileSubscribed)` 的快照，页面没有订阅者时不会更新，拿它拼新列表
+     * 会把别处刚落库的引擎整表覆盖掉（图片分享批量添加曾因此每次只留下最后一条）。
+     */
+    suspend fun updateSearchEngines(
+        transform: (List<SearchEngineConfig>) -> List<SearchEngineConfig>,
+    ): Result<Unit> = editor.edit { prefs ->
+        val updated = transform(SearchEngineStore.readFromPreferences(prefs, context))
+        prefs[SettingsPreferenceKeys.SEARCH_ENGINES_JSON] = SearchEngineStore.encode(updated)
+        prefs[SettingsPreferenceKeys.SEARCH_ENGINES_INITIALIZED] = true
+    }
+
+    /**
+     * 一次性迁移：旧版本把分享 / 外部跳转引擎的图标落成了快照，这里补上「跟随的应用包名」。
+     *
+     * 只在首次执行（标记见 [SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SOURCE_MIGRATED]）：
+     * 备份导入的旧数据不会被反复改写，用户手动切回固定图标的结果也不会被覆盖。
+     */
+    private suspend fun migrateSearchEngineIconSourcesOnce() = editor.edit { prefs ->
+        if (prefs[SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SOURCE_MIGRATED] == true) return@edit
+        prefs[SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SOURCE_MIGRATED] = true
+        if (prefs[SettingsPreferenceKeys.SEARCH_ENGINES_INITIALIZED] != true) return@edit
+        val raw = prefs[SettingsPreferenceKeys.SEARCH_ENGINES_JSON] ?: return@edit
+        val engines = SearchEngineStore.decodeOrEmpty(raw)
+        if (engines.isEmpty()) return@edit
+        val migrated = SearchEngineIconSourceMigration.migrate(engines)
+        if (migrated != engines) {
+            prefs[SettingsPreferenceKeys.SEARCH_ENGINES_JSON] = SearchEngineStore.encode(migrated)
+        }
+    }
+
     suspend fun setLauncherShortcutMenuOrder(ids: List<String>) =
         overlay.setLauncherShortcutMenuOrder(ids)
 
@@ -1036,7 +1071,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setOtpBlockedPackages(packages: Set<String>) = otp.setOtpBlockedPackages(packages)
 
     suspend fun setShakeGesturesEnabled(enabled: Boolean) = shake.setShakeGesturesEnabled(enabled)
-    suspend fun setShakeWorkMode(mode: ShakeWorkMode) = shake.setShakeWorkMode(mode)
+    suspend fun setShakeWorkModes(modes: Set<ShakeWorkMode>) = shake.setShakeWorkModes(modes)
     suspend fun setShakeGestureAction(type: ShakeGestureType, action: GestureAction) = shake.setShakeGestureAction(type, action)
     suspend fun setLockScreenShakeAction(type: ShakeGestureType, action: GestureAction) = shake.setLockScreenShakeAction(type, action)
     suspend fun setPerAppShakeAction(packageName: String, type: ShakeGestureType, action: GestureAction) =
@@ -1235,5 +1270,6 @@ class SettingsRepository @Inject constructor(
     suspend fun setDragDropFlowEnabled(enabled: Boolean) = overlay.setDragDropFlowEnabled(enabled)
     suspend fun setDragDropFlowPosition(position: DragDropFlowPosition) = overlay.setDragDropFlowPosition(position)
     suspend fun setDragDropFlowHapticEnabled(enabled: Boolean) = overlay.setDragDropFlowHapticEnabled(enabled)
+    suspend fun setDragDropFlowActionsInline(enabled: Boolean) = overlay.setDragDropFlowActionsInline(enabled)
     suspend fun setDragFlowTextEngines(engines: List<SearchEngineConfig>) = overlay.setDragFlowTextEngines(engines)
 }

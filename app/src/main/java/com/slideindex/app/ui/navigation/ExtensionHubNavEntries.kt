@@ -28,14 +28,32 @@ import com.slideindex.app.ui.FreezerSettingsScreen
 import com.slideindex.app.ui.LicenseTextScreen
 import com.slideindex.app.ui.LauncherShortcutMenuScreen
 import com.slideindex.app.ui.MissingGesturePermissionsScreen
+import com.slideindex.app.ui.MultiTouchGestureSettingsScreen
+import com.slideindex.app.ui.GestureActionPickerScreen
+import com.slideindex.app.ui.GestureExecuteShellCommandScreen
+import com.slideindex.app.ui.MultiTouchPathRecordScreen
+import com.slideindex.app.ui.picker.ActivityShortcutPickActivityScreen
+import com.slideindex.app.ui.picker.ActivityShortcutPickAppScreen
+import com.slideindex.app.ui.picker.MyShortcutsFolderScreen
+import com.slideindex.app.ui.picker.PresetShortcutsFolderScreen
+import com.slideindex.app.gesture.ActionPickerCatalogPolicy
+import com.slideindex.app.gesture.multitouch.MultiPointerGesture
+import com.slideindex.app.gesture.GestureAction
+import com.slideindex.app.gesture.GestureTriggerType
+import com.slideindex.app.gesture.multitouch.MultiPointerBinding
+import com.slideindex.app.multitouch.decodePathStrokes
+import com.slideindex.app.multitouch.encodePathStrokes
+import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import com.slideindex.app.ui.PrivacyPolicyScreen
 import com.slideindex.app.ui.SettingsBackupScreen
+import com.slideindex.app.ui.ShortcutTestScreen
 import com.slideindex.app.ui.ThirdPartyNoticesScreen
 import com.slideindex.app.ui.viewmodel.CloudBackupViewModel
 import com.slideindex.app.ui.viewmodel.CloudStorageSettingsViewModel
 import com.slideindex.app.ui.viewmodel.DiagnosticLogViewModel
 import com.slideindex.app.ui.viewmodel.ExtensionHubViewModel
 import com.slideindex.app.ui.viewmodel.ExtensionSettingsViewModel
+import com.slideindex.app.ui.viewmodel.MultiTouchGestureViewModel
 import com.slideindex.app.ui.viewmodel.SettingsBackupViewModel
 import com.slideindex.app.settings.SearchEngineType
 import com.slideindex.app.ui.viewmodel.SearchEngineSettingsViewModel
@@ -73,11 +91,14 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
             onOpenSettingsBackup = { ctx.navigate(AppNavKey.ExtensionBackup) },
             onOpenNativeEnginePacks = { ctx.navigate(AppNavKey.NativeEnginePacks) },
             onOpenDiagnosticLogs = { ctx.navigate(AppNavKey.ExtensionDiagnosticLogs) },
+            onOpenShortcutTest = { ctx.navigate(AppNavKey.ExtensionShortcutTest) },
             onOpenIconLibrary = { ctx.navigate(AppNavKey.GlobalIconLibrary) },
             onOpenIconTheme = { ctx.navigate(AppNavKey.IconThemeSettings) },
             onOpenAbout = { ctx.navigate(AppNavKey.ExtensionAbout) },
         )
     }
+
+    multiTouchNavEntries(ctx, AppNavKey.ExtensionHub)
 
     hiltEntry<AppNavKey.DragDropFlowSettings> {
         val viewModel: ExtensionSettingsViewModel = hiltViewModel()
@@ -88,6 +109,7 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
             onEnabledChange = viewModel::setDragDropFlowEnabled,
             onPositionChange = viewModel::setDragDropFlowPosition,
             onHapticChange = viewModel::setDragDropFlowHapticEnabled,
+            onActionsInlineChange = viewModel::setDragDropFlowActionsInline,
             onOpenTextSearchEngines = { ctx.navigate(AppNavKey.FloatBallSearchEngine) },
             onOpenImageSearchEngines = { ctx.navigate(AppNavKey.FloatBallImageSearchEngine) },
             onOpenFileShareEngines = { ctx.navigate(AppNavKey.FileShareEngineSettings) },
@@ -135,6 +157,12 @@ fun NavEntryBuilder.extensionHubNavEntries(ctx: MainNavContext) {
 
     hiltEntry<AppNavKey.IconThemeSettings> {
         com.slideindex.app.ui.IconThemeSettingsScreen(
+            onBack = { ctx.navigateBackTo(AppNavKey.ExtensionHub) },
+        )
+    }
+
+    hiltEntry<AppNavKey.ExtensionShortcutTest> {
+        ShortcutTestScreen(
             onBack = { ctx.navigateBackTo(AppNavKey.ExtensionHub) },
         )
     }

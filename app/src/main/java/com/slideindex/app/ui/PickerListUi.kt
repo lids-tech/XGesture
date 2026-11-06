@@ -68,6 +68,7 @@ import com.slideindex.app.overlay.ShellCommandBadgeOverlay
 import com.slideindex.app.overlay.ShortcutBadgeOverlay
 import com.slideindex.app.ui.miuix.miuixGroupedCardItem
 import com.slideindex.app.util.PickerAppIconBitmap
+import com.slideindex.app.util.ShortcutKind
 import com.slideindex.app.util.toSafeImageBitmap
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
@@ -184,6 +185,26 @@ fun PickerStatusChip(
 
 /** 行尾状态胶囊的内容与配色。 */
 data class PickerChipSpec(val text: String, val color: Color)
+
+/** 快捷方式类型徽章：所有选择器共用，避免各页面各写一套颜色。 */
+@Composable
+fun shortcutKindChip(kind: ShortcutKind?): PickerChipSpec? {
+    if (kind == null) return null
+    val labelRes = when (kind) {
+        ShortcutKind.PINNED -> R.string.shortcut_test_kind_pinned
+        ShortcutKind.DYNAMIC -> R.string.shortcut_test_kind_dynamic
+        ShortcutKind.STATIC -> R.string.shortcut_test_kind_static
+    }
+    val contentColor = when (kind) {
+        ShortcutKind.PINNED -> MaterialTheme.colorScheme.primary
+        ShortcutKind.DYNAMIC -> MaterialTheme.colorScheme.tertiary
+        ShortcutKind.STATIC -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    return PickerChipSpec(
+        text = stringResource(labelRes),
+        color = contentColor,
+    )
+}
 
 /** 行尾槽位：`endActions` 是必填闭包，没有胶囊时这里什么都不画，别让调用点各写一份空判断。 */
 @Composable
@@ -376,7 +397,13 @@ fun Md3PickerManagedShortcutLeading(
         ActivityShortcutKind.COMPONENT -> Icons.AutoMirrored.Filled.Launch
         else -> Icons.AutoMirrored.Filled.Shortcut
     }
-    val iconBitmap = remember(shortcut.id, shortcut.iconPath, shortcut.identityKey()) {
+    val iconBitmap = remember(
+        shortcut.id,
+        shortcut.iconPath,
+        shortcut.identityKey(),
+        // 宿主应用的全局图标覆盖变了，快捷方式回退到应用图标时要跟着换
+        com.slideindex.app.ui.GlobalIconStore.revision,
+    ) {
         ManagedShortcutIconResolver.drawableForManaged(context, shortcut)
             ?.toBitmap(96, 96)
     }
@@ -527,7 +554,7 @@ fun Md3PickerAppLeading(app: AppInfo, sizeDp: Int = 40) {
     // 必须在这里统一画出来，否则同一个应用在不同列表里的样子会不一致。
     Box(modifier = Modifier.size(sizeDp.dp)) {
         // 全局图标覆盖优先（扩展 → 图标库 → 应用图标）
-        val iconOverride = remember(app.packageName) {
+        val iconOverride = remember(app.packageName, com.slideindex.app.ui.GlobalIconStore.revision) {
             GlobalIconStore.appIcon(context, app.packageName)
         }
         if (iconOverride != null) {

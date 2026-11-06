@@ -14,6 +14,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,7 @@ import com.slideindex.app.R
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.shell.ShellCommand
 import com.slideindex.app.ui.ShellCommandPanelOverlaySheet
+import com.slideindex.app.ui.compose.LocalAppDependencies
 import com.slideindex.app.ui.miuix.theme.ModuleTheme
 import com.slideindex.app.util.TaskManagerUtil
 import kotlinx.coroutines.flow.first
@@ -79,25 +81,27 @@ class ShellCommandPanelTrampolineActivity : ComponentActivity() {
             }
 
             ModuleTheme(settings = appSettings) {
-                ShellCommandPanelOverlaySheet(
-                    initialCommands = commands,
-                    shizukuGranted = shizukuGranted,
-                    onRequestShizuku = { TaskManagerUtil.requestPermission(this@ShellCommandPanelTrampolineActivity) },
-                    onDismissComplete = { finishPicker() },
-                    onPersistCommands = { updated ->
-                        commands = updated
-                        ShellCommandPanelTrampoline.onCommandsPersist(updated)
-                        lifecycleScope.launch {
-                            deps.settingsRepository.setShellCommands(updated)
-                        }
-                    },
-                    onWindowReady = { ShellCommandPanelTrampoline.runPrepareIfNeeded() },
-                    registerBackHandler = { dismissRequest = it },
-                    registerContinuousDismissHandler = { handler ->
-                        ShellCommandPanelTrampoline.registerContinuousDismissRequest(handler)
-                    },
-                    onCopyOutput = { output -> copyOutput(output) }
-                )
+                CompositionLocalProvider(LocalAppDependencies provides deps) {
+                    ShellCommandPanelOverlaySheet(
+                        initialCommands = commands,
+                        shizukuGranted = shizukuGranted,
+                        onRequestShizuku = { TaskManagerUtil.requestPermission(this@ShellCommandPanelTrampolineActivity) },
+                        onDismissComplete = { finishPicker() },
+                        onPersistCommands = { updated ->
+                            commands = updated
+                            ShellCommandPanelTrampoline.onCommandsPersist(updated)
+                            lifecycleScope.launch {
+                                deps.settingsRepository.setShellCommands(updated)
+                            }
+                        },
+                        onWindowReady = { ShellCommandPanelTrampoline.runPrepareIfNeeded() },
+                        registerBackHandler = { dismissRequest = it },
+                        registerContinuousDismissHandler = { handler ->
+                            ShellCommandPanelTrampoline.registerContinuousDismissRequest(handler)
+                        },
+                        onCopyOutput = { output -> copyOutput(output) }
+                    )
+                }
             }
         }
     }
@@ -105,6 +109,20 @@ class ShellCommandPanelTrampolineActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         shizukuGrantedState.value = TaskManagerUtil.hasPermission()
+    }
+
+    /**
+     * 临时浮窗语义：离开前台即关闭。
+     *
+     * 面板跳去别的 app（例如测试执行 `am start`）后本 Activity 只会 stopped、不会 destroy，
+     * 而 ShellCommandPanelTrampoline.active 只在 onDestroy 复位；于是后续所有手势入口都会在
+     * `if (isActive()) return` 处静默丢弃，表现为"面板再也唤不出来，只能靠桌面长按快捷方式"。
+     * 这里在不可见时直接收掉，让 active 随 onDestroy 一起复位。
+     */
+    override fun onStop() {
+        super.onStop()
+        // 配置变更（如旋转）会重建 Activity，不能在这里收掉。
+        if (!isChangingConfigurations) finishPicker()
     }
 
     override fun onDestroy() {

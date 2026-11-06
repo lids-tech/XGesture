@@ -66,6 +66,7 @@ fun MainScreen(
     onOpenGestureAppProfiles: () -> Unit = {},
     gestureAppProfileCount: Int = 0,
     onOpenCornerWheel: () -> Unit,
+    onOpenMultiTouchGesture: () -> Unit,
     onOpenGestureAngle: () -> Unit,
     onOpenSystemBackGestureWidth: () -> Unit,
     onOpenAnimationStyleSelect: () -> Unit,
@@ -379,6 +380,23 @@ fun MainScreen(
                             subtitle = cornerWheelHomeSubtitle(cornerGestureSettings),
                             enabled = accessibilityGranted,
                             onClick = onOpenCornerWheel,
+                            )
+                        }
+                    },
+                )
+                add(
+                    settingsCardItem("multi-touch") {
+                        SettingsCardScopeContent {
+                            SettingNavigationRow(
+                                icon = { label ->
+                                    Icon(
+                                        HomeLeadingIcons.gesture(true),
+                                        contentDescription = label,
+                                    )
+                                },
+                                title = stringResource(R.string.multitouch_title),
+                                subtitle = stringResource(R.string.multitouch_home_summary),
+                                onClick = onOpenMultiTouchGesture,
                             )
                         }
                     },

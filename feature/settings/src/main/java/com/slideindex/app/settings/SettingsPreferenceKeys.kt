@@ -431,7 +431,12 @@ internal object SettingsPreferenceKeys {
     val GESTURE_PROFILES = stringSetPreferencesKey("gesture_profiles")
     val INDEPENDENT_APP_GESTURE_ENABLED = booleanPreferencesKey("gesture_independent_app_enabled")
     val SHAKE_GESTURES_ENABLED = booleanPreferencesKey("shake_gestures_enabled")
+
+    /** 旧版单选工作模式（int id），仅用于迁移到 [SHAKE_WORK_MODES]。 */
     val SHAKE_WORK_MODE = intPreferencesKey("shake_work_mode")
+
+    /** 多选工作模式，按 [com.slideindex.app.shake.ShakeWorkMode] 的 bit 位存掩码。 */
+    val SHAKE_WORK_MODES = intPreferencesKey("shake_work_modes")
     val SHAKE_GESTURE_ACTIONS = stringSetPreferencesKey("shake_gesture_actions")
     val SHAKE_MENU_ACTIONS = stringSetPreferencesKey("shake_menu_actions")
     val SHAKE_HOLD_SCREEN_ACTIONS = stringSetPreferencesKey("shake_hold_screen_actions")
@@ -770,6 +775,10 @@ internal object SettingsPreferenceKeys {
     val SEARCH_ENGINES_JSON = stringPreferencesKey("search_engines_json")
     val DRAG_FLOW_TEXT_ENGINES_JSON = stringPreferencesKey("drag_flow_text_engines_json")
     val SEARCH_ENGINES_INITIALIZED = booleanPreferencesKey("search_engines_initialized")
+
+    /** 一次性迁移标记：给旧引擎补「图标跟随的应用包名」，见 [SearchEngineIconSourceMigration]。 */
+    val SEARCH_ENGINE_ICON_SOURCE_MIGRATED =
+        booleanPreferencesKey("search_engine_icon_source_migrated")
     val SEARCH_ENGINE_GRID_COLUMNS = intPreferencesKey("search_engine_grid_columns")
     val SEARCH_ENGINE_GRID_ROWS = intPreferencesKey("search_engine_grid_rows")
     val SEARCH_ENGINE_SHOW_LABELS = booleanPreferencesKey("search_engine_show_labels")
@@ -859,4 +868,7 @@ internal object SettingsPreferenceKeys {
     val DRAG_DROP_FLOW_ENABLED = booleanPreferencesKey("drag_drop_flow_enabled")
     val DRAG_DROP_FLOW_POSITION = intPreferencesKey("drag_drop_flow_position")
     val DRAG_DROP_FLOW_HAPTIC = booleanPreferencesKey("drag_drop_flow_haptic")
+
+    /** 内置动作是否直接平铺在流转栏上（关掉则收进「操作」枢纽）。 */
+    val DRAG_DROP_FLOW_ACTIONS_INLINE = booleanPreferencesKey("drag_drop_flow_actions_inline")
 }

@@ -19,6 +19,7 @@ import com.slideindex.app.settings.SearchPanelSectionAliasSettings
 import com.slideindex.app.settings.SearchPanelEnterAction
 import com.slideindex.app.settings.SearchPanelInputBehavior
 import com.slideindex.app.settings.SearchEngineConfig
+import com.slideindex.app.settings.SearchEngineStore
 import com.slideindex.app.settings.SearchEngineType
 import com.slideindex.app.settings.SearchIconType
 import com.slideindex.app.settings.SettingsRepository
@@ -53,6 +54,8 @@ data class SearchEngineDraft(
     val pendingIconUri: Uri? = null,
     val pendingIconPath: String? = null,
     val pendingTextIcon: String? = null,
+    /** 「用应用图标」时跟随的包名；非空表示图标实时跟随该应用（含图标库覆盖）。 */
+    val pendingIconSourcePackage: String? = null,
 )
 
 data class SearchEngineImportPreviewState(
@@ -118,6 +121,7 @@ class SearchEngineSettingsViewModel @Inject constructor(
             autoInputEnter = initialEngine?.autoInputEnter ?: true,
             pendingIconPath = initialEngine?.iconPath?.takeIf { initialEngine.iconType == SearchIconType.URI },
             pendingTextIcon = initialEngine?.textIcon?.takeIf { initialEngine.iconType == SearchIconType.TEXT },
+            pendingIconSourcePackage = initialEngine?.iconSourcePackage,
         )
         draftCategory = category
     }
@@ -250,6 +254,15 @@ class SearchEngineSettingsViewModel @Inject constructor(
                         textIcon = null,
                     )
                 }
+                result.engine.iconSourcePackage != null -> {
+                    // 「用应用图标」：不落盘，清掉旧快照，渲染时实时取该应用的当前图标。
+                    previous?.iconPath?.let { SearchEngineIconStorage.deleteIconIfOwned(appContext, it) }
+                    engine = engine.copy(
+                        iconType = SearchIconType.OTHER,
+                        iconPath = null,
+                        textIcon = null,
+                    )
+                }
                 result.engine.iconType == SearchIconType.TEXT -> {
                     previous?.iconPath?.let { oldPath ->
                         SearchEngineIconStorage.deleteIconIfOwned(appContext, oldPath)
@@ -279,15 +292,24 @@ class SearchEngineSettingsViewModel @Inject constructor(
     fun addEngines(newEngines: List<SearchEngineConfig>) {
         if (newEngines.isEmpty()) return
         viewModelScope.launch {
-            val existing = settings.value.searchEngines.toMutableList()
-            var nextOrder = (existing.maxOfOrNull { it.sortOrder } ?: -1) + 1
-            for (engine in newEngines) {
-                existing.add(engine.copy(sortOrder = nextOrder++))
-                invalidateSearchEngineIconCache(engine.id)
+            appendEngines(newEngines).onFailure {
+                userMessageBus.showError(appContext.getString(R.string.settings_save_failed))
             }
-            persistEngines(existing.sortedBy { it.sortOrder })
         }
     }
+
+    /**
+     * 原子追加一批引擎。
+     *
+     * 不能用 `settings.value` 当基线：它是 `stateIn(WhileSubscribed)` 的快照，页面没有
+     * 订阅者（例如批量选择页）时不会更新，拿它拼新列表会把上次新增的引擎整表覆盖掉。
+     */
+    private suspend fun appendEngines(newEngines: List<SearchEngineConfig>): Result<Unit> =
+        settingsRepository.updateSearchEngines { current ->
+            SearchEngineStore.appendEngines(current, newEngines)
+        }.onSuccess {
+            newEngines.forEach { engine -> invalidateSearchEngineIconCache(engine.id) }
+        }
 
     /**
      * 批量添加分享引擎：每个勾选的分享入口生成一条 [engineType] 引擎（图片 / 文件分享共用）。
@@ -298,7 +320,10 @@ class SearchEngineSettingsViewModel @Inject constructor(
     fun addShareEngines(targets: List<ShareImageTarget>, engineType: SearchEngineType) {
         if (targets.isEmpty()) return
         viewModelScope.launch {
-            val existing = settings.value.searchEngines
+            // 判重同样不能用 settings.value（同上：可能是旧快照，会让重复目标漏过判重）。
+            val existing = withContext(Dispatchers.IO) {
+                settingsRepository.readFreshSnapshot().searchEngines
+            }
             val fresh = targets
                 .distinctBy { "${it.packageName}/${it.activityClassName}" }
                 .filterNot { target ->
@@ -314,28 +339,31 @@ class SearchEngineSettingsViewModel @Inject constructor(
                 )
                 return@launch
             }
-            val newEngines = withContext(Dispatchers.IO) {
-                fresh.mapIndexed { index, target ->
-                    val iconPath = SearchEngineIconStorage.saveIconFromPackage(appContext, target.packageName)
-                    SearchEngineConfig(
-                        id = "engine_${System.currentTimeMillis()}_$index",
-                        name = ShareImageTargetResolver.displayGroupTitle(target),
-                        engineType = engineType,
-                        iconType = if (iconPath != null) SearchIconType.URI else SearchIconType.OTHER,
-                        iconPath = iconPath,
-                        targetPackage = target.packageName,
-                        targetActivity = target.activityClassName,
+            // 不再落盘快照：记录图标来源包名，运行期实时取该应用的当前图标（含图标库覆盖）。
+            val newEngines = fresh.mapIndexed { index, target ->
+                SearchEngineConfig(
+                    id = "engine_${System.currentTimeMillis()}_$index",
+                    name = ShareImageTargetResolver.displayGroupTitle(target),
+                    engineType = engineType,
+                    iconType = SearchIconType.OTHER,
+                    iconSourcePackage = target.packageName,
+                    targetPackage = target.packageName,
+                    targetActivity = target.activityClassName,
+                )
+            }
+            appendEngines(newEngines)
+                .onSuccess {
+                    userMessageBus.showSuccess(
+                        appContext.resources.getQuantityString(
+                            R.plurals.share_target_batch_added,
+                            newEngines.size,
+                            newEngines.size,
+                        ),
                     )
                 }
-            }
-            addEngines(newEngines)
-            userMessageBus.showSuccess(
-                appContext.resources.getQuantityString(
-                    R.plurals.share_target_batch_added,
-                    newEngines.size,
-                    newEngines.size,
-                ),
-            )
+                .onFailure {
+                    userMessageBus.showError(appContext.getString(R.string.settings_save_failed))
+                }
         }
     }
 

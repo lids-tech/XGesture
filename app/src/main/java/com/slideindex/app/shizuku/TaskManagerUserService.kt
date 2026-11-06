@@ -1,8 +1,12 @@
 package com.slideindex.app.shizuku
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.Keep
 import androidx.annotation.StringRes
+import com.slideindex.app.multitouch.EvdevTouchObserver
+import com.slideindex.app.multitouch.encodePathStrokes
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class TaskManagerUserService() : ITaskManagerService.Stub() {
 
@@ -15,13 +19,136 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
     private val freeWindow =
         TaskManagerFreeWindowOperations(verifier = SystemRecentsAccess::freeWindowMoveStatus)
 
+    private var touchObserver: EvdevTouchObserver? = null
+
     @Keep
     constructor(context: Context) : this() {
         appContext = context.applicationContext
     }
 
     override fun destroy() {
+        stopMultiTouchObservation()
         System.exit(0)
+    }
+
+    override fun startMultiTouchObservation(
+        callback: IOnMultiTouchGesture,
+        pathPriority: Boolean,
+    ): Boolean {
+        stopMultiTouchObservation()
+        val observer = EvdevTouchObserver(
+            onGesture = { gestures, eventTimeMs, anchor ->
+                runCatching {
+                    Log.i(
+                        "MultiTouchBridge",
+                        "batch: " + gestures.joinToString { "${it.gesture}x${it.fingerCount}" } +
+                            " anchor=(${anchor.u},${anchor.v})",
+                    )
+                    callback.onGestureBatch(
+                        gestures.map { it.gesture.ordinal }.toIntArray(),
+                        gestures.map { it.fingerCount }.toIntArray(),
+                        eventTimeMs,
+                        anchor.u,
+                        anchor.v,
+                    )
+                }
+            },
+            onPathGesture = { path, eventTimeMs, anchor ->
+                val coordinates = ArrayList<Float>()
+                val strokeLengths = IntArray(path.strokes.size)
+                path.strokes.forEachIndexed { index, stroke ->
+                    strokeLengths[index] = stroke.points.size
+                    for (point in stroke.points) {
+                        coordinates += point.x
+                        coordinates += point.y
+                    }
+                }
+                runCatching {
+                    callback.onPathGesture(
+                        path.fingerCount,
+                        coordinates.toFloatArray(),
+                        strokeLengths,
+                        eventTimeMs,
+                        anchor.u,
+                        anchor.v,
+                    )
+                }
+            },
+            onInputConflict = { devices ->
+                android.util.Log.i("MultiTouchBridge", "notify conflict: $devices")
+                runCatching { callback.onInputConflict(devices) }
+            },
+            onState = { running, detail ->
+                runCatching { callback.onObserverState(running, detail) }
+            },
+        )
+        touchObserver = observer
+        return observer.start()
+    }
+
+    override fun stopMultiTouchObservation() {
+        touchObserver?.stop()
+        touchObserver = null
+    }
+
+    override fun isMultiTouchObservationRunning(): Boolean =
+        touchObserver?.isRunning() == true
+
+    // ---- root 模式轮询（RPC 无法传 binder callback）----
+
+    private val pollingEvents = ConcurrentLinkedQueue<String>()
+
+    private var pollingObserver: EvdevTouchObserver? = null
+
+    /**
+     * root 模式：启动观察器，事件进队列，由 app 轮询取走。
+     *
+     * 事件格式（`u`/`v` 是面板自然坐标 0..1，见 [IOnMultiTouchGesture]）：
+     * - `g:<手势 ordinal>:<触点数>:<u>:<v>`
+     * - `p:<触点数>:<u>:<v>:<轨迹>`（轨迹里没有冒号，可以直接按 limit 切）
+     */
+    override fun startMultiTouchPolling(pathPriority: Boolean): Boolean {
+        stopMultiTouchPolling()
+        val observer = EvdevTouchObserver(
+            onGesture = { gestures, _, anchor ->
+                for (gesture in gestures) {
+                    pollingEvents += "g:${gesture.gesture.ordinal}:${gesture.fingerCount}:" +
+                        "${anchor.u}:${anchor.v}"
+                }
+            },
+            onPathGesture = { path, _, anchor ->
+                pollingEvents += "p:${path.fingerCount}:${anchor.u}:${anchor.v}:" +
+                    encodePathStrokes(path.strokes)
+            },
+            onState = { _, detail ->
+                // 设备路径只取短名（event7），状态行不用完整的 /dev/input/...。
+                if (detail.startsWith("watching:")) {
+                    val device = detail.removePrefix("watching:").substringAfterLast('/')
+                    pollingEvents += "d:$device"
+                }
+            },
+            onInputConflict = { devices ->
+                pollingEvents += "c:${devices?.takeIf { it.isNotBlank() } ?: ""}"
+            },
+        )
+        val started = observer.start()
+        if (!started) return false
+        pollingObserver = observer
+        return true
+    }
+
+    override fun pollMultiTouchEvents(): Array<String> {
+        val events = ArrayList<String>()
+        while (true) {
+            events += pollingEvents.poll() ?: break
+        }
+        return events.toTypedArray()
+    }
+
+    override fun stopMultiTouchPolling() {
+        pollingObserver?.stop()
+        pollingObserver = null
+        pollingEvents.clear()
     }
 
     override fun removeTaskById(taskIdStr: String?): Boolean =

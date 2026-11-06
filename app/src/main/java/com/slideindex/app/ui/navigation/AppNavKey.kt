@@ -318,6 +318,59 @@ sealed interface AppNavKey : NavKey {
 
     // Extension tab
     @Serializable data object ExtensionHub : AppNavKey
+    /** 多指手势设置（Shizuku evdev 观察模式）。 */
+    @Serializable data object ExtensionMultiTouchGesture : AppNavKey
+    /** 路径手势录制页；`entryId` 非空表示重录已有条目（只覆盖轨迹）。 */
+    @Serializable data class ExtensionMultiTouchPathRecord(
+        val entryId: String = "",
+        val initialStrokes: String = "",
+    ) : AppNavKey
+    /**
+     * 多指手势的动作选择页。
+     *
+     * @param kind `MultiPointerGesture.ordinal`
+     * @param fingerCount 接触点数（1–5）
+     * @param pendingStrokes 路径草稿（`x,y;x,y|x,y`），`kind=PATH` 时使用
+     * @param entryId 非空表示编辑已有条目（绘制手势按 id 定位，避免覆盖同触点数的其它条目）
+     */
+    @Serializable data class ExtensionMultiTouchActionPick(
+        val kind: Int,
+        val fingerCount: Int,
+        val pendingStrokes: String = "",
+        val entryId: String = "",
+    ) : AppNavKey
+    @Serializable data class ExtensionMultiTouchActionMyShortcuts(
+        val kind: Int,
+        val fingerCount: Int,
+        val pendingStrokes: String = "",
+        val entryId: String = "",
+    ) : AppNavKey
+    @Serializable data class ExtensionMultiTouchActionPresetShortcuts(
+        val kind: Int,
+        val fingerCount: Int,
+        val pendingStrokes: String = "",
+        val entryId: String = "",
+    ) : AppNavKey
+    @Serializable data class ExtensionMultiTouchActionPickApp(
+        val kind: Int,
+        val fingerCount: Int,
+        val pendingStrokes: String = "",
+        val entryId: String = "",
+    ) : AppNavKey
+    @Serializable data class ExtensionMultiTouchActionPickActivity(
+        val kind: Int,
+        val fingerCount: Int,
+        val pendingStrokes: String = "",
+        val appPackageName: String = "",
+        val entryId: String = "",
+    ) : AppNavKey
+    @Serializable data class ExtensionMultiTouchActionShellCommand(
+        val kind: Int,
+        val fingerCount: Int,
+        val pendingStrokes: String = "",
+        val initialCommand: String = "",
+        val entryId: String = "",
+    ) : AppNavKey
     // 手势宏（宏列表 / 新建-编辑 / 目标 App 选择）
     @Serializable data object MacroList : AppNavKey
     /** 「页面滚动」设置（滚动方式 / 默认速度 / 控制条配色）。 */
@@ -343,6 +396,7 @@ sealed interface AppNavKey : NavKey {
 @Serializable data object GlobalIconLibrary : AppNavKey
 @Serializable data object IconThemeSettings : AppNavKey
     @Serializable data object ExtensionDiagnosticLogs : AppNavKey
+    @Serializable data object ExtensionShortcutTest : AppNavKey
     @Serializable data class ExtensionDiagnosticLogDetail(val fileName: String) : AppNavKey
     @Serializable data object ExtensionFreezer : AppNavKey
     @Serializable data object ExtensionFreezerApps : AppNavKey
@@ -447,6 +501,17 @@ sealed interface AppNavKey : NavKey {
     @Serializable data object ShellCommands : AppNavKey
     @Serializable data object ActivityShortcuts : AppNavKey
     @Serializable data object ActivityShortcutPresets : AppNavKey
+    @Serializable data class ActivityShortcutEdit(val shortcutId: String) : AppNavKey
+    @Serializable data class ActivityShortcutEditPickApp(
+        val shortcutId: String,
+    ) : AppNavKey
+    @Serializable data class ActivityShortcutEditPickActivity(
+        val shortcutId: String,
+        val packageName: String,
+    ) : AppNavKey
+    @Serializable data class ActivityShortcutEditPickIconApp(
+        val shortcutId: String,
+    ) : AppNavKey
     @Serializable data object ActivityShortcutPickApp : AppNavKey
     @Serializable data class ActivityShortcutPickActivity(val packageName: String) : AppNavKey
     @Serializable data object ActivityShortcutPickAppShortcut : AppNavKey

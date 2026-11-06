@@ -18,15 +18,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.activity.ActivityShortcut
-import com.slideindex.app.activity.activityShortcutFromQuickLauncherItem
+import com.slideindex.app.activity.toActivityShortcut
 import com.slideindex.app.overlay.TaskSwitcherMenuItem
 import com.slideindex.app.ui.Md3PickerIconLeading
 import com.slideindex.app.ui.Md3PickerListRow
 import com.slideindex.app.ui.PickerTrailingMode
+import com.slideindex.app.ui.shortcutKindChip
 import com.slideindex.app.ui.compose.rememberAppRepository
 import com.slideindex.app.ui.settings.components.SettingsLazyScreenScaffoldWithExpandableSearch
 import com.slideindex.app.util.AppShortcutLoader
-import com.slideindex.app.util.AppShortcutLoader.toQuickLauncherItem
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -81,6 +81,7 @@ fun ActivityShortcutPickAppShortcutScreen(
                     appsByPackage = appsByPackage,
                     loading = true,
                     scanProgress = loadedCatalog.scanProgress,
+                    searchQuery = query,
                     loadingItemKey = "loading",
                     onCreateHostClick = {},
                     shortcutRowContent = { _, _, _, _ -> },
@@ -102,6 +103,7 @@ fun ActivityShortcutPickAppShortcutScreen(
                     appsByPackage = appsByPackage,
                     loading = false,
                     scanProgress = null,
+                    searchQuery = query,
                     onCreateHostClick = {},
                     shortcutRowContent = { group, shortcut, segmentIndex, segmentCount ->
                         ActivityShortcutPickAppShortcutRow(
@@ -128,11 +130,11 @@ private fun ActivityShortcutPickAppShortcutRow(
     existingIdentityKeys: Set<String>,
     onAddShortcut: (ActivityShortcut) -> Unit,
 ) {
-    val qlItem = shortcut.toQuickLauncherItem(group.app.packageName)
-    val managed = activityShortcutFromQuickLauncherItem(
-        qlItem.copy(label = shortcut.label.ifBlank { qlItem.label }),
+    val managed = shortcut.toActivityShortcut(
+        packageName = group.app.packageName,
+        label = shortcut.label.ifBlank { group.app.label },
     )
-    val key = managed?.identityKey().orEmpty()
+    val key = managed.identityKey()
     val alreadyAdded = key.isNotBlank() && key in existingIdentityKeys
     Md3PickerListRow(
         segmentIndex = segmentIndex,
@@ -140,7 +142,7 @@ private fun ActivityShortcutPickAppShortcutRow(
         title = shortcut.label,
         selected = alreadyAdded,
         onClick = {
-            if (!alreadyAdded && managed != null) {
+            if (!alreadyAdded) {
                 onAddShortcut(managed)
             }
         },
@@ -151,5 +153,6 @@ private fun ActivityShortcutPickAppShortcutRow(
             )
         },
         trailingMode = PickerTrailingMode.Toggle,
+        trailingChip = shortcutKindChip(shortcut.kind),
     )
 }

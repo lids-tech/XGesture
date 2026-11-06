@@ -36,7 +36,7 @@ import kotlin.math.max
  * 统一 1.75dp 线宽的描边图标，暂停键是唯一的大圆钮，速度用**竖向 7 格刻度梯**（下慢上快）。
  *
  * 交互：整条可上下拖（位置记住）；速度梯可点可拖；加速/减速键支持长按连调；
- * 闲置 4 秒淡出；手指落在条上期间回报宿主暂停滚动。
+ * 闲置 4 秒淡到设置里的「闲置不透明度」（默认 55%，0 即完全看不见）；手指落在条上期间回报宿主暂停滚动。
  */
 internal class PageScrollControlBar(
     private val context: Context,
@@ -88,7 +88,7 @@ internal class PageScrollControlBar(
         val settings = settingsProvider()
 
         val iconColor = iconColor()
-        val accent = accentColor(settings)
+        val accent = accentColor()
 
         val bar = BarContainer(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -136,7 +136,7 @@ internal class PageScrollControlBar(
             setOnClickListener {
                 pressFeedback(this)
                 // 先本地立刻切选中态，再通知滚动器；refresh 回来时值相同，等于幂等对齐。
-                applyPausedVisual(!visualPaused, settingsProvider())
+                applyPausedVisual(!visualPaused)
                 listener.onTogglePause()
             }
         }
@@ -224,7 +224,7 @@ internal class PageScrollControlBar(
             rotation = if (directionDown) 0f else 180f
             contentDescription = context.getString(R.string.page_scroll_reverse_direction)
         }
-        applyPausedVisual(paused, settings)
+        applyPausedVisual(paused)
         fasterIcon?.apply {
             contentDescription = context.getString(R.string.page_scroll_faster)
             isEnabled = settings.speedLevel < PageScrollSettings.MAX_SPEED_LEVEL
@@ -240,7 +240,7 @@ internal class PageScrollControlBar(
             text = settings.speedLevel.toString()
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(accentColor(settings))
+                setColor(accentColor())
             }
             setTextColor(if (night) NIGHT_SURFACE else DAY_SURFACE)
             contentDescription = context.getString(
@@ -257,9 +257,9 @@ internal class PageScrollControlBar(
      * 点击时先调它做乐观更新，[refresh] 再调一次做对齐；由于只改已存在 drawable 的颜色、
      * 不重建 RippleDrawable，按下的 ripple 不会被抹掉，选中态也在同一帧出现。
      */
-    private fun applyPausedVisual(paused: Boolean, settings: PageScrollSettings) {
+    private fun applyPausedVisual(paused: Boolean) {
         visualPaused = paused
-        val accent = accentColor(settings)
+        val accent = accentColor()
         pauseIcon?.apply {
             setImageResource(
                 if (paused) R.drawable.ic_page_scroll_play else R.drawable.ic_page_scroll_pause,
@@ -271,7 +271,7 @@ internal class PageScrollControlBar(
         }
         val fill = pauseFill ?: return
         if (paused) {
-            fill.setColor(pausedIndicatorColor(settings))
+            fill.setColor(pausedIndicatorColor())
         } else {
             fill.setColor(activeIndicatorColor())
         }
@@ -279,8 +279,8 @@ internal class PageScrollControlBar(
     }
 
     /** 暂停态圆底：强调色压到约 25% 不透明度（原实现是 `and 0x22FFFFFF`，实际只剩 13%）。 */
-    private fun pausedIndicatorColor(settings: PageScrollSettings): Int {
-        val accent = accentColor(settings)
+    private fun pausedIndicatorColor(): Int {
+        val accent = accentColor()
         return (accent and 0x00FFFFFF) or (0x40 shl 24)
     }
 
@@ -347,7 +347,11 @@ internal class PageScrollControlBar(
     private fun scheduleDim() {
         dimTask?.let { handler.removeCallbacks(it) }
         val task = Runnable {
-            container?.animate()?.alpha(DIM_ALPHA)?.setDuration(DIM_ANIM_MS)?.start()
+            val alpha = settingsProvider().controlBarIdleAlpha.coerceIn(
+                PageScrollSettings.MIN_CONTROL_BAR_IDLE_ALPHA,
+                PageScrollSettings.MAX_CONTROL_BAR_IDLE_ALPHA,
+            )
+            container?.animate()?.alpha(alpha)?.setDuration(DIM_ANIM_MS)?.start()
         }
         dimTask = task
         handler.postDelayed(task, DIM_DELAY_MS)
@@ -421,12 +425,8 @@ internal class PageScrollControlBar(
 
     private fun iconColor(): Int = if (night) NIGHT_ICON else DAY_ICON
 
-    private fun accentColor(settings: PageScrollSettings): Int =
-        if (settings.controlBarUseAccentColor) {
-            if (night) NIGHT_ACCENT else DAY_ACCENT
-        } else {
-            iconColor()
-        }
+    /** 强调色固定跟随应用（不再提供开关）。 */
+    private fun accentColor(): Int = if (night) NIGHT_ACCENT else DAY_ACCENT
 
     private fun activeIndicatorColor(): Int =
         if (night) NIGHT_ACTIVE_CONTAINER else DAY_ACTIVE_CONTAINER
@@ -551,7 +551,6 @@ internal class PageScrollControlBar(
         const val TOP_MARGIN_DP = 48
         const val BOTTOM_MARGIN_DP = 48
 
-        const val DIM_ALPHA = 0.55f
         const val DIM_DELAY_MS = 4000L
         const val DIM_ANIM_MS = 220L
         const val DISABLED_ALPHA = 0.35f
