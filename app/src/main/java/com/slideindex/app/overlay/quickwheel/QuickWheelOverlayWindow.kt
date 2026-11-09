@@ -70,6 +70,9 @@ import kotlinx.coroutines.launch
 object QuickWheelOverlayWindow {
     private const val TAG = "QuickWheelOverlay"
 
+    /** 截屏类动作执行前的最小延迟：等轮盘窗口移除后系统重绘一帧，避免轮盘被拍进截图。 */
+    private const val SCREEN_CAPTURE_DISMISS_DELAY_MS = 150L
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var composeView: ComposeView? = null
     private var composeOwner: OverlayComposeOwner? = null
@@ -602,17 +605,34 @@ object QuickWheelOverlayWindow {
                     ?: true,
             )
         }
-        runCatching {
-            executor.execute(
-                action = action,
-                settings = effectiveSettings,
+        // ⚠️ 先收起轮盘再执行：像「全局复制 / 截屏取词」这类动作会在**下一瞬间截屏**，
+        // 轮盘这时还挂在屏幕上，就会被一起拍进截图里（真机反馈：从轮盘打开全局复制，
+        // 界面出现一排排轮盘容器的空方块）。所以这类动作先 dismiss，再等一帧干净的画面。
+        // 只针对「全局复制」：它执行后**立刻**截屏分析，轮盘还没收掉就会被拍进去。
+        // 其余动作（截屏 / 取词等）保持原行为，不多加延迟。
+        val needsCleanScreen = action.type == GestureActionType.UNIVERSAL_COPY
+
+        val runAction = {
+            runCatching {
+                executor.execute(
+                    action = action,
+                    settings = effectiveSettings,
                 // 轮盘的点击动作按「非长按」、长按动作按「长按」参与启动策略判定（长按时长仍用轮盘自己的设定，
                 // 与「应用与启动」页的长按时长互不影响）。
-                longPressArmed = longPress,
-                anchorRawX = anchorX,
-                anchorRawY = anchorY,
-            )
-        }.onFailure { Log.w(TAG, "executeSlot 失败", it) }
+                    longPressArmed = longPress,
+                    anchorRawX = anchorX,
+                    anchorRawY = anchorY,
+                )
+            }.onFailure { Log.w(TAG, "executeSlot 失败", it) }
+        }
+
+        if (needsCleanScreen) {
+            dismiss()
+            // 窗口移除后系统还要重绘一帧；150ms 足够让截图不再包含轮盘。
+            mainHandler.postDelayed({ runAction() }, SCREEN_CAPTURE_DISMISS_DELAY_MS)
+        } else {
+            runAction()
+        }
     }
 
     /** 目标包名（拿不到就返回 null：不参与"桌面 / 系统界面 / 自身"的硬排除判定）。 */
