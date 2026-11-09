@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.slideindex.app.di.OverlayDependencyAccess
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.gesture.QuickWheelAnchorMode
@@ -643,11 +642,13 @@ object QuickWheelOverlayWindow {
  * 保存用的是同一个方法），再按 id 把这一张轮盘替换进列表。
  */
 private fun persistWheel(context: Context, wheel: QuickWheel) {
-    val repo = OverlayDependencyAccess.overlayDependencies(context)?.settingsRepository ?: return
+    // 本模块不持有 SettingsRepository：读写走 :app 注册的钩子（PanelRuntimeHooks）。
+    val read = com.slideindex.app.overlay.panels.PanelRuntimeHooks.readQuickWheels ?: return
+    val write = com.slideindex.app.overlay.panels.PanelRuntimeHooks.updateQuickWheels ?: return
     kotlinx.coroutines.MainScope().launch {
         runCatching {
-            val wheels = repo.readSnapshot().launcher.quickWheels
-            repo.setQuickWheels(wheels.map { if (it.id == wheel.id) wheel else it })
+            val wheels = read().orEmpty()
+            write(wheels.map { if (it.id == wheel.id) wheel else it })
         }.onFailure {
             // 顶层函数访问不到对象里的私有 TAG，这里用字面量（与 TAG 的值保持一致）。
             Log.w("QuickWheelOverlay", "persistWheel 失败", it)

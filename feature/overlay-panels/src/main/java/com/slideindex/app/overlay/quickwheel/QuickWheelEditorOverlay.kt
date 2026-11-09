@@ -63,6 +63,9 @@ import com.slideindex.app.overlay.layout.QuickWheelLayout
 import com.slideindex.app.overlay.layout.QuickWheelLayoutEngine
 import com.slideindex.app.settings.QuickWheel
 import com.slideindex.app.settings.QuickWheelCodec
+import com.slideindex.app.ui.QuickWheelWheelRenderer
+import com.slideindex.app.ui.buildQuickWheelLayout
+import com.slideindex.app.ui.QuickWheelHintPill
 import com.slideindex.app.settings.withGapInserted
 import com.slideindex.app.settings.withPrimaryMoved
 import com.slideindex.app.settings.withPrimaryRemovedAt

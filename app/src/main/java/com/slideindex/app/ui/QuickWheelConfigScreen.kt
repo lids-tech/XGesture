@@ -67,6 +67,7 @@ import com.slideindex.app.overlay.layout.QuickWheelShape
 import com.slideindex.app.overlay.layout.QuickWheelStyleSpec
 import com.slideindex.app.overlay.quickwheel.QuickWheelOverlayWindow
 import com.slideindex.app.settings.QuickWheel
+import com.slideindex.app.overlay.quickwheel.QuickWheelEditorOverlay
 import com.slideindex.app.settings.QuickWheelCodec
 import com.slideindex.app.settings.withSectorToggled
 import com.slideindex.app.ui.miuix.MiuixSettingsScreenScaffold
