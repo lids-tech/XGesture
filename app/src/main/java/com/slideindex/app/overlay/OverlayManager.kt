@@ -57,9 +57,19 @@ class OverlayManager(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var refreshVisibilityPending = false
 
+    /** 自愈巡检日志节流（前后台切换时这条路径可能每秒被调多次）。 */
+    private var lastHealLogAtMs = 0L
+
+    /** 启动期触钮补挂：是否已排了一次延迟重试、还剩几次额度。 */
+    private var triggerAttachRetryPending = false
+    private var triggerAttachRetriesLeft = 0
+
     fun applySettings(settings: AppSettings) {
+        Log.d("XGStartup", "applySettings serviceEnabled=" + settings.serviceEnabled +
+            " triggersShown=" + triggersShown + " suppressed=" + triggersSuppressed)
         currentSettings = settings
         if (!settings.serviceEnabled) {
+            Log.d("XGStartup", "applySettings SKIP: serviceEnabled=false")
             clearAllOverlayBrightness()
             leftController?.destroy()
             rightController?.destroy()
@@ -97,7 +107,16 @@ class OverlayManager(
         settings: AppSettings,
         metrics: ScreenMetricsSnapshot = OverlayScreenMetrics.snapshot(context)
     ) {
-        if (!settings.serviceEnabled || triggersSuppressed) return
+        if (!settings.serviceEnabled || triggersSuppressed) {
+            Log.d("XGStartup", "ensureSideEdges SKIP serviceEnabled=" + settings.serviceEnabled +
+                " suppressed=" + triggersSuppressed)
+            return
+        }
+        Log.d("XGStartup", "ensureSideEdges attach left=" +
+            settings.runtimeTriggerHandles(PanelSide.LEFT, metrics.isLandscape).size +
+            " right=" + settings.runtimeTriggerHandles(PanelSide.RIGHT, metrics.isLandscape).size +
+            " bottom=" + settings.runtimeTriggerHandles(PanelSide.BOTTOM, metrics.isLandscape).size +
+            " top=" + settings.runtimeTriggerHandles(PanelSide.TOP, metrics.isLandscape).size)
         ensureSideEdge(PanelSide.LEFT, leftController, settings, metrics)
         ensureSideEdge(PanelSide.RIGHT, rightController, settings, metrics)
         ensureSideEdge(PanelSide.BOTTOM, bottomController, settings, metrics)
@@ -152,29 +171,43 @@ class OverlayManager(
      *
      * 由周期巡检、环境变化与预览入口调用；只有真的重挂了才返回 true。
      */
+    /** 自愈巡检的调试日志：同一条路径高频调用，统一节流，避免刷屏淹没真正的问题。 */
+    private fun logHealThrottled(message: String) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastHealLogAtMs < HEAL_LOG_THROTTLE_MS) return
+        lastHealLogAtMs = now
+        Log.d("XGStartup", message)
+    }
+
     fun healTriggerAttachments(
         metrics: ScreenMetricsSnapshot = OverlayScreenMetrics.snapshot(context)
     ): Boolean {
-        if (!currentSettings.serviceEnabled) return false
-        if (OverlayTrampolineGuard.blocksOverlayPresentationTouch()) return false
-        if (shouldSuppressTrigger()) return false
-
-        val sides = listOf(
-            PanelSide.LEFT to leftController,
-            PanelSide.RIGHT to rightController,
-            PanelSide.BOTTOM to bottomController,
-            PanelSide.TOP to topController,
-        )
-        val missing = sides.filter { (side, controller) ->
-            controller != null &&
-                currentSettings.runtimeTriggerHandles(side, metrics.isLandscape).isNotEmpty() &&
-                !controller.hasTriggerAttachments()
+        if (!currentSettings.serviceEnabled) {
+            OverlayStatePort.noteHealTick(skipped = true)
+            logHealThrottled("heal SKIP serviceEnabled=false")
+            return false
         }
-        if (missing.isEmpty()) return false
+        if (OverlayTrampolineGuard.blocksOverlayPresentationTouch()) {
+            OverlayStatePort.noteHealTick(skipped = true)
+            logHealThrottled("heal SKIP trampolineGuard")
+            return false
+        }
+        if (shouldSuppressTrigger()) {
+            OverlayStatePort.noteHealTick(skipped = true)
+            logHealThrottled("heal SKIP suppressed")
+            return false
+        }
+
+        val missing = missingTriggerSides(metrics)
+        if (missing.isEmpty()) {
+            OverlayStatePort.noteHealTick(skipped = false)
+            logHealThrottled("heal nothing-missing")
+            return false
+        }
 
         Log.w(
             TAG,
-            "触钮缺失，自愈重挂: ${missing.map { it.first }} " +
+            "触钮缺失，自愈重挂: $missing " +
                 "(serviceEnabled=${currentSettings.serviceEnabled}, " +
                 "triggersShown=$triggersShown, " +
                 "triggersSuppressed=$triggersSuppressed, " +
@@ -351,6 +384,8 @@ class OverlayManager(
                 triggersSuppressed = true
                 triggersShown = false
             }
+            // 被抑制期间不做补挂重试：等解除抑制时再走“首次显示”分支。
+            triggerAttachRetriesLeft = 0
             forwardingSideMask = 0
             return
         }
@@ -360,9 +395,50 @@ class OverlayManager(
             clearAllOverlayBrightness()
             TaskManagerUtil.ensureServiceBound()
             triggersShown = true
+            // 每次“重新显示”给几次短重试额度：首次挂载可能被窗口过渡/环境抖动打断，
+            // 不能只等 12 秒一次的自愈巡检（用户体感就是触钮晚好几秒才出现）。
+            triggerAttachRetriesLeft = TRIGGER_ATTACH_RETRY_ATTEMPTS
+            ensureSideEdgesForHandles(currentSettings)
+        } else if (triggerAttachRetriesLeft > 0 && missingTriggerSides().isNotEmpty()) {
+            // 上一轮已经把 triggersShown 置了 true，但窗口并没有真的建出来（attach 失败/被守卫打断）。
             ensureSideEdgesForHandles(currentSettings)
         }
         updateForwardingCapability()
+        scheduleTriggerAttachRetryIfNeeded()
+    }
+
+    /** 配置了触钮、但窗口没真的挂上的边。触钮自愈与启动重试共用同一判据。 */
+    private fun missingTriggerSides(
+        metrics: ScreenMetricsSnapshot = OverlayScreenMetrics.snapshot(context)
+    ): List<PanelSide> = listOf(
+        PanelSide.LEFT to leftController,
+        PanelSide.RIGHT to rightController,
+        PanelSide.BOTTOM to bottomController,
+        PanelSide.TOP to topController,
+    ).filter { (side, controller) ->
+        controller != null &&
+            currentSettings.runtimeTriggerHandles(side, metrics.isLandscape).isNotEmpty() &&
+            !controller.hasTriggerAttachments()
+    }.map { it.first }
+
+    /**
+     * 启动期补挂：触钮“该显示但没挂上”时，立刻在几百毫秒后重试，而不是等 12 秒自愈。
+     *
+     * 只在“首次显示 / 状态刚翻成已显示”时给有限次数，避免和 attach 失败形成死循环。
+     */
+    private fun scheduleTriggerAttachRetryIfNeeded() {
+        if (triggerAttachRetryPending || triggerAttachRetriesLeft <= 0) return
+        if (missingTriggerSides().isEmpty()) return
+        triggerAttachRetryPending = true
+        triggerAttachRetriesLeft--
+        Log.w(
+            TAG,
+            "触钮未挂齐，${TRIGGER_ATTACH_RETRY_MS}ms 后补挂（剩余 $triggerAttachRetriesLeft 次）",
+        )
+        mainHandler.postDelayed({
+            triggerAttachRetryPending = false
+            refreshTriggerVisibilityNow()
+        }, TRIGGER_ATTACH_RETRY_MS)
     }
 
     /** 输入层接管是否可用：服务开启、触钮未被隐藏、且该边 overlay 已就绪。 */
@@ -707,6 +783,13 @@ class OverlayManager(
 
     private companion object {
         private const val REFRESH_VISIBILITY_DEBOUNCE_MS = 150L
+
+        /** 自愈巡检日志的最小间隔：够看清趋势，又不会把 logcat 刷满。 */
+        private const val HEAL_LOG_THROTTLE_MS = 5_000L
+
+        /** 启动期触钮补挂：首次没挂上时多久重试一次、最多补几次。 */
+        private const val TRIGGER_ATTACH_RETRY_MS = 300L
+        private const val TRIGGER_ATTACH_RETRY_ATTEMPTS = 2
         private const val TAG = "OverlayManager"
 
         /** 没有明确触发侧时，按这个顺序找"有画布的那一侧"。 */

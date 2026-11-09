@@ -31,36 +31,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-@Serializable
-data class ClipboardEntry(
-    val id: String,
-    val type: ClipboardEntryType = ClipboardEntryType.TEXT,
-    val text: String,
-    val uri: String? = null,
-    val intentUri: String? = null,
-    val htmlText: String? = null,
-    val mimeType: String? = null,
-    val imageFileName: String? = null,
-    val imageFileNames: List<String> = emptyList(),
-    val contentBlocks: List<ClipboardContentBlock> = emptyList(),
-    val createdAtEpochMs: Long
-) {
-    fun contentKey(): String = ClipboardContentKey.forEntry(this)
-
-    fun matchesQuery(query: String): Boolean {
-        val lower = query.lowercase()
-        return text.contains(lower, ignoreCase = true) ||
-            uri?.contains(lower, ignoreCase = true) == true ||
-            intentUri?.contains(lower, ignoreCase = true) == true
-    }
-}
 
 @Singleton
 class ClipboardHistoryRepository @Inject constructor(
     @ApplicationContext appContext: Context,
     private val settingsRepository: SettingsRepository,
     private val clipboardMonitorController: ClipboardMonitorController
-) {
+) : com.slideindex.app.clipboard.ClipboardHistoryQuery {
     private val context = appContext.applicationContext
     private val storageDir = File(context.filesDir, DIR_NAME).apply { mkdirs() }
     private val indexFile = File(storageDir, INDEX_FILE_NAME)
@@ -69,9 +46,9 @@ class ClipboardHistoryRepository @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true }
     private val store = ClipboardHistoryStore(context, json)
     private val _entryCount = MutableStateFlow(0)
-    val entryCount: StateFlow<Int> = _entryCount.asStateFlow()
+    override val entryCount: StateFlow<Int> = _entryCount.asStateFlow()
     private val _revision = MutableStateFlow(0L)
-    val revision: StateFlow<Long> = _revision.asStateFlow()
+    override val revision: StateFlow<Long> = _revision.asStateFlow()
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -92,6 +69,7 @@ class ClipboardHistoryRepository @Inject constructor(
 
     init {
         ClipboardAccess.repository = this
+        com.slideindex.app.clipboard.ClipboardService.query = this
         migrateLegacyJsonIfNeeded()
         refreshEntryCount()
         clipboardMonitorController.onPayloadCaptured = { payload ->
@@ -163,7 +141,7 @@ class ClipboardHistoryRepository @Inject constructor(
         )
     }
 
-    suspend fun delete(id: String) {
+    override suspend fun delete(id: String) {
         writeMutex.withLock {
             val removed = store.queryById(id)
             removed?.let { ClipboardImageStore.deleteEntryImages(context, it) }
@@ -573,6 +551,20 @@ class ClipboardHistoryRepository @Inject constructor(
             store.search(query, limit)
         }
 
+    // ---- ClipboardHistoryQuery（P1 只读接口）----
+
+    override suspend fun loadPage(
+        createdBeforeMs: Long?,
+        limit: Int,
+        filter: ClipboardHistoryFilter,
+    ): ClipboardHistoryPage = loadHistoryPage(createdBeforeMs, limit, filter)
+
+    override suspend fun count(filter: ClipboardHistoryFilter): Int = countEntries(filter)
+
+    override suspend fun search(query: String, limit: Int): List<ClipboardEntry> =
+        searchHistory(query, limit)
+
+    override suspend fun peekLatest(): ClipboardEntry? = peekLatestEntry()
     private fun startScreenshotMonitor() {
         if (!ClipboardPermissionHelper.hasMediaReadPermission(context)) return
         screenshotMonitor = ScreenshotMonitor(context) { uri, displayName, mimeType ->

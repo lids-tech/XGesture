@@ -18,8 +18,10 @@ android {
 }
 
 dependencies {
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.core.ktx)
     implementation(libs.tinypinyin)
+    implementation(libs.zxing.core)
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
 }

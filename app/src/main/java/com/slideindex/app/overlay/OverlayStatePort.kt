@@ -35,6 +35,33 @@ object OverlayStatePort {
     const val COMMAND_RESUME_CORNER_OVERLAY = "resume_corner_overlay"
     const val COMMAND_RESUME_RING_LAUNCHER_OVERLAY = "resume_ring_launcher_overlay"
 
+    // ── 运行时计数（只给诊断报告用，不参与任何行为判断）─────────────────────────
+    private val settingsApplyCount = java.util.concurrent.atomic.AtomicInteger(0)
+    private val healTickCount = java.util.concurrent.atomic.AtomicInteger(0)
+    private val healSkipCount = java.util.concurrent.atomic.AtomicInteger(0)
+
+    @Volatile
+    private var lastSettingsApplyAtMs = 0L
+
+    fun noteSettingsApplied() {
+        settingsApplyCount.incrementAndGet()
+        lastSettingsApplyAtMs = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /** 触钮自愈巡检计数；[skipped] = 这次因为设置/抑制原因直接跳过。 */
+    fun noteHealTick(skipped: Boolean) {
+        healTickCount.incrementAndGet()
+        if (skipped) healSkipCount.incrementAndGet()
+    }
+
+    fun settingsApplyCount(): Int = settingsApplyCount.get()
+
+    fun healTickCount(): Int = healTickCount.get()
+
+    fun healSkipCount(): Int = healSkipCount.get()
+
+    fun lastSettingsApplyAtMs(): Long = lastSettingsApplyAtMs
+
     private val _activeNotificationSnapshots =
         MutableStateFlow<List<ActiveNotificationSnapshot>?>(null)
     val activeNotificationSnapshots: StateFlow<List<ActiveNotificationSnapshot>?> =
@@ -61,15 +88,22 @@ object OverlayStatePort {
     /** 单进程里本进程就是权威，永远可信。 */
     fun hasServiceState(): Boolean = true
 
-    /** 单进程里没有镜像延迟，永远新鲜。 */
+    /**
+     * 链路是否“新鲜可用”。
+     *
+     * ⚠️ 不能再恒 true：`OverlayGuard` 用 `isServiceConnected() && isServiceStateFresh()`
+     * 做第一道判定，恒 true 会让守护在任何半死状态下都直接返回 Healthy，
+     * 后面的“改设置强制重绑 / 发通知”永远走不到（ColorOS 掉线不自愈的直接原因）。
+     */
     fun isServiceStateFresh(
         @Suppress("UNUSED_PARAMETER") nowMs: Long = 0L,
         @Suppress("UNUSED_PARAMETER") maxAgeMs: Long = 0L,
-    ): Boolean = true
+    ): Boolean = AccessibilityLink.isUsable()
 
+    /** 链路不可用时返回 null，让等待方立刻超时而不是空等。 */
     fun millisSinceServiceState(
         @Suppress("UNUSED_PARAMETER") nowMs: Long = 0L,
-    ): Long? = 0L
+    ): Long? = if (AccessibilityLink.isUsable()) 0L else null
 
     fun foregroundPackage(): String? =
         OverlayService.foregroundPackage ?: SlideIndexAccessibilityService.currentForegroundPackage()

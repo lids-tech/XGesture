@@ -311,7 +311,19 @@ internal class EdgeGestureSessionCoordinator(
             anchorRawX = rawX,
             anchorRawY = rawY,
             externalTracking = continuousPick,
-            actionExecutor = if (continuousPick) null else actionExecutor
+            executeGesture = if (continuousPick) {
+                null
+            } else {
+                com.slideindex.app.overlay.panels.GestureActionRunner { action, s, armed, ax, ay, side ->
+                    actionExecutor.execute(
+                        action = action,
+                        settings = s,
+                        longPressArmed = armed,
+                        anchorRawX = ax,
+                        anchorRawY = ay,
+                    )
+                }
+            }
         )
         if (shown && continuousPick) {
             com.slideindex.app.overlay.fingertip.FingertipRingOverlayWindow.updatePointer(rawX, rawY)
@@ -328,7 +340,15 @@ internal class EdgeGestureSessionCoordinator(
             rawX = rawX,
             rawY = rawY,
             settings = settingsProvider(),
-            actionExecutor = actionExecutor
+            executeGesture = com.slideindex.app.overlay.panels.GestureActionRunner { action, s, armed, ax, ay, side ->
+                actionExecutor.execute(
+                    action = action,
+                    settings = s,
+                    longPressArmed = armed,
+                    anchorRawX = ax,
+                    anchorRawY = ay,
+                )
+            },
         )
         gestureSession.clearFingertipRingContinuousPick()
     }
@@ -340,7 +360,7 @@ internal class EdgeGestureSessionCoordinator(
         deferWindowLayout: Boolean
     ) {
         onAdjustPanelLayoutCallback(anchorRawY)
-        adjustPanelController.showAdjustPanel(mode, fraction, anchorRawY)
+        adjustPanelController.showAdjustPanel(mode.toPanelMode(), fraction, anchorRawY)
     }
 
     override fun onRequestInvalidate() {

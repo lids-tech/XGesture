@@ -1302,7 +1302,6 @@
     <string name="float_ball_pick_source_a11y">A11y</string>
     <string name="float_ball_pick_source_ocr">OCR</string>
     <string name="float_ball_pick_source_barcode">Scan</string>
-    <string name="float_ball_action_edit">Edit</string>
     <string name="float_ball_action_word_select">Word tap</string>
     <string name="float_ball_action_select_all">Select all</string>
     <string name="float_ball_action_deselect_all">Deselect all</string>
@@ -1930,7 +1929,6 @@
     <string name="universal_copy_copy">Copy</string>
     <string name="universal_copy_search">Search</string>
     <string name="universal_copy_translate">Translate</string>
-    <string name="universal_copy_pick">Segment</string>
     <string name="universal_copy_no_text">No copyable text found</string>
     <string name="universal_copy_ocr">OCR</string>
     <string name="universal_copy_ocr_recognizing">Recognizing…</string>
@@ -2427,7 +2425,6 @@
     <string name="holographic_apps_deselect_all">Deselect all</string>
     <string name="holographic_apps_allow_all_note">Currently "Allow all apps": the sphere shows every installed app and ignores the selections below.</string>
     <string name="holographic_apps_empty">Nothing selected yet. Add apps below and the sphere will show them.</string>
-    <string name="holographic_no_selected_apps">The sphere has no apps yet. Pick some in Settings → Holographic launcher → Select apps, or switch the mode to Allow all apps.</string>
     <string name="gesture_action_task_switcher">Task switcher</string>
     <string name="gesture_action_back">Back</string>
     <string name="gesture_action_home">Home</string>
@@ -4453,14 +4450,6 @@ adb mode should return uid=2000.
 If Shizuku was started as Root, use wireless debugging/adb instead,
 or revoke permanent Root for Shell in APatch.</string>
     <string name="shell_no_response">Shell service not responding. Fully restart Shizuku, then reopen this app.</string>
-    <string name="app_carousel_cancel_hint">Move to top or bottom edge and release to cancel</string>
-    <string name="app_carousel_action_split_screen">Split screen</string>
-    <string name="app_carousel_action_floating">Floating</string>
-    <string name="app_carousel_action_close">Close</string>
-    <string name="app_carousel_close_all">Close all</string>
-    <string name="app_carousel_close_all_hint">Release to close all apps</string>
-    <string name="app_carousel_cancel_down_hint">Swipe down to dismiss</string>
-    <string name="app_carousel_cancel_overshoot_hint">Release to cancel</string>
     <string name="extension_about_subtitle">Version, updates &amp; privacy</string>
     <string name="external_invocation_keyword_example"> "keyword"</string>
     <string name="search_panel_aggregated_image_search">Aggregated image search</string>
@@ -4571,8 +4560,6 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="widget_tab_apps">Apps</string>
     <string name="widget_tab_shortcuts">Shortcuts</string>
     <string name="cd_view_all">View all</string>
-    <string name="holographic_no_apps_loaded">No apps loaded</string>
-    <string name="holographic_check_settings_hint">Check settings or configure on the settings page</string>
     <string name="update_version_current">Current %1$s</string>
     <string name="update_version_latest">Latest %1$s</string>
     <string name="task_switcher_app_info">App info</string>
@@ -4686,16 +4673,6 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="clipboard_monitoring_capture_logcat">System log reading</string>
     <string name="clipboard_monitoring_capture_logcat_desc">Reads logcat and filters clipboard changes; better compatibility with older devices</string>
     <string name="clipboard_monitor_notification_lsposed_running">LSPosed allowlist mode</string>
-    <string name="app_carousel_settings_title">Card app switcher</string>
-    <string name="app_carousel_settings_desc">Swipe up or down from the center of the screen past the configured distance and release to cancel the switch</string>
-    <string name="app_carousel_cancel_distance">Cancel distance</string>
-    <string name="app_carousel_separate_cancel_distances">Set up and down distances separately</string>
-    <string name="app_carousel_cancel_distance_up">Upward cancel distance</string>
-    <string name="app_carousel_cancel_distance_down">Downward cancel distance</string>
-    <string name="app_carousel_slide_reversed">Reverse swipe direction</string>
-    <string name="app_carousel_slide_reversed_desc">Flip which way you swipe to browse recent apps</string>
-    <string name="app_carousel_slide_sensitivity">Swipe sensitivity</string>
-    <string name="app_carousel_cancel_both_directions">Cancel in both directions</string>
     <string name="inspire_image_edit_add_text">Add text</string>
     <string name="inspire_image_edit_brush_drag_hint">Tap or drag left/right to adjust the brush size</string>
     <string name="inspire_image_edit_brush_value">%1$d px</string>
@@ -4981,4 +4958,17 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="shell_panel_result_exit_ok">exit 0 (no output)</string>
     <string name="shell_panel_result_exit_only">exit %1$d (no output)</string>
     <string name="shell_panel_test_result">Test result</string>
+<string name="app_carousel_cancel_hint">Move to top or bottom edge and release to cancel</string>
+<string name="app_carousel_settings_title">Card app switcher</string>
+<string name="app_carousel_settings_desc">Swipe up or down from the center of the screen past the configured distance and release to cancel the switch</string>
+<string name="app_carousel_cancel_distance">Cancel distance</string>
+<string name="app_carousel_separate_cancel_distances">Set up and down distances separately</string>
+<string name="app_carousel_cancel_distance_up">Upward cancel distance</string>
+<string name="app_carousel_cancel_distance_down">Downward cancel distance</string>
+<string name="app_carousel_slide_reversed">Reverse swipe direction</string>
+<string name="app_carousel_slide_reversed_desc">Flip which way you swipe to browse recent apps</string>
+<string name="app_carousel_slide_sensitivity">Swipe sensitivity</string>
+<string name="app_carousel_cancel_both_directions">Cancel in both directions</string>
+<string name="float_ball_action_edit">Edit</string>
+<string name="universal_copy_pick">Segment</string>
 </resources>

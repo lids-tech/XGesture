@@ -28,6 +28,7 @@ import com.slideindex.app.overlay.KeyboardTriggerImeCoordinator
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.PointerSwipeConfig
 import com.slideindex.app.message.MessageReminderOrchestrator
+import com.slideindex.app.overlay.AccessibilityLink
 import com.slideindex.app.overlay.EdgeOverlayHost
 import com.slideindex.app.overlay.FloatBallOcrRegions
 import com.slideindex.app.overlay.FloatBallOverlay
@@ -61,18 +62,6 @@ import kotlinx.coroutines.cancel
  * 放在文件顶层而不是伴生对象里：Kotlin 只允许通过 `外层类.成员` 访问伴生对象里的**函数/属性**，
  * 伴生对象里的**类型**必须写成 `外层类.Companion.类型`，很别扭。
  */
-sealed interface ScreenshotCaptureOutcome {
-    data class Success(val bitmap: android.graphics.Bitmap) : ScreenshotCaptureOutcome
-
-    /** 无障碍服务未连接，或系统低于 API 30。 */
-    data object ServiceUnavailable : ScreenshotCaptureOutcome
-
-    /** 系统限流：距上一次截图太近。 */
-    data object Throttled : ScreenshotCaptureOutcome
-
-    /** 其它失败，[errorCode] 为系统返回码。 */
-    data class Failed(val errorCode: Int) : ScreenshotCaptureOutcome
-}
 
 @dagger.hilt.android.AndroidEntryPoint
 class SlideIndexAccessibilityService : AccessibilityService() {
@@ -196,7 +185,15 @@ class SlideIndexAccessibilityService : AccessibilityService() {
             return service.dispatchExternalGestureAction(action, anchorRawY, panelSide)
         }
 
-        fun isConnected(): Boolean = instance != null
+        /**
+         * 服务是否**真的**可用。
+         *
+         * 不能只看 `instance != null`：系统可以在不回调 `onUnbind` / `onDestroy` 的情况下
+         * 把连接摘掉（服务收到 `init(NO_ID, null)`），此后实例还在、旧窗口还在，
+         * 但 `performGlobalAction` 恒 false、新建无障碍窗口恒 `token null`。
+         * 真实失败会由 [com.slideindex.app.overlay.AccessibilityLink] 记下来，这里一并判断。
+         */
+        fun isConnected(): Boolean = instance != null && AccessibilityLink.isUsable()
 
         /** overlay 宿主是否就绪；未就绪时模块不应在输入层吞掉事件。 */
         fun isOverlayReady(): Boolean = instance?.edgeOverlayHost != null
@@ -1007,6 +1004,10 @@ class SlideIndexAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         instanceGeneration++
+        AccessibilityLink.noteAlive("onServiceConnected")
+        // 上一代手势动画的 Compose 组合属于已被系统摘掉的窗口：不丢就会出现
+        // “状态机在跑（onDrag/snapTo 都有）但屏幕上一个像素都没有”。重连即重建。
+        runCatching { GestureAnimationOverlayRegistry.detachAll() }
         startOverlayHostLease()
         com.slideindex.app.overlay.OverlayStatePort.publish(this, "onServiceConnected")
         watchdog = SlideIndexAccessibilityWatchdog(this) { edgeOverlayHost }
@@ -1152,6 +1153,7 @@ class SlideIndexAccessibilityService : AccessibilityService() {
         runCatching { ScreenSearchFloating.destroy() }
         if (::backTapGestureHost.isInitialized) runCatching { backTapGestureHost.stop() }
         instance = null
+        AccessibilityLink.reset()
         runCatching { com.slideindex.app.overlay.OverlayStatePort.publish(this, "onUnbind") }
         runCatching { notifyModuleHostState(ready = false) }
         return true
@@ -1193,6 +1195,7 @@ class SlideIndexAccessibilityService : AccessibilityService() {
         if (::backTapGestureHost.isInitialized) runCatching { backTapGestureHost.stop() }
         runCatching { serviceScope.cancel() }
         instance = null
+        AccessibilityLink.reset()
         runCatching { com.slideindex.app.overlay.OverlayStatePort.publish(this, "onDestroy") }
         runCatching { notifyModuleHostState(ready = false) }
         runCatching { super.onDestroy() }

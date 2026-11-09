@@ -19,7 +19,10 @@ import com.slideindex.app.settings.withActiveGestureProfile
 import android.util.Log
 import com.slideindex.app.overlay.corner.CornerGestureHost
 import com.slideindex.app.overlay.dragdrop.DragDropFlowController
+import com.slideindex.app.service.AccessibilityRecoverNotifier
+import com.slideindex.app.service.AccessibilityRecoverOutcome
 import com.slideindex.app.service.OverlayService
+import com.slideindex.app.service.OverlayServiceLifecycle
 import com.slideindex.app.service.SlideIndexAccessibilityService
 import com.slideindex.app.util.OverlaySnoozeController
 import com.slideindex.app.util.PermissionHelper
@@ -32,6 +35,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Hosts edge gesture overlays on the accessibility service process (SideGesture-style).
@@ -57,13 +61,32 @@ class EdgeOverlayHost(
     private val profileSettleHandler = Handler(Looper.getMainLooper())
     private var displayRotationMonitor: OverlayDisplayRotationMonitor? = null
     private var triggerHealJob: Job? = null
+    private var linkProbeJob: Job? = null
+
+    /**
+     * 是否已经用“真实设置快照”跑过一次 apply。
+     *
+     * 真机故障：进程/服务重建后，设置回流的第一帧可能早于宿主就绪而被丢掉，之后设置没有变化
+     * 就不会再有回流 —— `OverlayManager.currentSettings` 一直停在默认值（`serviceEnabled=false`），
+     * 表现是**触钮永远不挂、面板专用宿主建不出来（快速启动器点了没反应）**，
+     * 只有用户手动改一次设置才恢复。这里用“主动补一次”替代等回流。
+     */
+    private var settingsApplied = false
+
+    /** 最近一次真正应用出去的 serviceEnabled（用于识别“只应用过默认值”的假健康）。 */
+    private var appliedServiceEnabled = false
     /** 宿主被显式 stop 后不再自动重建；租约兜底拆卸不属于此列。 */
     private var stopRequested = false
 
     fun start() {
         stopRequested = false
+        AccessibilityLink.noteAlive("host.start")
+        AccessibilityLink.attachRecovery(::onAccessibilityLinkBroken)
+        Log.d("XGStartup", "host.start cachedServiceEnabled=" +
+            deps.settingsRepository.readSnapshot().serviceEnabled)
         startCollectorsAndLease()
         ensureStarted()
+        Log.d("XGStartup", "host.start done overlayManager=${overlayManager != null}")
     }
 
     /**
@@ -104,7 +127,25 @@ class EdgeOverlayHost(
             TaskManagerUtil.warmRecentTasksAsync()
         }
         floatBallController = FloatBallController(context, scope, deps.settingsRepository)
-        cornerGestureHost = CornerGestureHost(context, scope, deps).also { it.start() }
+        val cornerExecutor = com.slideindex.app.gesture.ActionExecutor(
+            context = context,
+            appRepository = deps.appRepository,
+            onShellCommandsPersist = { commands ->
+                scope.launch { deps.settingsRepository.setShellCommands(commands) }
+            },
+        )
+        val cornerRunner = com.slideindex.app.overlay.panels.GestureActionRunner {
+            action, settings, armed, ax, ay, side ->
+            cornerExecutor.execute(
+                action = action,
+                settings = settings,
+                longPressArmed = armed,
+                anchorRawX = ax,
+                anchorRawY = ay,
+                panelSide = side,
+            )
+        }
+        cornerGestureHost = CornerGestureHost(context, scope, deps.appRepository, cornerRunner).also { it.start() }
         dragDropFlowController = DragDropFlowController(context, scope, deps.settingsRepository).also { it.start() }
         displayRotationMonitor = OverlayDisplayRotationMonitor(context) {
             overlayManager?.relayoutTriggersForDisplayRotation()
@@ -112,6 +153,34 @@ class EdgeOverlayHost(
         }.also { it.start() }
         OverlaySnoozeController.onStateChanged = {
             refreshOverlaySuppression()
+        }
+        // 宿主刚建好就立刻用当前快照跑一次：不能只等设置回流（首帧可能已被丢掉，
+        // 见 [settingsApplied] 的说明），否则触钮/面板宿主会一直缺席到用户改一次设置。
+        if (!settingsApplied) {
+            runCatching { applySettingsToHosts(deps.settingsRepository.readSnapshot()) }
+                .onFailure { Log.e(TAG, "initial applySettings after host start failed", it) }
+        }
+    }
+
+    /** 设置 → 各宿主的唯一应用口径（设置回流与宿主首次创建共用）。 */
+    private fun applySettingsToHosts(settings: AppSettings) {
+        // 「按应用分档」：把前台命中的那一档贴到全局之上（没命中就是原样）。
+        appliedProfileId = activeGestureProfileId(settings)
+        val effectiveSettings = settings
+            .withActiveGestureProfile(OverlayService.foregroundPackage)
+            .withGestureAnglesPreview()
+            .withOverlayLayoutPreview()
+        floatBallController?.apply(effectiveSettings)
+        updatePerformanceMonitor(effectiveSettings.debugPerformanceMonitorEnabled)
+        overlayManager?.applySettings(effectiveSettings)
+        settingsApplied = true
+        appliedServiceEnabled = settings.serviceEnabled
+        OverlayStatePort.noteSettingsApplied()
+        if (KeyboardTriggerImeState.imeVisible) {
+            FloatBallOverlay.onKeyboardImeChanged()
+        }
+        if (previewActive) {
+            overlayManager?.setPreviewMode(true, previewContent, previewFocus)
         }
     }
 
@@ -121,12 +190,56 @@ class EdgeOverlayHost(
             // 周期自愈：触钮"设置里开着、屏幕上没有"时自己挂回来。
             // 只发生在事件丢失/半重建之后，正常路径下是一次很便宜的判断。
             triggerHealJob = scope.launch {
+                val startedAtMs = android.os.SystemClock.elapsedRealtime()
                 while (isActive) {
-                    delay(TRIGGER_HEAL_INTERVAL_MS)
+                    // 启动期用更密的节奏：设置在进程冷启动后 1~10s 才加载完是常态，
+                    // 12s 一次的节奏会让触钮比悬浮球晚十几秒才出现（真机实测 9~11s）。
+                    // 启动窗口内 1.5s 一次，加载完立刻补 apply；之后恢复 12s 的日常节奏。
+                    val warmingUp = android.os.SystemClock.elapsedRealtime() - startedAtMs <
+                        STARTUP_WARMUP_MS
+                    delay(if (warmingUp) STARTUP_HEAL_INTERVAL_MS else TRIGGER_HEAL_INTERVAL_MS)
                     if (stopRequested) return@launch
                     if (!PermissionHelper.isAccessibilityServiceEnabled(context)) continue
                     ensureStarted()
+                    // 兜底：只应用过默认设置（全 false）时，用当前快照补一次。
+                    // 覆盖“宿主创建时设置还没加载完、之后又没有任何设置变化”的启动窗口。
+                    val snapshot = deps.settingsRepository.readSnapshot()
+                    if (!settingsApplied || (snapshot.serviceEnabled && !appliedServiceEnabled)) {
+                        runCatching { applySettingsToHosts(snapshot) }
+                            .onFailure { Log.e(TAG, "heal fallback applySettings failed", it) }
+                    }
                     runCatching { overlayManager?.healTriggerAttachments() }
+                    // 悬浮球没有触钮那条“窗口没了就重挂”的路径：这里按服务代次再 apply 一次，
+                    // 命中代次变化时它会自己 dismiss + 重建（幂等，正常路径下只是一次设置比对）。
+                    runCatching { floatBallController?.apply(deps.settingsRepository.readSnapshot()) }
+                }
+            }
+        }
+        if (linkProbeJob == null) {
+            // 进程内探活：系统摘连接**不会**回调 onUnbind，只能自己定期问一次。
+            // `Service.windows` 是少数几个“连接没了就返回空列表”的只读接口，代价是一次 binder 调用。
+            // 连续两次为空才判掉线，避免锁屏/窗口过渡的瞬间误伤。
+            linkProbeJob = scope.launch {
+                var consecutiveFailures = 0
+                while (isActive) {
+                    delay(LINK_PROBE_INTERVAL_MS)
+                    if (stopRequested) return@launch
+                    val service = SlideIndexAccessibilityService.accessibilityInstance() ?: continue
+                    val windowsAlive = withContext(Dispatchers.Default) {
+                        runCatching { service.windows?.isNotEmpty() == true }.getOrDefault(false)
+                    }
+                    if (windowsAlive) {
+                        consecutiveFailures = 0
+                        AccessibilityLink.noteAlive("probe")
+                    } else {
+                        consecutiveFailures++
+                        if (consecutiveFailures >= LINK_PROBE_FAILURES_TO_BROKEN) {
+                            AccessibilityLink.noteBroken(
+                                "probe",
+                                "windows empty for ${consecutiveFailures * LINK_PROBE_INTERVAL_MS / 1000}s",
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -154,27 +267,15 @@ class EdgeOverlayHost(
                 ) { _, _ ->
                     deps.settingsRepository.readSnapshot()
                 }.collectLatest { settings ->
+                    Log.d("XGStartup", "settings emission serviceEnabled=" +
+                        settings.serviceEnabled + " manager=" + (overlayManager != null))
                     if (!PermissionHelper.isAccessibilityServiceEnabled(context)) {
                         // 服务不可用：拆掉窗口，但保留订阅，恢复后由 ensureStarted() 重建。
                         teardownOverlayWindows()
                         return@collectLatest
                     }
                     ensureStarted()
-                    // 「按应用分档」：把前台命中的那一档贴到全局之上（没命中就是原样）。
-                    appliedProfileId = activeGestureProfileId(settings)
-                    val effectiveSettings = settings
-                        .withActiveGestureProfile(OverlayService.foregroundPackage)
-                        .withGestureAnglesPreview()
-                        .withOverlayLayoutPreview()
-                    floatBallController?.apply(effectiveSettings)
-                    updatePerformanceMonitor(effectiveSettings.debugPerformanceMonitorEnabled)
-                    overlayManager?.applySettings(effectiveSettings)
-                    if (KeyboardTriggerImeState.imeVisible) {
-                        FloatBallOverlay.onKeyboardImeChanged()
-                    }
-                    if (previewActive) {
-                        overlayManager?.setPreviewMode(true, previewContent, previewFocus)
-                    }
+                    applySettingsToHosts(settings)
                 }
             }
         }
@@ -182,17 +283,20 @@ class EdgeOverlayHost(
         // 也会由 OverlayHostLease 把这里的窗口摘掉，避免全屏直触窗留下吞触摸。
         OverlayHostLease.register(
             key = HOST_LEASE_KEY,
-            // 同进程内直接看服务实例：比读 Settings.Secure 更准，也不会在
-            // 覆盖安装/系统重绑的窗口期被一次性误判成"服务已死"而拆家。
-            isOwnerAlive = { SlideIndexAccessibilityService.accessibilityInstance() != null },
+            // 同进程内直接看“链路是否可用”，而不是“实例还在不在”：
+            // 系统摘连接时实例不会消失，只看实例就会把半死状态当成健康，永远不拆窗。
+            isOwnerAlive = { SlideIndexAccessibilityService.isConnected() },
             teardown = ::teardownOverlayWindows,
         )
     }
 
     fun stop() {
         stopRequested = true
+        AccessibilityLink.detachRecovery()
         triggerHealJob?.cancel()
         triggerHealJob = null
+        linkProbeJob?.cancel()
+        linkProbeJob = null
         OverlaySnoozeController.onStateChanged = null
         OverlaySnoozeController.cancel()
         OverlayPerformanceMonitorBinding.onOverlayHidden(context)
@@ -206,6 +310,34 @@ class EdgeOverlayHost(
         OverlayCompose.clearWindowContextCache()
         // 放在最后：万一上面的拆卸半途失败，租约超时还能兜底把残留窗口再摘一次。
         OverlayHostLease.unregister(HOST_LEASE_KEY)
+    }
+
+    /**
+     * 无障碍链路失效时的唯一恢复入口（由 [AccessibilityLink] 调用，已做 60s 节流）。
+     *
+     * 顺序刻意是“先拆、再重绑、最后提示”：
+     * 1. 拆窗：当前所有浮层都建在这一代连接上，连接没了它们要么是僵尸窗口、要么再也挂不上；
+     * 2. 重绑：有 WRITE_SECURE_SETTINGS（Shizuku / adb）时改写系统条目强制重绑；
+     * 3. 提示：重绑失败就发一条可点击的通知 —— ColorOS 上这是唯一 100% 可靠的出路。
+     */
+    private fun onAccessibilityLinkBroken(reason: String) {
+        scope.launch {
+            Log.e(TAG, "accessibility link broken: $reason → teardown + rebind")
+            runCatching { teardownOverlayWindows() }
+                .onFailure { Log.e(TAG, "teardown after link broken failed", it) }
+            val settings = deps.settingsRepository.readSnapshot()
+            val outcome = runCatching {
+                OverlayServiceLifecycle.recoverAccessibilityBindingWithRetries(context, settings)
+            }.getOrNull()
+            if (outcome == AccessibilityRecoverOutcome.Connected) {
+                AccessibilityLink.noteAlive("recover")
+                AccessibilityLink.noteRecoveryResult("成功")
+            } else {
+                Log.w(TAG, "accessibility recovery failed (outcome=$outcome), notifying user")
+                AccessibilityLink.noteRecoveryResult("失败（$outcome，已发通知）")
+                runCatching { AccessibilityRecoverNotifier.notifyOffline(context) }
+            }
+        }
     }
 
     /**
@@ -231,6 +363,8 @@ class EdgeOverlayHost(
         overlayManager = null
         OverlayService.foregroundPackage = null
         appliedProfileId = null
+        settingsApplied = false
+        appliedServiceEnabled = false
         profileSettleHandler.removeCallbacks(leaveProfileRunnable)
         previewActive = false
     }
@@ -566,6 +700,18 @@ class EdgeOverlayHost(
 
         /** 触钮自愈巡检间隔：足够快（用户几乎察觉不到）又足够便宜。 */
         const val TRIGGER_HEAL_INTERVAL_MS = 12_000L
+
+        /** 启动期自愈的加速窗口：这段时间内用 [STARTUP_HEAL_INTERVAL_MS] 的节奏。 */
+        const val STARTUP_WARMUP_MS = 20_000L
+
+        /** 启动期自愈间隔：只用来尽快补上“设置加载完但还没应用”的那一帧。 */
+        const val STARTUP_HEAL_INTERVAL_MS = 1_500L
+
+        /** 无障碍链路探活间隔（连续两次失败才判掉线，见 [LINK_PROBE_FAILURES_TO_BROKEN]）。 */
+        const val LINK_PROBE_INTERVAL_MS = 15_000L
+
+        /** 探活连续失败几次才判掉线：一次空窗口可能只是锁屏/窗口过渡的瞬态。 */
+        const val LINK_PROBE_FAILURES_TO_BROKEN = 2
 
         /** 离开「按应用分档」的迟滞：拉通知栏/弹键盘/过渡态的前台抖动短于此值时不动触钮。 */
         const val PROFILE_SETTLE_MS = 400L

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quick_wheel_add_placeholder">+ 空白占位</string>
+    <string name="quick_wheel_delete_container">删除</string>
+    <string name="quick_wheel_hint_canvas">点击格子编辑 · 长按展开二级 · 拖动排序 · 拖到垃圾桶删除</string>
+    <string name="quick_wheel_hint_secondary">长按容器进入它的二级设置（长按后拖动可排序或拖到「删除」）；点按二级容器编辑，点其它任意位置返回</string>
+</resources>

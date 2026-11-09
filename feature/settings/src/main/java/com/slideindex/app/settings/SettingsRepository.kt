@@ -77,6 +77,7 @@ class SettingsRepository @Inject constructor(
             // 修复动作失败不能拖死快照收集：否则 readSnapshot() 永远停在默认值
             // （历史上表现为 overlay 进程按默认手势动作执行，例如短滑=返回）。
             runCatching {
+                runSettingsSchemaMigrations()
                 editor.cleanupLegacyClipboardKeysOnce()
                 overlay.migrateFvRingLauncherPreferenceKeysOnce()
                 overlay.migrateFloatBallInstantTranslateDefaultOnOnce()
@@ -90,7 +91,9 @@ class SettingsRepository @Inject constructor(
                 )
             }
             runCatching {
-                settings.collect { snapshot ->
+                // 缓存与三个同步镜像都走共享快照：它们常驻不取消，用冷流的话每次写盘
+                // 会各自完整解析一遍（这正是切片化要消掉的重复）。
+                editor.snapshotFlow.collect { snapshot ->
                     cachedSettings = snapshot
                 }
             }.onFailure {
@@ -102,14 +105,14 @@ class SettingsRepository @Inject constructor(
             }
         }
         cacheScope.launch {
-            settings
+            editor.snapshotFlow
                 .map { it.serviceEnabled }
                 .distinctUntilChanged()
                 .collect { enabled -> ServiceEnabledStore.write(context, enabled) }
         }
         // 晃动总开关也落一份同步镜像：XShake 磁贴可能被 SystemUI 冷启动绑起，不能等 DataStore。
         cacheScope.launch {
-            settings
+            editor.snapshotFlow
                 .map { it.shakeGestureSettings.enabled }
                 .distinctUntilChanged()
                 .collect { enabled -> ShakeEnabledStore.write(context, enabled) }
@@ -118,7 +121,7 @@ class SettingsRepository @Inject constructor(
         // 就要被读到（用来写 ApplicationInfo 的 FLAG_ENABLE_ON_BACK_INVOKED_CALLBACK），
         // 而那个时点**不能**同步读 DataStore。详见 PredictiveBackStartupStore 的 KDoc。
         cacheScope.launch {
-            settings
+            editor.snapshotFlow
                 .map { it.predictiveBackEnabled }
                 .distinctUntilChanged()
                 .collect { enabled -> PredictiveBackStartupStore.write(context, enabled) }
@@ -932,6 +935,24 @@ class SettingsRepository @Inject constructor(
      * 只在首次执行（标记见 [SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SOURCE_MIGRATED]）：
      * 备份导入的旧数据不会被反复改写，用户手动切回固定图标的结果也不会被覆盖。
      */
+    /**
+     * 按 [SettingsSchemaMigrations] 的版本表执行未完成的 schema 迁移。
+     *
+     * 与下面那些 `*Once` 一次性修复的区别：这里由**版本号**驱动，顺序由表定义，
+     * 不再依赖「每个键一个布尔标记 + init 里的排列顺序」。失败时不写版本号，下次启动整批重跑。
+     */
+    private suspend fun runSettingsSchemaMigrations() {
+        val current = editor.readRawPreferences()[SettingsPreferenceKeys.SETTINGS_SCHEMA_VERSION] ?: 0
+        if (current >= SettingsSchemaMigrations.CURRENT_VERSION) return
+        SettingsSchemaMigrations.pending(current).forEach { migration ->
+            editor.edit { prefs -> migration.block(prefs) }.getOrThrow()
+        }
+        editor.edit { prefs ->
+            prefs[SettingsPreferenceKeys.SETTINGS_SCHEMA_VERSION] =
+                SettingsSchemaMigrations.CURRENT_VERSION
+        }.getOrThrow()
+    }
+
     private suspend fun migrateSearchEngineIconSourcesOnce() = editor.edit { prefs ->
         if (prefs[SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SOURCE_MIGRATED] == true) return@edit
         prefs[SettingsPreferenceKeys.SEARCH_ENGINE_ICON_SOURCE_MIGRATED] = true
