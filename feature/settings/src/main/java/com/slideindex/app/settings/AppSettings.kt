@@ -329,11 +329,17 @@ data class AppSettings(
     val floatBallPickSearchGridLastExpanded get() = floatBall.floatBallPickSearchGridLastExpanded
     val floatBallPickTextModeDefault get() = floatBall.floatBallPickTextModeDefault
     val floatBallPickTextModeLastMode get() = floatBall.floatBallPickTextModeLastMode
+    val floatBallPickWordTapGranularity get() = floatBall.floatBallPickWordTapGranularity
     val floatBallPickDefaultSearchEngineId get() = floatBall.floatBallPickDefaultSearchEngineId
     val floatBallPickAutoSelectAll get() = floatBall.floatBallPickAutoSelectAll
     val floatBallPickCopyDismissPanel get() = floatBall.floatBallPickCopyDismissPanel
     val floatBallPickCopyButtonPosition get() = floatBall.floatBallPickCopyButtonPosition
     val floatBallPickImageToolbarPosition get() = floatBall.floatBallPickImageToolbarPosition
+    val floatBallPickIconBarEnabled get() = floatBall.floatBallPickIconBarEnabled
+    val floatBallPickTextBarOrder get() = floatBall.floatBallPickTextBarOrder
+    val floatBallPickTextBarHidden get() = floatBall.floatBallPickTextBarHidden
+    val floatBallPickImageBarOrder get() = floatBall.floatBallPickImageBarOrder
+    val floatBallPickImageBarHidden get() = floatBall.floatBallPickImageBarHidden
     val floatBallPickHapticEnabled get() = floatBall.floatBallPickHapticEnabled
     val floatBallDragPickEnabled get() = floatBall.floatBallDragPickEnabled
     val floatBallDragPasteEnabled get() = floatBall.floatBallDragPasteEnabled

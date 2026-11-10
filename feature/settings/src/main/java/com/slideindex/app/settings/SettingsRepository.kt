@@ -14,6 +14,7 @@ import com.slideindex.app.message.MessageAction
 import com.slideindex.app.message.MessageAppFilterRule
 import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.overlay.PanelSide
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.shake.ShakeGestureType
 import com.slideindex.app.shake.ShakeWorkMode
 import com.slideindex.app.shell.ShellCommand
@@ -687,6 +688,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallPickTextModeLastMode(storageKey: String) =
         overlay.setFloatBallPickTextModeLastMode(storageKey)
 
+    suspend fun setFloatBallPickWordTapGranularity(
+        granularity: PickResultWordTapGranularity,
+    ) = overlay.setFloatBallPickWordTapGranularity(granularity)
+
     suspend fun setFloatBallPickDefaultSearchEngineId(id: String?) =
         overlay.setFloatBallPickDefaultSearchEngineId(id)
 
@@ -701,6 +706,21 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setFloatBallPickImageToolbarPosition(position: PickResultImageToolbarPosition) =
         overlay.setFloatBallPickImageToolbarPosition(position)
+
+    suspend fun setFloatBallPickIconBarEnabled(enabled: Boolean) =
+        overlay.setFloatBallPickIconBarEnabled(enabled)
+
+    suspend fun setFloatBallPickTextBarOrder(order: List<String>) =
+        overlay.setFloatBallPickTextBarOrder(order)
+
+    suspend fun setFloatBallPickTextBarHidden(hidden: Set<String>) =
+        overlay.setFloatBallPickTextBarHidden(hidden)
+
+    suspend fun setFloatBallPickImageBarOrder(order: List<String>) =
+        overlay.setFloatBallPickImageBarOrder(order)
+
+    suspend fun setFloatBallPickImageBarHidden(hidden: Set<String>) =
+        overlay.setFloatBallPickImageBarHidden(hidden)
 
     suspend fun setFloatBallPickHapticEnabled(enabled: Boolean) =
         overlay.setFloatBallPickHapticEnabled(enabled)
@@ -1166,6 +1186,8 @@ class SettingsRepository @Inject constructor(
     suspend fun setCornerGestureInnerDiameterDp(value: Float) = overlay.setCornerGestureInnerDiameterDp(value)
     suspend fun setCornerGestureRingSpacingDp(value: Float) = overlay.setCornerGestureRingSpacingDp(value)
     suspend fun setCornerGestureBubbleSizeDp(value: Float) = overlay.setCornerGestureBubbleSizeDp(value)
+    suspend fun setCornerGestureSlotIconShape(shape: FvIconShape) =
+        overlay.setCornerGestureSlotIconShape(shape)
     suspend fun setCornerGestureWheelLayerCount(value: Int) =
         overlay.setCornerGestureWheelLayerCount(value)
     suspend fun setCornerGestureCancelOutsideWheel(enabled: Boolean) =

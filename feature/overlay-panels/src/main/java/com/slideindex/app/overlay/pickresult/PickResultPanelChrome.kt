@@ -7,8 +7,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
@@ -689,6 +692,10 @@ fun PickResultTextActionBar(
     compactEmbedded: Boolean = true,
     copyButtonPosition: com.slideindex.app.settings.PickResultCopyButtonPosition =
         com.slideindex.app.settings.PickResultCopyButtonPosition.LEFT,
+    /** 纯图标模式：不再画「复制选中」主胶囊，整排同规格小图标；按钮顺序/显隐由设置决定。 */
+    iconBarEnabled: Boolean = false,
+    iconBarOrder: List<String> = emptyList(),
+    iconBarHidden: Set<String> = emptySet(),
 ) {
     var justCopied by remember { mutableStateOf(false) }
     var moreMenuExpanded by remember { mutableStateOf(false) }
@@ -726,6 +733,322 @@ fun PickResultTextActionBar(
     if (compactEmbedded) {
         val copyOnRight =
             copyButtonPosition == com.slideindex.app.settings.PickResultCopyButtonPosition.RIGHT
+
+        /** 纯图标行里的通用动作键：42dp 圆形容器 + 22dp 图标，与经典样式同尺寸。 */
+        val iconBarTint = if (enabled) {
+            if (isDark) Color(0xFFE0E0E6) else Color(0xFF333333)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        }
+
+        @Composable
+        fun IconBarActionButton(
+            icon: ImageVector,
+            contentDescription: String?,
+            tint: Color,
+            actionEnabled: Boolean,
+            onClick: () -> Unit,
+            onLongClick: (() -> Unit)? = null,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .then(
+                        if (onLongClick != null) {
+                            Modifier.combinedClickable(
+                                enabled = actionEnabled,
+                                onClick = onClick,
+                                onLongClick = onLongClick,
+                            )
+                        } else {
+                            Modifier.clickable(enabled = actionEnabled, onClick = onClick)
+                        }
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = tint,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
+        @Composable
+        fun IconBarOpenLinkButton() {
+            Box {
+                IconButton(
+                    onClick = onOpenLink,
+                    enabled = enabled,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(21.dp)),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                        contentDescription = stringResource(R.string.pick_result_open_link),
+                        tint = iconBarTint,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                if (openLinkChoices.isNotEmpty()) {
+                    PickResultDropdownMenuInLtr(
+                        expanded = openLinkChooserExpanded,
+                        onDismissRequest = onDismissOpenLinkChooser,
+                        modifier = Modifier.widthIn(max = 240.dp),
+                    ) {
+                        openLinkChoices.forEachIndexed { index, url ->
+                            if (index > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 12.dp)
+                                        .fillMaxWidth()
+                                        .height(0.5.dp)
+                                        .background(pickResultDropdownMenuDividerColor(isDark))
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = url,
+                                        maxLines = 3,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 12.sp,
+                                            lineHeight = 16.sp,
+                                            color = if (isDark) Color(0xFFECECED) else Color(0xFF1F1F1F),
+                                        ),
+                                    )
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                onClick = {
+                                    onDismissOpenLinkChooser()
+                                    onOpenLinkChoice(url)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        fun IconBarCopyButton() {
+            val successColor = if (isDark) Color(0xFF2ED573) else Color(0xFF22B14C)
+            val copyTint = when {
+                !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                justCopied -> successColor
+                else -> iconBarTint
+            }
+            val copyScale by animateFloatAsState(
+                targetValue = if (justCopied) 1.12f else 1.0f,
+                label = "iconBarCopyScale",
+            )
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .graphicsLayer {
+                        scaleX = copyScale
+                        scaleY = copyScale
+                    }
+                    .clip(CircleShape)
+                    .then(
+                        if (copyDismissEnabled) {
+                            Modifier.combinedClickable(
+                                enabled = enabled,
+                                onClick = handleCopyAction,
+                                onLongClick = handleCopyKeepOpenAction,
+                            )
+                        } else {
+                            Modifier.clickable(enabled = enabled, onClick = handleCopyKeepOpenAction)
+                        }
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (justCopied) Icons.Filled.Check else Icons.Outlined.ContentCopy,
+                    contentDescription = stringResource(R.string.pick_result_copy_selection),
+                    tint = copyTint,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
+        @Composable
+        fun IconBarProcessTextButton() {
+            Box {
+                IconBarActionButton(
+                    icon = Icons.Outlined.Apps,
+                    contentDescription = stringResource(R.string.pick_result_process_text),
+                    tint = iconBarTint,
+                    actionEnabled = enabled,
+                    onClick = { processTextMenuExpanded = true },
+                )
+                PickResultDropdownMenuInLtr(
+                    expanded = processTextMenuExpanded,
+                    onDismissRequest = { processTextMenuExpanded = false },
+                ) {
+                    PickResultProcessTextTargetList(
+                        targets = processTextTargets.orEmpty(),
+                        loading = processTextTargets == null,
+                        onBack = { processTextMenuExpanded = false },
+                        onSelect = { target ->
+                            processTextMenuExpanded = false
+                            onProcessText?.invoke(target)
+                        },
+                    )
+                }
+            }
+        }
+
+        @Composable
+        fun CompactIconBar() {
+            val buttons = remember(iconBarOrder) {
+                com.slideindex.app.settings.PickResultBarButtons.normalizeText(iconBarOrder)
+            }
+            val hidden = remember(iconBarHidden) {
+                com.slideindex.app.settings.PickResultBarButtons.sanitizeHiddenText(iconBarHidden)
+            }
+            // 可见集合由「排序 + 隐藏 + 当前是否有文字/链接/搜索网格」共同决定。
+            // 链接出现时是 9 颗，1080p 手机上会超出几 dp，所以溢出时整行可横向滑。
+            val visible = buttons.filter { button ->
+                button.id !in hidden && when (button) {
+                    com.slideindex.app.settings.PickResultTextBarButton.COPY -> true
+                    com.slideindex.app.settings.PickResultTextBarButton.OPEN_LINK -> showOpenLink
+                    com.slideindex.app.settings.PickResultTextBarButton.SEARCH -> showSearch
+                    com.slideindex.app.settings.PickResultTextBarButton.TRANSLATE -> translateEnabled
+                    com.slideindex.app.settings.PickResultTextBarButton.SHARE -> true
+                    com.slideindex.app.settings.PickResultTextBarButton.PIN -> onPinToScreen != null
+                    com.slideindex.app.settings.PickResultTextBarButton.STASH -> onStash != null
+                    com.slideindex.app.settings.PickResultTextBarButton.QR -> onGenerateQr != null
+                    com.slideindex.app.settings.PickResultTextBarButton.PROCESS_TEXT -> onProcessText != null
+                }
+            }
+
+            @Composable
+            fun BarButton(button: com.slideindex.app.settings.PickResultTextBarButton) {
+                when (button) {
+                    com.slideindex.app.settings.PickResultTextBarButton.COPY ->
+                        IconBarCopyButton()
+
+                    com.slideindex.app.settings.PickResultTextBarButton.OPEN_LINK ->
+                        IconBarOpenLinkButton()
+
+                    com.slideindex.app.settings.PickResultTextBarButton.SEARCH -> {
+                        val searchTint = when {
+                            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            searchSelected -> MaterialTheme.colorScheme.primary
+                            else -> iconBarTint
+                        }
+                        PickResultSearchActionButton(
+                            enabled = enabled,
+                            selected = searchSelected,
+                            tint = searchTint,
+                            background = Color.Transparent,
+                            buttonSize = 42.dp,
+                            cornerRadius = 21.dp,
+                            iconSize = 22.dp,
+                            quickLaunch = searchQuickLaunch,
+                            onClick = onSearch,
+                        )
+                    }
+
+                    com.slideindex.app.settings.PickResultTextBarButton.TRANSLATE -> {
+                        val translateTint = when {
+                            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            translateSelected -> MaterialTheme.colorScheme.primary
+                            else -> iconBarTint
+                        }
+                        IconBarActionButton(
+                            icon = Icons.Outlined.Translate,
+                            contentDescription = null,
+                            tint = translateTint,
+                            actionEnabled = enabled && translateEnabled,
+                            onClick = onTranslate,
+                        )
+                    }
+
+                    com.slideindex.app.settings.PickResultTextBarButton.SHARE ->
+                        IconBarActionButton(
+                            icon = Icons.Outlined.Share,
+                            contentDescription = stringResource(R.string.pick_result_share),
+                            tint = iconBarTint,
+                            actionEnabled = enabled,
+                            onClick = onShare,
+                            onLongClick = onStartDrag,
+                        )
+
+                    com.slideindex.app.settings.PickResultTextBarButton.PIN ->
+                        IconBarActionButton(
+                            icon = Icons.Outlined.PushPin,
+                            contentDescription = stringResource(R.string.pick_result_pin),
+                            tint = iconBarTint,
+                            actionEnabled = enabled,
+                            onClick = { onPinToScreen?.invoke() },
+                        )
+
+                    com.slideindex.app.settings.PickResultTextBarButton.STASH ->
+                        IconBarActionButton(
+                            icon = Icons.Outlined.Archive,
+                            contentDescription = stringResource(R.string.pick_result_stash),
+                            tint = iconBarTint,
+                            actionEnabled = enabled,
+                            onClick = { onStash?.invoke() },
+                        )
+
+                    com.slideindex.app.settings.PickResultTextBarButton.QR ->
+                        IconBarActionButton(
+                            icon = Icons.Outlined.QrCode,
+                            contentDescription = stringResource(R.string.pick_result_qr),
+                            tint = iconBarTint,
+                            actionEnabled = enabled,
+                            onClick = { onGenerateQr?.invoke() },
+                        )
+
+                    com.slideindex.app.settings.PickResultTextBarButton.PROCESS_TEXT ->
+                        IconBarProcessTextButton()
+                }
+            }
+
+            val itemSize = 42.dp
+            val itemSpacing = 2.dp
+            val contentWidth = itemSize * visible.size +
+                itemSpacing * (visible.size - 1).coerceAtLeast(0)
+
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = bottomPadding, start = 2.dp, end = 2.dp),
+            ) {
+                if (contentWidth <= maxWidth) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.CenterHorizontally),
+                    ) {
+                        visible.forEach { button -> BarButton(button) }
+                    }
+                } else {
+                    // 溢出（有链接时 9 颗）才横向滑动，平时看不出来。
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.Start),
+                    ) {
+                        visible.forEach { button -> BarButton(button) }
+                    }
+                }
+            }
+        }
+
+        if (iconBarEnabled) {
+            CompactIconBar()
+            return
+        }
 
         @Composable
         fun CompactPrimaryChip() {

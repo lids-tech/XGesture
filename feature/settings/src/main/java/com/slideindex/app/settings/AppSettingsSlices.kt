@@ -325,6 +325,9 @@ data class FloatBallSettings(
      * 空串表示还没有记录过，读取方需回落默认值。
      */
     val floatBallPickTextModeLastMode: String = "",
+    /** 点词粒度：分词（可见 chip）或不分词（按字符选、无 chip）。 */
+    val floatBallPickWordTapGranularity: PickResultWordTapGranularity =
+        PickResultWordTapGranularity.WORD,
     /** Pick panel: engine used by search-button long-press quick search (null = long press idle). */
     val floatBallPickDefaultSearchEngineId: String? = null,
     /** Pick panel: auto-select all text when the panel opens after word pick or screenshot. */
@@ -334,6 +337,16 @@ data class FloatBallSettings(
     /** Pick panel: primary copy chip on the left or right of the bottom action bar. */
     val floatBallPickCopyButtonPosition: PickResultCopyButtonPosition = PickResultCopyButtonPosition.LEFT,
     val floatBallPickImageToolbarPosition: PickResultImageToolbarPosition = PickResultImageToolbarPosition.LEFT,
+    /** Pick panel: 底栏纯图标模式（文本区 + 图片区一起切换）。开启后两项「位置」设置不再生效。 */
+    val floatBallPickIconBarEnabled: Boolean = false,
+    /** 文本区底栏按钮顺序（空 = 默认顺序）。 */
+    val floatBallPickTextBarOrder: List<String> = emptyList(),
+    /** 文本区底栏被隐藏的按钮 id。 */
+    val floatBallPickTextBarHidden: Set<String> = emptySet(),
+    /** 图片区底栏按钮顺序（空 = 默认顺序）。 */
+    val floatBallPickImageBarOrder: List<String> = emptyList(),
+    /** 图片区底栏被隐藏的按钮 id。 */
+    val floatBallPickImageBarHidden: Set<String> = emptySet(),
     /** Pick panel: enable subtle haptic feedback for copy and word tap drag selection. */
     val floatBallPickHapticEnabled: Boolean = true,
     /**

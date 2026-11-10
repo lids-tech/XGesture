@@ -7,6 +7,7 @@ import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureTriggerMode
 import com.slideindex.app.gesture.SelectedHintMetrics
 import com.slideindex.app.launcher.QuickLauncherItemCodec
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.shell.ShellCommand
 import com.slideindex.app.shell.ShellCommandCodec
 import com.slideindex.app.activity.ActivityShortcutCodec
@@ -1050,6 +1051,12 @@ class OverlaySettingsMutator @Inject constructor(
         }
     }
 
+    suspend fun setFloatBallPickWordTapGranularity(
+        granularity: PickResultWordTapGranularity,
+    ) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_WORD_TAP_GRANULARITY] = granularity.storageKey
+    }
+
     suspend fun setFloatBallPickDefaultSearchEngineId(id: String?) = editor.edit {
         if (id.isNullOrBlank()) {
             it.remove(SettingsPreferenceKeys.FLOAT_BALL_PICK_DEFAULT_SEARCH_ENGINE_ID)
@@ -1072,6 +1079,31 @@ class OverlaySettingsMutator @Inject constructor(
 
     suspend fun setFloatBallPickImageToolbarPosition(position: PickResultImageToolbarPosition) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_TOOLBAR_POSITION] = position.storageKey
+    }
+
+    suspend fun setFloatBallPickIconBarEnabled(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_ICON_BAR_ENABLED] = enabled
+    }
+
+    /** 文本区底栏按钮顺序：落盘前过一遍归一化，避免 UI 层传进来未知 id。 */
+    suspend fun setFloatBallPickTextBarOrder(order: List<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_BAR_ORDER] =
+            PickResultBarButtons.encodeOrder(PickResultBarButtons.normalizeText(order).map { it.id })
+    }
+
+    suspend fun setFloatBallPickTextBarHidden(hidden: Set<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_BAR_HIDDEN] =
+            PickResultBarButtons.sanitizeHiddenText(hidden)
+    }
+
+    suspend fun setFloatBallPickImageBarOrder(order: List<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_BAR_ORDER] =
+            PickResultBarButtons.encodeOrder(PickResultBarButtons.normalizeImage(order).map { it.id })
+    }
+
+    suspend fun setFloatBallPickImageBarHidden(hidden: Set<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_BAR_HIDDEN] =
+            PickResultBarButtons.sanitizeHiddenImage(hidden)
     }
 
     suspend fun setFloatBallPickHapticEnabled(enabled: Boolean) = editor.edit {
@@ -1744,6 +1776,10 @@ class OverlaySettingsMutator @Inject constructor(
     suspend fun setCornerGestureWheelLayerCount(value: Int) = editor.edit {
         it[SettingsPreferenceKeys.CORNER_GESTURE_WHEEL_LAYER_COUNT] =
             CornerGestureSettings.clampWheelLayerCount(value)
+    }
+
+    suspend fun setCornerGestureSlotIconShape(shape: FvIconShape) = editor.edit {
+        it[SettingsPreferenceKeys.CORNER_GESTURE_SLOT_ICON_SHAPE] = shape.name
     }
 
     suspend fun setCornerGestureLeftSlotAction(index: Int, action: GestureAction) = editor.edit { prefs ->

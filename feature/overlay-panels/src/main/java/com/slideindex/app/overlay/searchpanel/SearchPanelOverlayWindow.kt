@@ -105,6 +105,25 @@ object SearchPanelOverlayWindow {
         mainHandler.postDelayed(delayedB, 800)
     }
 
+    /**
+     * 从下层内容面板（取词面板）呼出搜索面板前调用：释放预热壳，让下一次 [show] 重新建窗。
+     *
+     * 不能靠 `removeView` + `addView` 抢 z-order：搜索面板的 ComposeView 用的是
+     * `DisposeOnDetachedFromWindow`，重排会让组合被销毁，重新 attach 后 measure 时
+     * 找不到窗口根上的 `ViewTreeLifecycleOwner`，直接崩（真机 logcat 已复现）。
+     * 反过来先销毁再 [show]，新窗口最后 add，天然压在取词面板之上。
+     */
+    fun releaseWarmShellForPickPanel() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { releaseWarmShellForPickPanel() }
+            return
+        }
+        // 无条件销毁：只要残留的是预热壳（甚至上一轮没完全收起的窗口），show() 都只会
+        // updateViewLayout（不改 z-order），窗口就停在比取词面板更低的层级。
+        // 释放后 show() 重新建窗，新窗口最后 add，天然压在取词面板之上。
+        releaseWarmUp()
+    }
+
     fun warmUp(context: Context) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post { warmUp(context) }
@@ -192,6 +211,7 @@ object SearchPanelOverlayWindow {
             if (panelVisibilityState?.targetState == true) return@postDelayed
             applyPanelShellPassive()
             com.slideindex.app.overlay.panels.PanelRuntimeHooks.onContentPanelHidden?.invoke()
+            destroyWindow()
         }, 140L)
     }
 
@@ -578,5 +598,7 @@ object SearchPanelOverlayWindow {
         screenOffUnregister?.invoke()
         screenOffUnregister = null
         appContext = null
+        // 所有关闭路径都收敛在这里：通知「因搜图而隐藏」的取词面板恢复。
+        SearchPanelSessionState.onPanelClosed?.invoke()
     }
 }
