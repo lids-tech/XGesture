@@ -2,8 +2,11 @@
 
 package com.slideindex.app.ui
 
+import androidx.compose.ui.unit.DpSize
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -176,6 +179,8 @@ fun SearchEngineSettingsScreen(
     MiuixBottomSheet(
         show = showAddSheet,
         title = stringResource(R.string.search_engine_add_title),
+        // 行自身带 12dp 外层边距，sheet 内部不再叠一层水平留白。
+        insideMargin = DpSize(0.dp, 12.dp),
         onDismissRequest = { showAddSheet = false },
     ) {
         // 规范做法（ui/miuix/README「类型 1：列表」）：非懒加载容器用 settingsCardItems + RenderRows，
@@ -194,6 +199,7 @@ fun SearchEngineSettingsScreen(
                 },
                 title = stringResource(R.string.search_engine_settings_preset_catalog),
                 subtitle = stringResource(R.string.search_engine_settings_preset_catalog_subtitle),
+                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
                 onClick = {
                     showAddSheet = false
                     onOpenPresetPicker()
@@ -210,6 +216,7 @@ fun SearchEngineSettingsScreen(
                 },
                 title = stringResource(R.string.search_engine_settings_import),
                 subtitle = stringResource(R.string.search_engine_settings_import_subtitle),
+                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
                 onClick = {
                     showAddSheet = false
                     importLauncher.launch(
@@ -233,6 +240,7 @@ fun SearchEngineSettingsScreen(
                 },
                 title = stringResource(R.string.search_engine_add_title),
                 subtitle = stringResource(R.string.search_engine_add_subtitle),
+                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
                 onClick = {
                     showAddSheet = false
                     onOpenEditor(null)
@@ -302,10 +310,10 @@ private fun DragFlowBarCard(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
+            MiuixText(
                 text = "流转栏",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                style = MiuixTheme.textStyles.title4,
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.width(8.dp))
             Text(

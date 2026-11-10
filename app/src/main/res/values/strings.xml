@@ -114,11 +114,13 @@
     <string name="shake_gestures_app_blacklist_desc">Disable shake gestures in blacklisted apps</string>
     <string name="shake_gestures_blacklist_section_blocked">Blocked apps</string>
     <string name="shake_gestures_blacklist_section_add">Add app</string>
+    <string name="shake_gestures_blacklist_section_add_desc">Pick apps where shake gestures are ignored</string>
     <string name="shake_gestures_blacklist_empty">No blocked apps</string>
     <string name="shake_gestures_blacklist_remove">Remove from blacklist</string>
     <string name="shake_gestures_lock_screen_settings_desc">Use these shake actions while locked or with the screen off</string>
     <string name="shake_gestures_per_app_configured">Configured apps</string>
     <string name="shake_gestures_per_app_add">Add app</string>
+    <string name="shake_gestures_per_app_add_desc">Pick apps to configure shake gestures separately</string>
     <string name="shake_gestures_per_app_empty">No configured apps yet</string>
     <string name="shake_gestures_per_app_remove">Remove config</string>
     <string name="shake_gestures_per_app_actions_title">%1$s shake actions</string>
@@ -585,6 +587,7 @@
     <string name="corner_gesture_slot_icon_shape">Slot icon shape</string>
     <string name="corner_gesture_zone_dp_value">%1$d dp</string>
     <string name="corner_gesture_behavior_section">Behavior</string>
+    <string name="corner_gesture_appearance_section">Appearance</string>
     <string name="corner_gesture_hide_landscape">Disable in landscape</string>
     <string name="corner_gesture_hide_landscape_desc">Hide corner trigger zones in landscape</string>
     <string name="corner_gesture_landscape_prevent_false_touch">Landscape false-touch guard</string>
@@ -2324,6 +2327,7 @@
     <string name="previous_app_blacklist_desc">Apps on this list are skipped when switching to the previous app. Input methods are always excluded automatically.</string>
     <string name="previous_app_blacklist_section_blocked">Skipped</string>
     <string name="previous_app_blacklist_section_add">Add app</string>
+    <string name="previous_app_blacklist_section_add_desc">Pick apps to skip when switching to the previous app</string>
     <string name="previous_app_blacklist_empty">No apps skipped</string>
     <string name="previous_app_blacklist_remove">Remove</string>
     <string name="app_package_uninstalled">App uninstalled</string>
@@ -2331,6 +2335,7 @@
     <string name="excluded_apps_entry_count">Disabled apps: %1$d</string>
     <string name="excluded_apps_section_excluded">Disabled</string>
     <string name="excluded_apps_section_add">Add app</string>
+    <string name="excluded_apps_section_add_desc">Pick apps to hide the handle, wheel and floating ball</string>
     <string name="excluded_apps_empty">No excluded apps</string>
     <string name="excluded_apps_remove">Remove exclusion</string>
     <string name="settings_section_gestures">Shortcut gestures</string>
@@ -3189,6 +3194,7 @@
     <string name="activity_shortcut_reset_icon">Reset icon</string>
     <string name="activity_shortcut_icon_from_gallery">Gallery</string>
     <string name="activity_shortcut_icon_from_app">From app</string>
+    <string name="activity_shortcut_icon_from_icon_pack">From icon pack</string>
     <string name="activity_shortcut_add">Add shortcut</string>
     <string name="activity_shortcut_pick_app_title">Choose app</string>
     <string name="activity_shortcut_preset_add">Add</string>

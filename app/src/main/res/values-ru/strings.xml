@@ -87,11 +87,13 @@
     <string name="shake_gestures_app_blacklist_desc">Отключить жесты встряхивания в заблокированных приложениях</string>
     <string name="shake_gestures_blacklist_section_blocked">Заблокированные приложения</string>
     <string name="shake_gestures_blacklist_section_add">Добавить приложение</string>
+    <string name="shake_gestures_blacklist_section_add_desc">Выберите приложения, где игнорировать встряхивание</string>
     <string name="shake_gestures_blacklist_empty">Нет заблокированных приложений</string>
     <string name="shake_gestures_blacklist_remove">Убрать из списка блокировки</string>
     <string name="shake_gestures_lock_screen_settings_desc">Используйте эти действия встряхивания в заблокированном состоянии или при выключенном экране</string>
     <string name="shake_gestures_per_app_configured">Настроенные приложения</string>
     <string name="shake_gestures_per_app_add">Добавить приложение</string>
+    <string name="shake_gestures_per_app_add_desc">Выберите приложения для отдельной настройки встряхивания</string>
     <string name="shake_gestures_per_app_empty">Настроенных приложений пока нет</string>
     <string name="shake_gestures_per_app_remove">Удалить настройку</string>
     <string name="shake_gestures_per_app_actions_title">Действия встряхивания: %1$s</string>
@@ -557,6 +559,7 @@
     <string name="corner_gesture_bubble_size">Размер пузыря</string>
     <string name="corner_gesture_zone_dp_value">%1$d dp</string>
     <string name="corner_gesture_behavior_section">Поведение</string>
+    <string name="corner_gesture_appearance_section">Внешний вид</string>
     <string name="corner_gesture_hide_landscape">Отключить в альбомной ориентации</string>
     <string name="corner_gesture_hide_landscape_desc">Скрывать угловые зоны срабатывания в альбомной ориентации</string>
     <string name="corner_gesture_landscape_prevent_false_touch">Защита от ложных касаний в альбомной ориентации</string>
@@ -2294,6 +2297,7 @@
     <string name="previous_app_blacklist_desc">Приложения из этого списка пропускаются при переключении на предыдущее приложение. Методы ввода всегда исключаются автоматически.</string>
     <string name="previous_app_blacklist_section_blocked">Пропускаемые</string>
     <string name="previous_app_blacklist_section_add">Добавить приложение</string>
+    <string name="previous_app_blacklist_section_add_desc">Выберите приложения, пропускаемые при переключении на предыдущее</string>
     <string name="previous_app_blacklist_empty">Нет пропускаемых приложений</string>
     <string name="previous_app_blacklist_remove">Удалить</string>
     <string name="app_package_uninstalled">Приложение удалено</string>
@@ -2301,6 +2305,7 @@
     <string name="excluded_apps_entry_count">Отключённых приложений: %1$d</string>
     <string name="excluded_apps_section_excluded">Отключённые</string>
     <string name="excluded_apps_section_add">Добавить приложение</string>
+    <string name="excluded_apps_section_add_desc">Выберите приложения, где скрыть триггер, колесо и плавающий шар</string>
     <string name="excluded_apps_empty">Нет исключённых приложений</string>
     <string name="excluded_apps_remove">Удалить исключение</string>
     <string name="settings_section_gestures">Жесты-ярлыки</string>
@@ -3160,6 +3165,7 @@
     <string name="activity_shortcut_reset_icon">Сбросить значок</string>
     <string name="activity_shortcut_icon_from_gallery">Галерея</string>
     <string name="activity_shortcut_icon_from_app">Из приложения</string>
+    <string name="activity_shortcut_icon_from_icon_pack">Из набора значков</string>
     <string name="activity_shortcut_add">Добавить ярлык</string>
     <string name="activity_shortcut_pick_app_title">Выберите приложение</string>
     <string name="activity_shortcut_preset_add">Добавить</string>

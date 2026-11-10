@@ -56,11 +56,13 @@
     <string name="shake_gestures_app_blacklist_desc">ブラックリストのアプリでシェイクジェスチャを無効化</string>
     <string name="shake_gestures_blacklist_section_blocked">ブロック中のアプリ</string>
     <string name="shake_gestures_blacklist_section_add">アプリを追加</string>
+    <string name="shake_gestures_blacklist_section_add_desc">揺れジェスチャーを無視するアプリを選択</string>
     <string name="shake_gestures_blacklist_empty">ブロック中のアプリはありません</string>
     <string name="shake_gestures_blacklist_remove">ブラックリストから削除</string>
     <string name="shake_gestures_lock_screen_settings_desc">ロック中または画面オフ時に以下のシェイクアクションを使用</string>
     <string name="shake_gestures_per_app_configured">設定済みのアプリ</string>
     <string name="shake_gestures_per_app_add">アプリを追加</string>
+    <string name="shake_gestures_per_app_add_desc">揺れジェスチャーを個別に設定するアプリを選択</string>
     <string name="shake_gestures_per_app_empty">設定済みのアプリはまだありません</string>
     <string name="shake_gestures_per_app_remove">設定を削除</string>
     <string name="shake_gestures_per_app_actions_title">%1$s のシェイクアクション</string>
@@ -471,6 +473,7 @@
     <string name="corner_gesture_bubble_size">バブルサイズ</string>
     <string name="corner_gesture_zone_dp_value">%1$d dp</string>
     <string name="corner_gesture_behavior_section">動作</string>
+    <string name="corner_gesture_appearance_section">外観</string>
     <string name="corner_gesture_hide_landscape">横向きで無効</string>
     <string name="corner_gesture_hide_landscape_desc">横向きでコーナートリガーゾーンを非表示</string>
     <string name="corner_gesture_landscape_prevent_false_touch">横向き誤タッチ防止</string>
@@ -733,6 +736,7 @@
     <string name="previous_app_blacklist_desc">このリストのアプリは前のアプリへの切り替え時にスキップされます。入力方法は常に自動で除外されます。</string>
     <string name="previous_app_blacklist_section_blocked">スキップ</string>
     <string name="previous_app_blacklist_section_add">アプリを追加</string>
+    <string name="previous_app_blacklist_section_add_desc">前のアプリへ切り替える際にスキップするアプリを選択</string>
     <string name="previous_app_blacklist_empty">スキップするアプリはありません</string>
     <string name="previous_app_blacklist_remove">削除</string>
     <string name="app_package_uninstalled">アプリがアンインストールされました</string>
@@ -752,6 +756,7 @@
     <string name="excluded_apps_scope_dialog_hint">このアプリで非表示にする項目を選択。少なくとも 1 つは有効にしてください。</string>
     <string name="excluded_apps_section_excluded">無効</string>
     <string name="excluded_apps_section_add">アプリを追加</string>
+    <string name="excluded_apps_section_add_desc">触钮・ホイール・フローティングボールを隠すアプリを選択</string>
     <string name="excluded_apps_empty">除外アプリはありません</string>
     <string name="excluded_apps_remove">除外を解除</string>
     <string name="layout_settings_title">アプリインデックス</string>
@@ -2782,6 +2787,7 @@
     <string name="activity_shortcut_reset_icon">アイコンをリセット</string>
     <string name="activity_shortcut_icon_from_gallery">ギャラリー</string>
     <string name="activity_shortcut_icon_from_app">アプリから</string>
+    <string name="activity_shortcut_icon_from_icon_pack">アイコンパックから</string>
     <string name="activity_shortcut_add">ショートカットを追加</string>
     <string name="activity_shortcut_pick_app_title">アプリを選択</string>
     <string name="activity_shortcut_preset_add">追加</string>
