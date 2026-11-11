@@ -215,6 +215,20 @@ enum class GestureActionType(val id: Int) {
      * 一个基础晃动方向绑定本动作后，这个方向就变成「打开某个菜单」而不是直接执行动作。
      */
     SHAKE_MENU(112),
+
+    /**
+     * 「NFC 开关」：把 NFC 取反。
+     *
+     * NFC 没有「第三方 App 直接开关」的公开 API（`NfcAdapter.enable()` 是 @SystemApi，且被
+     * `WRITE_SECURE_SETTINGS` 拦住），但有两条不需要系统签名的路：给本应用授一次
+     * `WRITE_SECURE_SETTINGS` 后进程内反射调用，或借 Shizuku 的 shell 身份直调 NFC 的 binder。
+     * **不要用 `svc nfc`**：它在部分 ROM 上执行完不退出，等待进程结束会把主线程卡到 ANR。
+     * 两条路都不通时执行器降级打开系统 NFC 设置页；没有 NFC 硬件的机型只吐一句提示。
+     */
+    TOGGLE_NFC(113),
+
+    /** 「蓝牙开关」：把蓝牙取反；与 [TOGGLE_NFC] 同一套特权/降级策略（`cmd bluetooth_manager`）。 */
+    TOGGLE_BLUETOOTH(114),
     ;
 
     companion object {
@@ -887,6 +901,19 @@ sealed class GestureAction {
         override val payload = ""
     }
 
+    /** 「NFC 开关」：优先进程内反射（需 `WRITE_SECURE_SETTINGS`，可由 Shizuku/Root 代授），
+     *  其次 Shizuku binder，否则打开系统 NFC 设置页。 */
+    data object ToggleNfc : GestureAction() {
+        override val type = GestureActionType.TOGGLE_NFC
+        override val payload = ""
+    }
+
+    /** 「蓝牙开关」：需 Shizuku / Root（`cmd bluetooth_manager`）；无特权时执行器打开蓝牙设置页。 */
+    data object ToggleBluetooth : GestureAction() {
+        override val type = GestureActionType.TOGGLE_BLUETOOTH
+        override val payload = ""
+    }
+
     /** 把「晃动」总开关取反（等价于晃动页顶部那个开关）。 */
     data object ToggleShakeGesture : GestureAction() {
         override val type = GestureActionType.TOGGLE_SHAKE_GESTURE
@@ -1281,6 +1308,8 @@ sealed class GestureAction {
                 GestureActionType.TOGGLE_SHAKE_GESTURE -> ToggleShakeGesture
                 GestureActionType.TOGGLE_FLOAT_BALL -> ToggleFloatBall
                 GestureActionType.TOGGLE_MOBILE_DATA -> ToggleMobileData
+                GestureActionType.TOGGLE_NFC -> ToggleNfc
+                GestureActionType.TOGGLE_BLUETOOTH -> ToggleBluetooth
                 GestureActionType.SWITCH_INPUT_METHOD -> SwitchInputMethod
                 GestureActionType.CORNER_INNER_CANCEL -> CornerInnerCancel
                 GestureActionType.CORNER_INNER_PIN_WHEEL -> CornerInnerPinWheel

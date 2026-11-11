@@ -61,6 +61,7 @@ import com.slideindex.app.util.FlashlightHelper
 import com.slideindex.app.util.FreeWindowTriggerAnchor
 import com.slideindex.app.util.InputMethodHelper
 import com.slideindex.app.util.InputTapUtil
+import com.slideindex.app.util.NfcToggleHelper
 import com.slideindex.app.util.OverlayBrightnessControl
 import com.slideindex.app.util.QuickToolsHelper
 import com.slideindex.app.util.ScreenRecordHelper
@@ -402,6 +403,12 @@ class ActionExecutor(
             }
             GestureAction.ToggleWifi -> QuickToolsHelper.toggleWifi(context) == true
             GestureAction.ToggleMobileData -> QuickToolsHelper.toggleMobileData(context) == true
+            GestureAction.ToggleNfc -> {
+                // NFC 的开关调用走反射 / binder，绝不放主线程（历史上 `svc nfc` 不退出，直接把主线程卡到 ANR）。
+                CoroutineScope(Dispatchers.IO).launch { performNfcToggle() }
+                true
+            }
+            GestureAction.ToggleBluetooth -> toggleBluetoothAction()
             GestureAction.ToggleShakeGesture -> {
                 CoroutineScope(Dispatchers.IO).launch {
                     val deps = com.slideindex.app.di.OverlayDependencyAccess.overlayDependencies(context)
@@ -633,6 +640,27 @@ class ActionExecutor(
             InputTapUtil.dispatchTap(rawX, rawY)
             onComplete()
         }
+    }
+
+    /**
+     * NFC 开关（在 IO 线程执行）：优先进程内反射，其次 Shizuku binder，最后降级系统设置页。
+     * 没有 NFC 硬件的机型只给一句提示。
+     */
+    private fun performNfcToggle() {
+        when (NfcToggleHelper.toggle(context)) {
+            NfcToggleHelper.Outcome.TOGGLED -> Unit
+            NfcToggleHelper.Outcome.UNSUPPORTED -> NfcToggleHelper.notifyUnsupported(context)
+            NfcToggleHelper.Outcome.NEEDS_SETTINGS -> NfcToggleHelper.openSettings(context)
+        }
+    }
+
+    /** 蓝牙开关：无特权时降级打开蓝牙设置页。 */
+    private fun toggleBluetoothAction(): Boolean {
+        if (QuickToolsHelper.toggleBluetooth(context) == null) {
+            QuickToolsHelper.openBluetoothSettings(context)
+            return false
+        }
+        return true
     }
 
     private fun executeShellCommand(action: GestureAction.ExecuteShellCommand): Boolean {

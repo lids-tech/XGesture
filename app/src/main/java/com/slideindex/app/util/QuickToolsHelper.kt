@@ -1,6 +1,8 @@
 package com.slideindex.app.util
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -123,6 +125,19 @@ object QuickToolsHelper {
             if (ok) return enable
         }
         return null
+    }
+
+    /** 没有特权时的降级：打开系统设置页。 */
+    fun openBluetoothSettings(context: Context): Boolean =
+        openSystemSettings(context, Settings.ACTION_BLUETOOTH_SETTINGS)
+
+    private fun openSystemSettings(context: Context, action: String): Boolean {
+        val appContext = context.applicationContext
+        val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (appContext.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) == null) {
+            return false
+        }
+        return runCatching { appContext.startActivity(intent) }.isSuccess
     }
 
     fun readAutoRotateEnabled(context: Context): Boolean {

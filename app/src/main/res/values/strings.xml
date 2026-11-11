@@ -1028,6 +1028,12 @@
     <string name="float_ball_style_animated_orbit">Orbit</string>
     <string name="float_ball_style_custom_image">Custom image</string>
     <string name="float_ball_style_slideshow">Slideshow</string>
+    <string name="float_ball_style_slideshow_interval">Interval</string>
+    <string name="float_ball_style_slideshow_interval_confirm">OK</string>
+    <string name="float_ball_style_slideshow_interval_seconds">%1$d s</string>
+    <string name="float_ball_style_slideshow_interval_minutes">%1$d min</string>
+    <string name="float_ball_style_slideshow_interval_hours">%1$d h</string>
+    <string name="float_ball_style_slideshow_interval_days">%1$d d</string>
     <string name="float_ball_style_gif">GIF</string>
     <string name="float_ball_style_custom_image_hint">Pick a custom image for the float ball</string>
     <string name="float_ball_style_custom_image_no_crop">Show as original</string>
@@ -2799,6 +2805,9 @@
     <string name="gesture_action_toggle_float_ball_snoozed">Float ball enabled; overlays are paused and it will appear shortly</string>
     <string name="gesture_action_toggle_float_ball_suppressed">Float ball enabled, but the rule for the current screen hides it</string>
     <string name="gesture_action_toggle_mobile_data">Toggle mobile data</string>
+    <string name="gesture_action_toggle_nfc">Toggle NFC</string>
+    <string name="gesture_action_toggle_bluetooth">Toggle Bluetooth</string>
+    <string name="gesture_action_nfc_unsupported">This device has no NFC</string>
     <string name="gesture_action_screen_record_permission">Needs “Display over other apps” permission</string>
     <string name="screen_record_channel_name">Screen recording</string>
     <string name="screen_record_notification_recording">Recording screen…</string>
@@ -5010,6 +5019,10 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="shell_panel_shizuku_ready">Authorized</string>
     <string name="shell_panel_shizuku_unavailable">Not authorized</string>
     <string name="shell_panel_mode_unavailable">The selected execution mode is unavailable.</string>
+    <string name="shell_panel_mode_status_unavailable">Unavailable</string>
+    <string name="shell_panel_mode_unavailable_shizuku">This command needs Shizuku, but Shizuku is not authorized. Authorize it and try again.</string>
+    <string name="shell_panel_mode_unavailable_root">This command needs Root, but Root is unavailable. Switch it to Shizuku or edit the command.</string>
+    <string name="shell_panel_mode_unavailable_unset">This command has no execution mode. Edit the command first.</string>
     <string name="shell_panel_result_exit_ok">exit 0 (no output)</string>
     <string name="shell_panel_result_exit_only">exit %1$d (no output)</string>
     <string name="shell_panel_test_result">Test result</string>
