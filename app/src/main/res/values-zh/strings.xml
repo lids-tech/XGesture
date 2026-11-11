@@ -42,8 +42,7 @@
     <string name="shake_menu_delete_confirm">「%1$s」里的方向动作会一起删除。</string>
     <string name="shake_gestures_section_feedback">反馈效果</string>
     <string name="shake_gestures_section_advanced_features">高级功能</string>
-    <string name="shake_gestures_section_action_scope">锁屏与独立应用</string>
-    <string name="shake_gestures_section_other">其他手势</string>
+    <string name="shake_gestures_section_action_scope">应用与生效范围</string>
     <string name="shake_gestures_other_hint">扣桌和背部敲击有各自独立的开关与模式，不受上面的晃动工作模式影响。</string>
     <string name="shake_work_mode_section">晃动工作模式</string>
     <string name="shake_work_mode_always">始终</string>
@@ -80,7 +79,7 @@
     <string name="shake_gestures_animation_color">动画颜色</string>
     <string name="shake_gestures_disable_landscape">横屏禁用</string>
     <string name="shake_gestures_app_blacklist">应用黑名单</string>
-    <string name="shake_gestures_app_blacklist_desc">在黑名单应用中禁用晃动</string>
+    <string name="shake_gestures_app_blacklist_desc">在这些应用中禁用晃动与扣桌</string>
     <string name="shake_gestures_blacklist_section_blocked">已屏蔽应用</string>
     <string name="shake_gestures_blacklist_section_add">添加应用</string>
     <string name="shake_gestures_blacklist_section_add_desc">选择要忽略晃动动作的应用</string>
@@ -1107,8 +1106,10 @@
     <string name="screen_search_ocr_requires_ppocr">OCR 模式需选用 PP-OCR 模型（取词 → OCR 模型）</string>
     <string name="gesture_action_open_internet_panel">原生网络连接面板</string>
     <string name="gesture_action_open_internet_panel_desc">弹出系统原生 Wi-Fi 与移动网络控制面板</string>
-    <string name="gesture_action_open_volume_panel">原生声音调节面板</string>
-    <string name="gesture_action_open_volume_panel_desc">调出系统原生音量调节条浮窗</string>
+    <string name="gesture_action_open_volume_panel">音量面板（设置页）</string>
+    <string name="gesture_action_open_volume_panel_desc">打开系统的音量设置面板（含多路滑块）</string>
+    <string name="gesture_action_open_volume_slider">音量条（不改音量）</string>
+    <string name="gesture_action_open_volume_slider_desc">弹出系统音量条（与音量键同款），不改变音量</string>
     <string name="gesture_action_volume_up">音量增加</string>
     <string name="gesture_action_volume_up_desc">媒体音量增加一级，并弹出系统音量面板</string>
     <string name="gesture_action_volume_down">音量减小</string>

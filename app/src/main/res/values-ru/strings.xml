@@ -56,8 +56,7 @@
     <string name="shake_gestures_section_sensitivity">Чувствительность и настройки</string>
     <string name="shake_gestures_section_feedback">Эффекты отклика</string>
     <string name="shake_gestures_section_advanced_features">Расширенные функции</string>
-    <string name="shake_gestures_section_action_scope">Экран блокировки и отдельные приложения</string>
-    <string name="shake_gestures_section_other">Другие жесты</string>
+    <string name="shake_gestures_section_action_scope">Приложения и область действия</string>
     <string name="shake_gestures_other_hint">У жестов «экраном вниз» и «двойного постукивания по корпусу» есть свои переключатели и режимы; режим срабатывания встряхивания на них не влияет.</string>
     <string name="shake_work_mode_section">Режим срабатывания встряхивания</string>
     <string name="shake_work_mode_always">Всегда</string>
@@ -94,7 +93,7 @@
     <string name="shake_gestures_animation_color">Цвет анимации</string>
     <string name="shake_gestures_disable_landscape">Отключить в альбомной ориентации</string>
     <string name="shake_gestures_app_blacklist">Список блокировки приложений</string>
-    <string name="shake_gestures_app_blacklist_desc">Отключить жесты встряхивания в заблокированных приложениях</string>
+    <string name="shake_gestures_app_blacklist_desc">Отключить встряхивание и жест «экраном вниз» в этих приложениях</string>
     <string name="shake_gestures_blacklist_section_blocked">Заблокированные приложения</string>
     <string name="shake_gestures_blacklist_section_add">Добавить приложение</string>
     <string name="shake_gestures_blacklist_section_add_desc">Выберите приложения, где игнорировать встряхивание</string>
@@ -1858,8 +1857,10 @@
     <string name="gesture_action_universal_copy_desc">Выделение текстовых блоков на экране и копирование</string>
     <string name="gesture_action_open_internet_panel">Нативная панель интернета</string>
     <string name="gesture_action_open_internet_panel_desc">Показать системную нативную панель Wi-Fi и мобильной сети</string>
-    <string name="gesture_action_open_volume_panel">Нативная панель громкости</string>
-    <string name="gesture_action_open_volume_panel_desc">Показать системное нативное всплывающее окно громкости</string>
+    <string name="gesture_action_open_volume_panel">Панель громкости (страница настроек)</string>
+    <string name="gesture_action_open_volume_panel_desc">Открыть системную панель настроек громкости с ползунками по потокам</string>
+    <string name="gesture_action_open_volume_slider">Ползунок громкости (без изменения уровня)</string>
+    <string name="gesture_action_open_volume_slider_desc">Показать системный ползунок громкости, не меняя уровень</string>
     <string name="gesture_action_volume_up">Громче</string>
     <string name="gesture_action_volume_up_desc">Увеличить медиагромкость на шаг и показать системную панель громкости</string>
     <string name="gesture_action_volume_down">Тише</string>
