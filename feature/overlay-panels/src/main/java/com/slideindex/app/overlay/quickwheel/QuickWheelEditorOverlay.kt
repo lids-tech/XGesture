@@ -137,6 +137,15 @@ fun QuickWheelEditorOverlay(
      * 「轮盘预览 / 调参实时预览」完全一致——例如默认左半圆时，圆心同样落在屏幕右边缘。
      */
     anchorOverride: Pair<Float, Float>? = null,
+    /**
+     * 额外让出的顶部 / 底部高度（dp），由宿主传入（浮层宿主要避开状态栏与系统导航区）。
+     *
+     * ⚠️ 必须同时作用于「网格排布」和「药丸条位置」，否则会出现"药丸盖住轮盘容器"：
+     * 之前宿主用 `Modifier.padding(bottom = 72.dp)` 把整个编辑层往上抬，但网格求解仍按
+     * **整屏**高度算可视带，于是网格底部落在药丸条的下面，二者重叠。
+     */
+    extraTopInsetDp: Float = 0f,
+    extraBottomInsetDp: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     var expandedPrimary by remember(wheel.id) { mutableIntStateOf(-1) }
@@ -168,8 +177,8 @@ fun QuickWheelEditorOverlay(
     // 拖动多远算"真的在拖"（超过它就从二级显示里退出）。
     val dragExitSecondaryPx = DRAG_EXIT_SECONDARY_THRESHOLD_DP * density
     // 顶部提示条 / 底部药丸条占的高度：矩形网格的「+」必须留在它们之间（见常量注释）。
-    val editorTopBandPx = EDITOR_TOP_INSET_DP * density
-    val editorBottomBandPx = EDITOR_BOTTOM_INSET_DP * density
+    val editorTopBandPx = (EDITOR_TOP_INSET_DP + extraTopInsetDp) * density
+    val editorBottomBandPx = (EDITOR_BOTTOM_INSET_DP + extraBottomInsetDp) * density
 
     val anchor = remember(
         wheel.primaryStyle,
@@ -683,7 +692,12 @@ fun QuickWheelEditorOverlay(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 20.dp),
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 20.dp,
+                    bottom = (20f + extraBottomInsetDp).dp,
+                ),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {

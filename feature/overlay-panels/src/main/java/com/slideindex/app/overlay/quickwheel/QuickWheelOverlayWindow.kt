@@ -363,7 +363,10 @@ object QuickWheelOverlayWindow {
                                     // 交给编辑层自己居中，避免从边缘呼出时整组网格溢出屏幕。
                                     anchorOverride = null,
                                     // 浮层是全屏窗口，底部药丸落在系统导航区，整体上抬。
-                                    modifier = Modifier.padding(top = 32.dp, bottom = 72.dp),
+                                    // 让出状态栏与系统导航区：**同时**作用于网格排布与药丸条，
+                                    // 否则药丸会盖住轮盘容器（拖拽/增删都点不到）。
+                                    extraTopInsetDp = 32f,
+                                    extraBottomInsetDp = 72f,
                                 )
                             }
                         } else {
