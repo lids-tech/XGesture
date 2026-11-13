@@ -14,18 +14,25 @@ import com.slideindex.app.activity.ActivityShortcut
 import com.slideindex.app.data.AppRepository
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.SelectedHintMetrics
+import com.slideindex.app.launcher.isCloneTarget
 import com.slideindex.app.launcher.isShellActivityShortcut
 import com.slideindex.app.launcher.showsShellActivityShortcutBadge
 import com.slideindex.app.launcher.showsShellCommandBadge
 import com.slideindex.app.overlay.HintRingRenderer
+import com.slideindex.app.overlay.MacroBadgeRenderer
 import com.slideindex.app.overlay.ShellCommandBadgeRenderer
 import com.slideindex.app.overlay.ShortcutBadgeRenderer
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.settings.CornerGestureSettings
 import com.slideindex.app.shell.ShellCommand
+import com.slideindex.app.shell.ShellCommandLabelResolver
+import com.slideindex.app.util.CloneBadge
 import kotlin.math.min
 
 object CornerRadialMenuRenderer {
     private val slotIconClipPath = Path()
+    private val slotShapePath = Path()
+    private val slotShapeRect = RectF()
     /** 提示卡片里图标外圈的进度用矩形（复用，避免每帧分配）。 */
     private val hintRingRect = RectF()
     private const val ICON_TINT = 0xFF374151.toInt()
@@ -135,6 +142,7 @@ object CornerRadialMenuRenderer {
                     shadowPaint = shadowPaint,
                     fillPaint = fillPaint,
                     strokePaint = strokePaint,
+                    shape = settings.slotIconShape,
                 )
                 plusPaint.color = if (highlighted) PLUS_COLOR_HIGHLIGHT else PLUS_COLOR
                 plusPaint.textSize = radius * 1.1f
@@ -157,6 +165,7 @@ object CornerRadialMenuRenderer {
                     activityShortcuts = activityShortcuts,
                     shellCommands = shellCommands,
                     appRepository = appRepository,
+                    shape = settings.slotIconShape,
                 )
             }
         }
@@ -192,6 +201,7 @@ object CornerRadialMenuRenderer {
                     activityShortcuts = activityShortcuts,
                     shellCommands = shellCommands,
                     appRepository = appRepository,
+                    shape = settings.slotIconShape,
                     longPressRingProgress = longPressRingProgress,
                     hintLabelSuffix = hintLabelSuffix,
                     hintPipArmed = hintPipArmed,
@@ -339,8 +349,7 @@ object CornerRadialMenuRenderer {
 
             val label = (com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchShortcutLabel
                 ?.invoke(shortcut).orEmpty()).ifBlank {
-                com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionLabel
-                    ?.invoke(context, shortcut).orEmpty()
+                actionLabel(context, shortcut, shellCommands)
             }
             val textStart = drawRect.left + iconContentWidth
             val textMaxWidth = (drawRect.right - paddingRight - textStart).coerceAtLeast(0f)
@@ -364,6 +373,7 @@ object CornerRadialMenuRenderer {
         activityShortcuts: List<ActivityShortcut>,
         shellCommands: List<ShellCommand>,
         appRepository: AppRepository?,
+        shape: FvIconShape,
         /** 提示卡片里图标外圈的进度：0..1；-1 = 不画。 */
         longPressRingProgress: Float = -1f,
         /** 长按到时间后拼到名字后面的后缀（如 "-小窗" / "-全屏"）；空串表示不加。 */
@@ -372,7 +382,7 @@ object CornerRadialMenuRenderer {
         hintPipArmed: Boolean = false,
     ) {
         // 长按到时间 → 名字后面拼上目标形态（-小窗 / -全屏）
-        val label = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionLabel?.invoke(context, action).orEmpty() +
+        val label = actionLabel(context, action, shellCommands) +
             if (longPressRingProgress >= 1f) hintLabelSuffix else ""
         if (label.isBlank()) return
 
@@ -424,6 +434,7 @@ object CornerRadialMenuRenderer {
             activityShortcuts = activityShortcuts,
             shellCommands = shellCommands,
             appRepository = appRepository,
+            shape = shape,
         )
         val iconLeft = left + paddingX
         val iconTop = centerY - iconSize / 2f
@@ -493,11 +504,54 @@ object CornerRadialMenuRenderer {
                 progress,
                 density,
             )
+        } else if (action is GestureAction.RunMacro) {
+            MacroBadgeRenderer.draw(
+                canvas,
+                iconLeft + iconSize / 2f,
+                centerY,
+                iconSize,
+                progress,
+                density,
+            )
         }
 
         val metrics = namePaint.fontMetrics
         val baseline = centerY - (metrics.ascent + metrics.descent) / 2f
         canvas.drawText(fitted, 0, fitted.length, iconLeft + iconSize + gap, baseline, namePaint)
+    }
+
+    private fun drawSlotShape(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+        shape: FvIconShape,
+        paint: Paint,
+    ) {
+        if (shape == FvIconShape.CIRCLE) {
+            canvas.drawCircle(centerX, centerY, radius, paint)
+            return
+        }
+        slotShapePath.rewind()
+        buildSlotShapePath(centerX, centerY, radius, shape, slotShapePath)
+        canvas.drawPath(slotShapePath, paint)
+    }
+
+    private fun buildSlotShapePath(
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+        shape: FvIconShape,
+        path: Path,
+    ) {
+        path.rewind()
+        if (shape == FvIconShape.CIRCLE) {
+            path.addCircle(centerX, centerY, radius, Path.Direction.CW)
+            return
+        }
+        slotShapeRect.set(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
+        val corner = radius * 2f * shape.cornerRadiusRatio
+        path.addRoundRect(slotShapeRect, corner, corner, Path.Direction.CW)
     }
 
     private fun drawFilledSlotIcon(
@@ -516,9 +570,17 @@ object CornerRadialMenuRenderer {
         activityShortcuts: List<ActivityShortcut>,
         shellCommands: List<ShellCommand>,
         appRepository: AppRepository?,
+        shape: FvIconShape,
     ) {
         val shadowOffset = 3f * density * progress
-        canvas.drawCircle(centerX + shadowOffset, centerY + shadowOffset, radius, shadowPaint)
+        drawSlotShape(
+            canvas = canvas,
+            centerX = centerX + shadowOffset,
+            centerY = centerY + shadowOffset,
+            radius = radius,
+            shape = shape,
+            paint = shadowPaint,
+        )
 
         val diameterPx = (radius * 2f).toInt().coerceAtLeast(12)
         val bitmap = CornerSlotIconBitmap.get(
@@ -529,18 +591,26 @@ object CornerRadialMenuRenderer {
             activityShortcuts = activityShortcuts,
             shellCommands = shellCommands,
             appRepository = appRepository,
+            shape = shape,
         )
         val drawSize = radius * 2f
         val left = centerX - drawSize / 2f
         val top = centerY - drawSize / 2f
         slotIconClipPath.rewind()
-        slotIconClipPath.addCircle(centerX, centerY, radius, Path.Direction.CW)
+        buildSlotShapePath(centerX, centerY, radius, shape, slotIconClipPath)
         canvas.withClip(slotIconClipPath) {
             canvas.drawBitmap(bitmap, left, top, iconPaint)
         }
 
         strokePaint.color = if (highlighted) BUBBLE_STROKE_HIGHLIGHT else BUBBLE_STROKE
-        canvas.drawCircle(centerX, centerY, radius, strokePaint)
+        drawSlotShape(
+            canvas = canvas,
+            centerX = centerX,
+            centerY = centerY,
+            radius = radius,
+            shape = shape,
+            paint = strokePaint,
+        )
 
         if (action is GestureAction.LaunchShortcut) {
             when {
@@ -574,6 +644,27 @@ object CornerRadialMenuRenderer {
                 progress,
                 density,
             )
+        } else if (action is GestureAction.RunMacro) {
+            MacroBadgeRenderer.draw(
+                canvas,
+                centerX,
+                centerY,
+                drawSize,
+                progress,
+                density,
+            )
+        }
+
+        // 分身黄点画在形状裁剪之外，圆形槽位也不会被裁（烘焙版会掉一半）
+        if (action.isCloneTarget(context)) {
+            CloneBadge.draw(
+                canvas,
+                centerX,
+                centerY,
+                drawSize,
+                progress,
+                circular = shape == FvIconShape.CIRCLE,
+            )
         }
     }
 
@@ -589,21 +680,29 @@ object CornerRadialMenuRenderer {
         shadowPaint: Paint,
         fillPaint: Paint,
         strokePaint: Paint,
+        shape: FvIconShape,
     ) {
         val shadowOffset = 3f * density * progress
-        canvas.drawCircle(centerX + shadowOffset, centerY + shadowOffset, radius, shadowPaint)
+        drawSlotShape(
+            canvas = canvas,
+            centerX = centerX + shadowOffset,
+            centerY = centerY + shadowOffset,
+            radius = radius,
+            shape = shape,
+            paint = shadowPaint,
+        )
         fillPaint.color = when {
             highlighted -> BUBBLE_FILL_HIGHLIGHT
             empty -> BUBBLE_FILL_EMPTY
             else -> BUBBLE_FILL
         }
-        canvas.drawCircle(centerX, centerY, radius, fillPaint)
+        drawSlotShape(canvas, centerX, centerY, radius, shape, fillPaint)
         strokePaint.color = when {
             highlighted -> BUBBLE_STROKE_HIGHLIGHT
             empty -> BUBBLE_STROKE_EMPTY
             else -> BUBBLE_STROKE
         }
-        canvas.drawCircle(centerX, centerY, radius, strokePaint)
+        drawSlotShape(canvas, centerX, centerY, radius, shape, strokePaint)
     }
 
     private fun drawEditButton(
@@ -638,5 +737,22 @@ object CornerRadialMenuRenderer {
         }
         val textY = centerY - (iconPaint.descent() + iconPaint.ascent()) / 2f
         canvas.drawText("✎", centerX, textY, iconPaint)
+    }
+
+    /**
+     * 动作名称：Shell 命令优先用 Shell 命令面板里用户自定义的名字，
+     * 其余动作仍走 `:app` 注入的通用标签（宏、打开链接、快捷方式等）。
+     */
+    private fun actionLabel(
+        context: Context,
+        action: GestureAction,
+        shellCommands: List<ShellCommand>,
+    ): String {
+        val customShellLabel = (action as? GestureAction.ExecuteShellCommand)
+            ?.let { ShellCommandLabelResolver.customLabelFor(it.command, shellCommands) }
+        return customShellLabel
+            ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionLabel
+                ?.invoke(context, action)
+                .orEmpty()
     }
 }

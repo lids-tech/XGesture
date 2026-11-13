@@ -344,6 +344,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onCustomImageUriChange = viewModel::setFloatBallCustomImageUri,
             onCustomImageNoCropChange = viewModel::setFloatBallCustomImageNoCrop,
             onSlideshowUrisChange = viewModel::setFloatBallSlideshowUris,
+            onSlideshowIntervalChange = viewModel::setFloatBallSlideshowIntervalSeconds,
             onGifUriChange = viewModel::setFloatBallGifUri,
         )
     }
@@ -566,8 +567,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onOpenAggregatedEngine = { engineId ->
                 ctx.navigate(AppNavKey.FloatBallImageSearchEngineDetail(engineId))
             },
-            onImageSearchPickPanelTransparencyChange = viewModel::setImageSearchPickPanelTransparency,
-            onOpenEditor = { engineId ->
+                onOpenEditor = { engineId ->
                 ctx.navigate(AppNavKey.FloatBallImageSearchEngineEditor(engineId.orEmpty()))
             },
             onOpenBatchPicker = {
@@ -580,6 +580,7 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
                     ),
                 )
             },
+            onSetShowAggregatedImageEntry = viewModel::setSearchPanelShowAggregatedImageEntry,
         )
     }
 
@@ -721,11 +722,18 @@ fun NavEntryBuilder.floatBallNavEntries(ctx: MainNavContext) {
             onPickPanelPlacementChange = viewModel::setFloatBallPickPanelPlacement,
             onPickSearchGridDefaultStateChange = viewModel::setFloatBallPickSearchGridDefaultState,
             onPickTextModeDefaultChange = viewModel::setFloatBallPickTextModeDefault,
+            onPickWordTapGranularityChange = viewModel::setFloatBallPickWordTapGranularity,
             onPickTextFirstPanelChange = viewModel::setFloatBallPickTextFirstPanel,
             onPickAutoSelectAllChange = viewModel::setFloatBallPickAutoSelectAll,
             onPickCopyDismissPanelChange = viewModel::setFloatBallPickCopyDismissPanel,
             onPickCopyButtonPositionChange = viewModel::setFloatBallPickCopyButtonPosition,
             onPickImageToolbarPositionChange = viewModel::setFloatBallPickImageToolbarPosition,
+            onPickIconBarEnabledChange = viewModel::setFloatBallPickIconBarEnabled,
+            onPickBarTextOrderChange = viewModel::setFloatBallPickTextBarOrder,
+            onPickBarTextHiddenChange = viewModel::setFloatBallPickTextBarHidden,
+            onPickBarImageOrderChange = viewModel::setFloatBallPickImageBarOrder,
+            onPickBarImageHiddenChange = viewModel::setFloatBallPickImageBarHidden,
+            onResetPickBarButtons = viewModel::resetFloatBallPickBarButtons,
             onPickTextSizeChange = viewModel::setFloatBallPickTextSizeSp,
             onPickHapticEnabledChange = viewModel::setFloatBallPickHapticEnabled,
             onPickPanelEnterAnimationMsChange = viewModel::setFloatBallPickPanelEnterAnimationMs,

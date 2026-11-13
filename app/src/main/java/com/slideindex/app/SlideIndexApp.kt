@@ -208,6 +208,36 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.accessibilityService = {
             com.slideindex.app.service.SlideIndexAccessibilityService.accessibilityInstance()
         }
+        // 面板（应用切换器里的分身卡等）也要能执行手势动作；与悬浮球/圆环共用同一套 ActionExecutor。
+        val panelGestureExecutor = com.slideindex.app.gesture.ActionExecutor(
+            context = this,
+            appRepository = deps.appRepository,
+            onShellCommandsPersist = { commands ->
+                deps.applicationScope.launch {
+                    deps.settingsRepository.setShellCommands(commands)
+                }
+            },
+        )
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner =
+            object : com.slideindex.app.overlay.panels.GestureActionRunner {
+                override fun run(
+                    action: com.slideindex.app.gesture.GestureAction,
+                    settings: com.slideindex.app.settings.AppSettings,
+                    longPressArmed: Boolean,
+                    anchorRawX: Float?,
+                    anchorRawY: Float?,
+                    panelSide: com.slideindex.app.overlay.PanelSide?,
+                ) {
+                    panelGestureExecutor.execute(
+                        action = action,
+                        settings = settings,
+                        longPressArmed = longPressArmed,
+                        anchorRawX = anchorRawX,
+                        anchorRawY = anchorRawY,
+                        panelSide = panelSide,
+                    )
+                }
+            }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.recentTaskIdentifiers = {
             runCatching {
                 com.slideindex.app.util.TaskManagerUtil.refreshRecentTasks().map { it.identifier }
@@ -260,8 +290,10 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         com.slideindex.app.overlay.panels.PanelFloatBallHooks.suppressTouchHostsForActiveLauncherOverlay = {
             com.slideindex.app.overlay.FloatBallOverlay.suppressTouchHostsForActiveLauncherOverlay()
         }
-        com.slideindex.app.overlay.panels.PanelFloatBallHooks.overlayLayoutMetrics = { settings ->
-            com.slideindex.app.overlay.FloatBallOverlay.overlayLayoutMetrics(settings) ?: (1f to 1080f)
+        com.slideindex.app.overlay.panels.PanelFloatBallHooks.layoutDensityHint = { settings ->
+            // 只交密度提示：屏宽由圆环按当前方向自己算，钩子没有口子能塞进假宽度。
+            // 拿不到（球窗没建起来）就是 null，圆环退回真实屏幕度量。
+            com.slideindex.app.overlay.FloatBallOverlay.ballDensityHint(settings)
         }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.ringSlotIconEditorIntent = { ctx, axis, slotIndex ->
             com.slideindex.app.service.RingLauncherSlotIconEditorTrampolineActivity
@@ -317,6 +349,7 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                     editingSubtitle = request.editingSubtitle,
                     wheels = request.wheels,
                     panels = request.panels,
+                    widgetPanelPages = request.widgetPanelPages,
                     imeBottom = request.imeBottom,
                     onSelect = request.onSelect,
                     onCancel = request.onCancel,
@@ -760,9 +793,6 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                     shellCommands = shells,
                 )
             }
-        com.slideindex.app.overlay.panels.PanelRuntimeHooks.cloneBadgeDecorate = { bmp, isClone ->
-            com.slideindex.app.util.CloneBadge.decorate(bmp, isClone)
-        }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.cachedRecentTasks = {
             com.slideindex.app.tasks.TaskSwitcherRepository.getCachedEntries()
         }
@@ -852,9 +882,19 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         }
         com.slideindex.app.overlay.panels.PanelVolumeHooks.setVolume = { stream, fraction ->
             com.slideindex.app.overlay.overlayHostContext()?.let { ctx ->
+                val targetStream = when (stream) {
+                    com.slideindex.app.overlay.panels.PanelAudioStream.MEDIA ->
+                        com.slideindex.app.util.VolumeControlHelper.Stream.MEDIA
+                    com.slideindex.app.overlay.panels.PanelAudioStream.RING ->
+                        com.slideindex.app.util.VolumeControlHelper.Stream.RING
+                    com.slideindex.app.overlay.panels.PanelAudioStream.NOTIFICATION ->
+                        com.slideindex.app.util.VolumeControlHelper.Stream.NOTIFICATION
+                    com.slideindex.app.overlay.panels.PanelAudioStream.ALARM ->
+                        com.slideindex.app.util.VolumeControlHelper.Stream.ALARM
+                }
                 com.slideindex.app.util.VolumeControlHelper.setFraction(
                     ctx,
-                    com.slideindex.app.util.VolumeControlHelper.Stream.entries[stream],
+                    targetStream,
                     fraction,
                 )
             }
@@ -896,8 +936,10 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                     )
                 }
             }
-        com.slideindex.app.overlay.panels.PanelRuntimeHooks.globalIconKey = { pkg ->
-            com.slideindex.app.ui.GlobalIconStore.appIcon(this@SlideIndexApp, pkg)
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.globalIconKey = { key ->
+            // 动作类型覆盖优先，其次应用覆盖（两者前缀不同，不会互相命中）
+            com.slideindex.app.ui.GlobalIconStore.actionIcon(this@SlideIndexApp, key)
+                ?: com.slideindex.app.ui.GlobalIconStore.appIcon(this@SlideIndexApp, key)
         }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconView =
             object : com.slideindex.app.overlay.panels.PanelActionIconView {
@@ -1218,6 +1260,18 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                         },
                     )
                 }
+
+                override fun launchExternalEditor(
+                    context: android.content.Context,
+                    axis: com.slideindex.app.settings.FvRingLauncherAxis,
+                    slotIndex: Int,
+                ): Boolean = runCatching {
+                    context.startActivity(
+                        com.slideindex.app.service.RingLauncherSlotConfigActivity
+                            .createIntent(context, axis, slotIndex)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }.isSuccess
             }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot = { ctx ->
             com.slideindex.app.di.OverlayDependencyAccess.overlayDependencies(ctx)
@@ -1264,8 +1318,16 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
             com.slideindex.app.overlay.CloneAppsIndex.labelForUser(ctx, userId, base)
         }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconBitmapFull =
-            { action, sizePx, tint, outlined, withPlate, plateShapeOrdinal ->
-                com.slideindex.app.util.GestureActionIconBitmap.get(
+            { ctx, action, sizePx, tint, outlined, withPlate, plateShapeOrdinal ->
+                // 全局图标覆盖优先（扩展 → 图标库）：边角轮盘 / 指尖环 / 悬浮指针都走这里，
+                // 不先查覆盖就会一直画默认图标（快速启动器那边是查的，两边会不一致）。
+                com.slideindex.app.ui.ActionIconBitmap.load(
+                    context = ctx,
+                    action = action,
+                    sizePx = sizePx,
+                    tintArgb = tint,
+                    withPlate = withPlate,
+                ) ?: com.slideindex.app.util.GestureActionIconBitmap.get(
                     action = action,
                     sizePx = sizePx,
                     tintArgb = tint,
@@ -1274,8 +1336,13 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                     plateShape = com.slideindex.app.util.GestureActionPlateShape.entries[plateShapeOrdinal],
                 )
             }
-        com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconBitmap = { action, sizePx, tint ->
-            com.slideindex.app.util.GestureActionIconBitmap.get(action, sizePx, tint)
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconBitmap = { ctx, action, sizePx, tint ->
+            com.slideindex.app.ui.ActionIconBitmap.load(
+                context = ctx,
+                action = action,
+                sizePx = sizePx,
+                tintArgb = tint,
+            ) ?: com.slideindex.app.util.GestureActionIconBitmap.get(action, sizePx, tint)
         }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.cornerSlotIconBitmap =
             { ctx, action, sizePx, tint, shortcuts, shellCommands ->
@@ -1418,7 +1485,6 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
             if (deps.settingsRepository.readSnapshot().onboardingCompleted) {
                 deps.applicationScope.launch(Dispatchers.IO) {
                     deps.appRepository.loadApps()
-                    com.slideindex.app.widget.WidgetCatalog.preload(this@SlideIndexApp)
                 }
             }
             }, STARTUP_HEAVY_TASK_DELAY_MS)
@@ -1466,6 +1532,15 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         if (level >= TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_UI_HIDDEN) {
             com.slideindex.app.clipboard.ClipboardThumbnailCache.evictAll()
             com.slideindex.app.util.GestureActionIconBitmap.evictAll()
+            com.slideindex.app.util.PickerAppIconBitmap.clear()
+            com.slideindex.app.ui.AppIconOverride.clear()
+            com.slideindex.app.util.QuickLauncherIconResolver.clear()
+            com.slideindex.app.widget.WidgetAppIconCache.clear()
+            runCatching {
+                if (::deps.isInitialized) {
+                    deps.appRepository.clearIconCache()
+                }
+            }
         }
     }
 

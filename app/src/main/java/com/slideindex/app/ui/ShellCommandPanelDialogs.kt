@@ -50,8 +50,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
-import com.slideindex.app.privilege.PrivilegeGateway
 import com.slideindex.app.shell.ShellCommand
+import com.slideindex.app.shell.ShellCommandModeResolver
 import com.slideindex.app.shell.ShellExecutionMode
 import com.slideindex.app.shell.ShellResultDisplay
 import com.slideindex.app.shell.normalizeShellCommand
@@ -277,6 +277,9 @@ private fun ShellCommandEditorFields(
                 }
             },
             onSelect = onResultDisplayChange,
+            // 在卡片内：容器与页面同灰，选中 pill 用卡片白。
+            containerColor = MiuixTheme.colorScheme.surface,
+            indicatorColor = MiuixTheme.colorScheme.surfaceContainer,
         )
     }
 }
@@ -295,11 +298,7 @@ fun ShellCommandEditorScreen(
     var command by remember(initial) { mutableStateOf(initial?.command.orEmpty()) }
     var executionMode by remember(initial) {
         mutableStateOf(
-            initial?.executionMode ?: if (PrivilegeGateway.isRootMode()) {
-                ShellExecutionMode.ROOT
-            } else {
-                ShellExecutionMode.SHIZUKU
-            },
+            initial?.executionMode ?: ShellCommandModeResolver.currentDefault(),
         )
     }
     var resultDisplay by remember(initial) {
@@ -611,6 +610,8 @@ fun ShellCommandResultOverlaySheet(
                     text = command,
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
                 MiuixText(
                     text = stringResource(R.string.shell_panel_exit_code, exitCode),
@@ -622,15 +623,21 @@ fun ShellCommandResultOverlaySheet(
                     },
                 )
                 val scrollState = rememberScrollState()
-                MiuixText(
-                    text = output.ifBlank { stringResource(R.string.shell_panel_no_output) },
-                    style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurface,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 300.dp)
-                        .verticalScroll(scrollState),
-                )
+                        .weight(1f, fill = false),
+                ) {
+                    MiuixText(
+                        text = output.ifBlank { stringResource(R.string.shell_panel_no_output) },
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                            .verticalScroll(scrollState),
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -686,11 +693,7 @@ fun ShellCommandEditorOverlaySheet(
     var command by remember(initial) { mutableStateOf(initial?.command.orEmpty()) }
     var executionMode by remember(initial) {
         mutableStateOf(
-            initial?.executionMode ?: if (PrivilegeGateway.isRootMode()) {
-                ShellExecutionMode.ROOT
-            } else {
-                ShellExecutionMode.SHIZUKU
-            },
+            initial?.executionMode ?: ShellCommandModeResolver.currentDefault(),
         )
     }
     var resultDisplay by remember(initial) {

@@ -47,6 +47,10 @@ object MaterialSymbolThinIcons {
         "11.25H21.75V12.75H17.254L20.704 16.25L19.65 17.304L15.096 12.75H12.75V15.096L17.304 19.65L16.25 20.704L12.75 " +
         "17.254V21.75Z"
 
+    private const val BLUETOOTH_PATH =
+        "M11.25,21.65V13.8L6.4,18.65L5.35,17.6l5.6-5.6L5.35,6.4L6.4,5.35l4.85,4.85V2.35H12L17.35,7.7L13.05,12l4.3," +
+        "4.3L12,21.65H11.25Zm1.5-11.46l2.5-2.5l-2.5-2.47V10.2Zm0,8.57l2.5-2.47l-2.5-2.5v4.96Z"
+
     private const val BRIGHTNESSAUTO_PATH =
         "M7.992 16H9.265L10.181 13.546H13.869L14.785 16H16.046L12.569 7H11.45ZM10.554 12.496 11.95 8.612H12.05L13.465 " +
         "12.496ZM12 22.608 8.862 19.5H4.5V15.138L1.392 12L4.5 8.862V4.5H8.862L12 1.392L15.138 4.5H19.5V8.862L22.608 " +
@@ -102,6 +106,14 @@ object MaterialSymbolThinIcons {
         "10.085 9.409Q10.085 9.102 9.882 8.899Q9.679 8.696 9.369 8.696Q9.083 8.696 8.872 8.899Q8.662 9.102 8.662 " +
         "9.412Q8.662 9.698 8.874 9.909Q9.087 10.119 9.371 10.119Z"
 
+    private const val NFC_PATH =
+        "M7.5,16.5h9v-9H12.75q-0.62,0-1.06,0.44T11.25,9v1.68q-0.37,0.2-0.58,0.52T10.46,12q0,0.64 0.44,1.09T12,13.54q" +
+        "0.62,0 1.08-0.45T13.54,12q0-0.47-0.23-0.79t-0.56-0.52V9H15v6H9V9h1V7.5H7.5v9Zm-2.19,4q-0.76,0-1.28-0.52T" +
+        "3.5,18.69V5.31q0-0.76 0.52-1.28T5.31,3.5H18.69q0.76,0 1.28,0.52T20.5,5.31V18.69q0,0.76-0.52,1.28T18.69,20" +
+        ".5H5.31Zm0-1.5H18.69q0.12,0 0.21-0.1T19,18.69V5.31q0-0.12-0.1-0.21T18.69,5H5.31Q5.19,5 5.1,5.1T5,5.31V18." +
+        "69q0,0.12 0.1,0.21T5.31,19ZM5,5Q5,5 5,5.09T5,5.31V18.69q0,0.13 0,0.22T5,19q0,0 0-0.09t0-0.22V5.31Q5,5.17 " +
+        "5,5.09T5,5Z"
+
     private const val PHOTOLIBRARY_PATH =
         "M9.077 13.846H18.423L15.319 9.769L12.942 12.808L11.373 10.865ZM8.058 17.5Q7.3 17.5 6.775 16.975Q6.25 16.45 " +
         "6.25 15.692V4.308Q6.25 3.55 6.775 3.025Q7.3 2.5 8.058 2.5H19.442Q20.2 2.5 20.725 3.025Q21.25 3.55 21.25 " +
@@ -153,14 +165,27 @@ object MaterialSymbolThinIcons {
         "10.721 4.26Q9.846 3.385 8.596 3.385Q7.346 3.385 6.471 4.26Q5.596 5.135 5.596 6.385Q5.596 6.81 5.696 " +
         "7.172Q5.796 7.535 5.996 7.885ZM12.185 15.635Q12.185 15.635 12.185 15.635Q12.185 15.635 12.185 15.635Q12.185 " +
         "15.635 12.185 15.635Q12.185 15.635 12.185 15.635Q12.185 15.635 12.185 15.635Q12.185 15.635 12.185 15.635Z"
+
+    /**
+     * 「推子」：三行滑条（Material Symbols: tune）。
+     *
+     * 几何本身就是 1.5 厚的填充条，与 [ThinActionIcons.STROKE_WIDTH] 一致，混排不突兀。
+     * 用作「系统音量条」的图标：读作“滑条”，不会被误认成加/减号。
+     */
+    private const val TUNE_PATH =
+        "M11.25 20.75v-5.5h1.5v2h8v1.5h-8v2h-1.5Zm-8-2v-1.5h5.5v1.5H3.25Zm4-4v-2h-4v-1.5h4v-2h1.5v5.5H7.25Z" +
+            "m4-2v-1.5h9.5v1.5h-9.5Zm4-4V3.25h1.5v2h4v1.5h-4v2h-1.5Zm-12-2V5.25h9.5v1.5H3.25Z"
     val AcUnit: ImageVector by lazy { icon("SymbolThinAcUnit", ACUNIT_PATH) }
+    val Bluetooth: ImageVector by lazy { icon("SymbolThinBluetooth", BLUETOOTH_PATH) }
     val BrightnessAuto: ImageVector by lazy { icon("SymbolThinBrightnessAuto", BRIGHTNESSAUTO_PATH) }
     val Folder: ImageVector by lazy { icon("SymbolThinFolder", FOLDER_PATH) }
     val Handyman: ImageVector by lazy { icon("SymbolThinHandyman", HANDYMAN_PATH) }
     val Link: ImageVector by lazy { icon("SymbolThinLink", LINK_PATH) }
     val MobileRotate: ImageVector by lazy { icon("SymbolThinMobileRotate", MOBILEROTATE_PATH) }
+    val Nfc: ImageVector by lazy { icon("SymbolThinNfc", NFC_PATH) }
     val PhotoLibrary: ImageVector by lazy { icon("SymbolThinPhotoLibrary", PHOTOLIBRARY_PATH) }
     val RemoteGen: ImageVector by lazy { icon("SymbolThinRemoteGen", REMOTEGEN_PATH) }
     val SwapVert: ImageVector by lazy { icon("SymbolThinSwapVert", SWAPVERT_PATH) }
     val TouchApp: ImageVector by lazy { icon("SymbolThinTouchApp", TOUCHAPP_PATH) }
+    val Tune: ImageVector by lazy { icon("SymbolThinTune", TUNE_PATH) }
 }

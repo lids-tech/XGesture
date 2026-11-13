@@ -27,10 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -50,6 +52,10 @@ internal fun <T> SegmentedControl(
     selected: T,
     labelRes: (T) -> Int,
     onSelect: (T) -> Unit,
+    /** 容器底色；null 用默认的 surfaceContainerHigh。卡片内调用可传 surface 与页面同灰。 */
+    containerColor: Color? = null,
+    /** 选中 pill 底色；null 用默认的 surface。 */
+    indicatorColor: Color? = null,
 ) {
     val labels = items.map { item -> stringResource(labelRes(item)) }
     val selectedIndex = items.indexOf(selected).coerceAtLeast(0)
@@ -59,7 +65,7 @@ internal fun <T> SegmentedControl(
             .fillMaxWidth()
             .height(40.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainerHigh)
+            .background(containerColor ?: MiuixTheme.colorScheme.surfaceContainerHigh)
             .border(
                 width = 1.dp,
                 color = MiuixTheme.colorScheme.dividerLine,
@@ -93,7 +99,7 @@ internal fun <T> SegmentedControl(
                 .width(segmentWidth)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(11.dp))
-                .background(MiuixTheme.colorScheme.surface),
+                .background(indicatorColor ?: MiuixTheme.colorScheme.surface),
         )
 
         Row(
@@ -101,11 +107,12 @@ internal fun <T> SegmentedControl(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             labels.forEachIndexed { index, label ->
-                if (index > 0) {
+                // 选中项两侧不画竖线：两个 tab 时中间自然没有线，三个以上也保持选中 pill 周围干净。
+                if (index > 0 && index != selectedIndex && index - 1 != selectedIndex) {
                     Box(
                         modifier = Modifier
                             .width(1.dp)
-                            .height(24.dp)
+                            .height(18.dp)
                             .background(MiuixTheme.colorScheme.dividerLine),
                     )
                 }
@@ -127,6 +134,11 @@ internal fun <T> SegmentedControl(
                     MiuixText(
                         text = label,
                         style = MiuixTheme.textStyles.body2,
+                        fontWeight = if (index == selectedIndex) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Normal
+                        },
                         color = if (index == selectedIndex) {
                             MiuixTheme.colorScheme.primary
                         } else {

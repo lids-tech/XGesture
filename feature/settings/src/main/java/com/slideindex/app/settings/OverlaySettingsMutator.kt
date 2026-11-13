@@ -6,7 +6,9 @@ import com.slideindex.app.floatball.FloatBallGestureType
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureTriggerMode
 import com.slideindex.app.gesture.SelectedHintMetrics
+import com.slideindex.app.gesture.WidgetPanelActionRefs
 import com.slideindex.app.launcher.QuickLauncherItemCodec
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.shell.ShellCommand
 import com.slideindex.app.shell.ShellCommandCodec
 import com.slideindex.app.activity.ActivityShortcutCodec
@@ -116,7 +118,7 @@ class OverlaySettingsMutator @Inject constructor(
 
     suspend fun setFloatingPointerSensitivityFraction(value: Float) = editor.edit {
         it[SettingsPreferenceKeys.FLOATING_POINTER_SENSITIVITY] =
-            value.coerceIn(0.2f, 0.75f)
+            value.coerceIn(0.2f, 1f)
     }
 
     suspend fun setFloatingPointerJoystickDiameterPx(value: Float) = editor.edit {
@@ -837,7 +839,62 @@ class OverlaySettingsMutator @Inject constructor(
     suspend fun setWidgetPanelPages(
         pages: List<com.slideindex.app.widget.WidgetPanelPage>,
     ) = editor.edit { prefs ->
+        val previousPages = WidgetPanelCodec.decodeAll(
+            prefs[SettingsPreferenceKeys.WIDGET_PANEL_PAGES] ?: emptySet(),
+        )
         prefs[SettingsPreferenceKeys.WIDGET_PANEL_PAGES] = WidgetPanelCodec.encodeAll(pages)
+        val remaining = com.slideindex.app.widget.WidgetPanelDefaults.effectivePages(pages)
+        val remainingIds = remaining.map { it.id.toString() }.toSet()
+        val removedIds = previousPages
+            .map { it.id.toString() }
+            .filterNot { it in remainingIds }
+        if (removedIds.isEmpty()) return@edit
+        // 页被删后，指向它的「打开小组件面板」动作要钉到存活页上，否则运行期会静默
+        // 回落到第一页（与快速启动器面板删除时同一条规则）。
+        remapWidgetPanelPageReferences(
+            prefs = prefs,
+            removedPageIds = removedIds,
+            fallbackPageId = remaining.first().id.toString(),
+        )
+    }
+
+    /**
+     * 把 [removedPageIds] 指向的「打开小组件面板」动作改写到 [fallbackPageId]。
+     *
+     * 动作散落在手势规则、圆环槽位、启动面板条目、悬浮球手势等键里，编码格式统一，
+     * 所以按字符串遍历所有 `String` / `Set<String>` 值做一次精确改写，新增的存储位置也能自动覆盖。
+     */
+    private fun remapWidgetPanelPageReferences(
+        prefs: androidx.datastore.preferences.core.MutablePreferences,
+        removedPageIds: List<String>,
+        fallbackPageId: String,
+    ) {
+        val snapshot = prefs.asMap().toMap()
+        snapshot.forEach { (key, value) ->
+            when (value) {
+                is String -> {
+                    val updated = removedPageIds.fold(value) { acc, removedId ->
+                        WidgetPanelActionRefs.remap(acc, removedId, fallbackPageId)
+                    }
+                    if (updated != value) {
+                        @Suppress("UNCHECKED_CAST")
+                        prefs[key as Preferences.Key<String>] = updated
+                    }
+                }
+                is Set<*> -> {
+                    val strings = value.filterIsInstance<String>().toSet()
+                    if (strings.size != value.size) return@forEach
+                    val updated = removedPageIds.fold(strings) { acc, removedId ->
+                        WidgetPanelActionRefs.remap(acc, removedId, fallbackPageId)
+                    }
+                    if (updated != strings) {
+                        @Suppress("UNCHECKED_CAST")
+                        prefs[key as Preferences.Key<Set<String>>] = updated
+                    }
+                }
+                else -> Unit
+            }
+        }
     }
 
     suspend fun setWidgetPanelBlurEnabled(enabled: Boolean) = editor.edit { prefs ->
@@ -851,6 +908,10 @@ class OverlaySettingsMutator @Inject constructor(
 
     suspend fun setWidgetPanelCloseOnClickMode(mode: Int) = editor.edit { prefs ->
         prefs[SettingsPreferenceKeys.WIDGET_PANEL_CLOSE_ON_CLICK] = mode.coerceIn(0, 2)
+    }
+
+    suspend fun setWidgetPanelShowLabels(show: Boolean) = editor.edit { prefs ->
+        prefs[SettingsPreferenceKeys.WIDGET_PANEL_SHOW_LABELS] = show
     }
 
     suspend fun setWidgetPanelWidthFraction(fraction: Float) = editor.edit { prefs ->
@@ -1001,6 +1062,11 @@ class OverlaySettingsMutator @Inject constructor(
         it[SettingsPreferenceKeys.FLOAT_BALL_SLIDESHOW_URIS] = uris.filter { it.isNotBlank() }.toSet()
     }
 
+    suspend fun setFloatBallSlideshowIntervalSeconds(seconds: Int) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_SLIDESHOW_INTERVAL_SECONDS] =
+            FloatBallSettings.normalizeSlideshowIntervalSeconds(seconds)
+    }
+
     suspend fun setFloatBallGifUri(uri: String) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_GIF_URI] = uri
     }
@@ -1050,6 +1116,12 @@ class OverlaySettingsMutator @Inject constructor(
         }
     }
 
+    suspend fun setFloatBallPickWordTapGranularity(
+        granularity: PickResultWordTapGranularity,
+    ) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_WORD_TAP_GRANULARITY] = granularity.storageKey
+    }
+
     suspend fun setFloatBallPickDefaultSearchEngineId(id: String?) = editor.edit {
         if (id.isNullOrBlank()) {
             it.remove(SettingsPreferenceKeys.FLOAT_BALL_PICK_DEFAULT_SEARCH_ENGINE_ID)
@@ -1072,6 +1144,31 @@ class OverlaySettingsMutator @Inject constructor(
 
     suspend fun setFloatBallPickImageToolbarPosition(position: PickResultImageToolbarPosition) = editor.edit {
         it[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_TOOLBAR_POSITION] = position.storageKey
+    }
+
+    suspend fun setFloatBallPickIconBarEnabled(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_ICON_BAR_ENABLED] = enabled
+    }
+
+    /** 文本区底栏按钮顺序：落盘前过一遍归一化，避免 UI 层传进来未知 id。 */
+    suspend fun setFloatBallPickTextBarOrder(order: List<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_BAR_ORDER] =
+            PickResultBarButtons.encodeOrder(PickResultBarButtons.normalizeText(order).map { it.id })
+    }
+
+    suspend fun setFloatBallPickTextBarHidden(hidden: Set<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_BAR_HIDDEN] =
+            PickResultBarButtons.sanitizeHiddenText(hidden)
+    }
+
+    suspend fun setFloatBallPickImageBarOrder(order: List<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_BAR_ORDER] =
+            PickResultBarButtons.encodeOrder(PickResultBarButtons.normalizeImage(order).map { it.id })
+    }
+
+    suspend fun setFloatBallPickImageBarHidden(hidden: Set<String>) = editor.edit {
+        it[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_BAR_HIDDEN] =
+            PickResultBarButtons.sanitizeHiddenImage(hidden)
     }
 
     suspend fun setFloatBallPickHapticEnabled(enabled: Boolean) = editor.edit {
@@ -1262,6 +1359,21 @@ class OverlaySettingsMutator @Inject constructor(
             SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_Y_PORTRAIT
         }
         it[key] = y
+    }
+
+    suspend fun setClipboardHistoryFloatHandleWidthDp(widthDp: Float) = editor.edit {
+        it[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_WIDTH_DP] =
+            HistoryFloatHandleAppearance.coerceWidthDp(widthDp)
+    }
+
+    suspend fun setClipboardHistoryFloatHandleHeightDp(heightDp: Float) = editor.edit {
+        it[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_HEIGHT_DP] =
+            HistoryFloatHandleAppearance.coerceHeightDp(heightDp)
+    }
+
+    suspend fun setClipboardHistoryFloatHandleAlpha(alpha: Float) = editor.edit {
+        it[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_ALPHA] =
+            HistoryFloatHandleAppearance.coerceAlpha(alpha)
     }
 
     suspend fun setClipboardFloatEnabled(enabled: Boolean) = editor.edit {
@@ -1664,6 +1776,10 @@ class OverlaySettingsMutator @Inject constructor(
             SearchPanelSectionAliasSettings.toJson(aliases)
     }
 
+    suspend fun setSearchPanelShowAggregatedImageEntry(enabled: Boolean) = editor.edit {
+        it[SettingsPreferenceKeys.SEARCH_PANEL_SHOW_AGGREGATED_IMAGE_ENTRY] = enabled
+    }
+
     suspend fun setAggregatedImageSearchEngines(configs: List<AggregatedImageSearchEngineConfig>) = editor.edit {
         it[SettingsPreferenceKeys.AGGREGATED_IMAGE_SEARCH_ENGINES_JSON] =
             AggregatedImageSearchEnginePreferencesStore.encode(configs)
@@ -1744,6 +1860,10 @@ class OverlaySettingsMutator @Inject constructor(
     suspend fun setCornerGestureWheelLayerCount(value: Int) = editor.edit {
         it[SettingsPreferenceKeys.CORNER_GESTURE_WHEEL_LAYER_COUNT] =
             CornerGestureSettings.clampWheelLayerCount(value)
+    }
+
+    suspend fun setCornerGestureSlotIconShape(shape: FvIconShape) = editor.edit {
+        it[SettingsPreferenceKeys.CORNER_GESTURE_SLOT_ICON_SHAPE] = shape.name
     }
 
     suspend fun setCornerGestureLeftSlotAction(index: Int, action: GestureAction) = editor.edit { prefs ->

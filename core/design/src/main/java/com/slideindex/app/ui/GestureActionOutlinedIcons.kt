@@ -83,7 +83,7 @@ fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector = when (
     GestureActionType.REGIONAL_SCREENSHOT_PICK -> ThinActionIcons.ScreenshotRegion
     GestureActionType.SEARCH_PANEL -> ThinActionIcons.Search
     GestureActionType.FILE_BROWSER -> MaterialSymbolThinIcons.Folder
-    GestureActionType.VOLUME_PANEL -> ThinActionIcons.VolumeUp
+    GestureActionType.VOLUME_PANEL -> MaterialSymbolThinIcons.Tune
     GestureActionType.SCREEN_TRANSLATE -> ThinActionIcons.TextFields
     GestureActionType.SCREEN_SEARCH -> ThinActionIcons.Search
     GestureActionType.REMIND,
@@ -104,13 +104,16 @@ fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector = when (
     GestureActionType.TOGGLE_SHAKE_GESTURE -> ThinActionIcons.Gesture
     GestureActionType.TOGGLE_FLOAT_BALL -> ThinActionIcons.FloatBall
     GestureActionType.TOGGLE_MOBILE_DATA -> ThinActionIcons.Cellular
+    GestureActionType.TOGGLE_NFC -> MaterialSymbolThinIcons.Nfc
+    GestureActionType.TOGGLE_BLUETOOTH -> MaterialSymbolThinIcons.Bluetooth
     GestureActionType.SWITCH_INPUT_METHOD -> ThinActionIcons.Keyboard
     GestureActionType.OPEN_INTERNET_PANEL -> ThinActionIcons.Wifi
-    GestureActionType.OPEN_VOLUME_PANEL -> ThinActionIcons.VolumeUp
+    GestureActionType.OPEN_VOLUME_PANEL -> MaterialSymbolThinIcons.Tune
+    GestureActionType.OPEN_VOLUME_SLIDER -> MaterialSymbolThinIcons.Tune
     GestureActionType.OPEN_LINK -> MaterialSymbolThinIcons.Link
     GestureActionType.CURRENT_APP_INFO -> ThinActionIcons.Assistant
     GestureActionType.SCREEN_OFF_KEEP_AWAKE -> ThinActionIcons.ScreenOffKeepAwake
-    GestureActionType.TOUCH_BLOCK -> ThinActionIcons.TouchApp
+    GestureActionType.TOUCH_BLOCK -> ThinActionIcons.TouchBlockOff
     GestureActionType.PIN_TO_SCREEN -> ThinActionIcons.Pin
     GestureActionType.SIMULATE_KEY_EVENT -> ThinActionIcons.Keyboard
     GestureActionType.POINTER_GESTURE_RECORDER -> ThinActionIcons.Gesture
@@ -119,7 +122,7 @@ fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector = when (
     GestureActionType.LAUNCH_APP -> ThinActionIcons.Apps
     GestureActionType.LAUNCH_SHORTCUT -> ThinActionIcons.Shortcut
     GestureActionType.CORNER_INNER_CANCEL -> ThinActionIcons.Close
-    GestureActionType.CORNER_INNER_PIN_WHEEL -> ThinActionIcons.TouchApp
+    GestureActionType.CORNER_INNER_PIN_WHEEL -> ThinActionIcons.Block
     GestureActionType.SNOOZE_OVERLAYS -> ThinActionIcons.VisibilityOff
     GestureActionType.FOREGROUND_ACTIVITY_INSPECTOR -> ThinActionIcons.Search
     GestureActionType.SMART_SCREENSHOT -> ThinActionIcons.Screenshot
@@ -195,7 +198,7 @@ fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = when (type
     GestureActionType.REGIONAL_SCREENSHOT_PICK -> ThinActionIcons.ScreenshotRegion
     GestureActionType.SEARCH_PANEL -> ThinActionIcons.Search
     GestureActionType.FILE_BROWSER -> MaterialSymbolThinIcons.Folder
-    GestureActionType.VOLUME_PANEL -> ThinActionIcons.VolumeUp
+    GestureActionType.VOLUME_PANEL -> MaterialSymbolThinIcons.Tune
     GestureActionType.SCREEN_TRANSLATE -> ThinActionIcons.TextFields
     GestureActionType.SCREEN_SEARCH -> ThinActionIcons.Search
     GestureActionType.REMIND,
@@ -216,13 +219,16 @@ fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = when (type
     GestureActionType.TOGGLE_SHAKE_GESTURE -> ThinActionIcons.Gesture
     GestureActionType.TOGGLE_FLOAT_BALL -> ThinActionIcons.FloatBall
     GestureActionType.TOGGLE_MOBILE_DATA -> ThinActionIcons.Cellular
+    GestureActionType.TOGGLE_NFC -> MaterialSymbolThinIcons.Nfc
+    GestureActionType.TOGGLE_BLUETOOTH -> MaterialSymbolThinIcons.Bluetooth
     GestureActionType.SWITCH_INPUT_METHOD -> ThinActionIcons.Keyboard
     GestureActionType.OPEN_INTERNET_PANEL -> ThinActionIcons.Wifi
-    GestureActionType.OPEN_VOLUME_PANEL -> ThinActionIcons.VolumeUp
+    GestureActionType.OPEN_VOLUME_PANEL -> MaterialSymbolThinIcons.Tune
+    GestureActionType.OPEN_VOLUME_SLIDER -> MaterialSymbolThinIcons.Tune
     GestureActionType.OPEN_LINK -> MaterialSymbolThinIcons.Link
     GestureActionType.CURRENT_APP_INFO -> ThinActionIcons.Assistant
     GestureActionType.SCREEN_OFF_KEEP_AWAKE -> ThinActionIcons.ScreenOffKeepAwake
-    GestureActionType.TOUCH_BLOCK -> ThinActionIcons.TouchApp
+    GestureActionType.TOUCH_BLOCK -> ThinActionIcons.TouchBlockOff
     GestureActionType.PIN_TO_SCREEN -> ThinActionIcons.Pin
     GestureActionType.SIMULATE_KEY_EVENT -> ThinActionIcons.Keyboard
     GestureActionType.POINTER_GESTURE_RECORDER -> ThinActionIcons.Gesture
@@ -231,7 +237,7 @@ fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = when (type
     GestureActionType.LAUNCH_APP -> ThinActionIcons.Apps
     GestureActionType.LAUNCH_SHORTCUT -> ThinActionIcons.Shortcut
     GestureActionType.CORNER_INNER_CANCEL -> ThinActionIcons.Close
-    GestureActionType.CORNER_INNER_PIN_WHEEL -> ThinActionIcons.TouchApp
+    GestureActionType.CORNER_INNER_PIN_WHEEL -> ThinActionIcons.Block
     GestureActionType.SNOOZE_OVERLAYS -> ThinActionIcons.VisibilityOff
     GestureActionType.FOREGROUND_ACTIVITY_INSPECTOR -> ThinActionIcons.Search
     GestureActionType.SMART_SCREENSHOT -> ThinActionIcons.Screenshot

@@ -155,13 +155,20 @@ class SettingsBackupManager @Inject constructor(
             val filteredPreferences = finalDocument.preferences.filter { entry ->
                 modules == null || SettingsModuleRegistry.moduleOf(entry.key) in modules
             }
-            val filteredDocument = finalDocument.copy(preferences = filteredPreferences)
+            val filteredDocument = finalDocument.copy(
+                preferences = filteredPreferences,
+                externalStores = finalDocument.externalStores.forModules(modules),
+            )
 
             editor.edit { prefs ->
                 if (replaceExisting) {
                     prefs.asMap().keys
                         .filter { key ->
+                            // 这两个键不属于"某模块的设置"，不能被整块覆盖清掉：
+                            // - 引导完成标记是设备状态；
+                            // - schema 版本被清掉会变成 0，下次启动把全部迁移重放一遍。
                             key.name != SettingsPreferenceKeys.ONBOARDING_COMPLETED.name &&
+                                key.name != SettingsPreferenceKeys.SETTINGS_SCHEMA_VERSION.name &&
                                 (modules == null || SettingsModuleRegistry.moduleOf(key.name) in modules)
                         }
                         .forEach { key -> prefs.remove(key) }
@@ -333,6 +340,8 @@ class SettingsBackupManager @Inject constructor(
             otpAutoFillStatsJson = otpAutoFillStatsJson,
             shellOutputHistoryJson = shellOutputHistoryJson,
             searchPanelHistoryJson = searchPanelHistoryJson,
+            multiTouchGestureJson = multiTouchGestureJson,
+            externalStores = externalStores,
         )
 
     /** 只保留选中模块的分区；`modules == null` 时原样返回。 */
@@ -349,6 +358,8 @@ class SettingsBackupManager @Inject constructor(
             otpAutoFillStatsJson = otpAutoFillStatsJson.takeIf { keep(SettingsModule.OTP) },
             shellOutputHistoryJson = shellOutputHistoryJson.takeIf { keep(SettingsModule.SHELL) },
             searchPanelHistoryJson = searchPanelHistoryJson.takeIf { keep(SettingsModule.SEARCH) },
+            multiTouchGestureJson = multiTouchGestureJson.takeIf { keep(SettingsModule.EDGE_GESTURE) },
+            externalStores = externalStores.forModules(modules),
         )
     }
 

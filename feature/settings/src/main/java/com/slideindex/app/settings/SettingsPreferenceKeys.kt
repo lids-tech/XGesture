@@ -91,6 +91,15 @@ internal object SettingsPreferenceKeys {
     val HAPTIC_ENABLED = booleanPreferencesKey("haptic_enabled")
     val HAPTIC_STRENGTH = intPreferencesKey("haptic_strength_level")
     val HAPTIC_GESTURE_TRIGGER_ENABLED = booleanPreferencesKey("haptic_gesture_trigger_enabled")
+    val HAPTIC_LONG_THRESHOLD_ENABLED = booleanPreferencesKey("haptic_long_threshold_enabled")
+    val HAPTIC_SHORT_THRESHOLD_ENABLED = booleanPreferencesKey("haptic_short_threshold_enabled")
+    val HAPTIC_COMPOUND_TURN_ENABLED = booleanPreferencesKey("haptic_compound_turn_enabled")
+    val HAPTIC_RETURN_SWIPE_ENABLED = booleanPreferencesKey("haptic_return_swipe_enabled")
+    val HAPTIC_HOVER_ENABLED = booleanPreferencesKey("haptic_hover_enabled")
+    val HAPTIC_LONG_PRESS_ENABLED = booleanPreferencesKey("haptic_long_press_enabled")
+    val HAPTIC_SLOT_LETTER_ENABLED = booleanPreferencesKey("haptic_slot_letter_enabled")
+    val HAPTIC_SLOT_APP_ENABLED = booleanPreferencesKey("haptic_slot_app_enabled")
+    val HAPTIC_ACTION_CONFIRM_ENABLED = booleanPreferencesKey("haptic_action_confirm_enabled")
     val HAPTIC_SLOT_SELECTION_ENABLED = booleanPreferencesKey("haptic_slot_selection_enabled")
     val HAPTIC_CONFIRM_LAUNCH_ENABLED = booleanPreferencesKey("haptic_confirm_launch_enabled")
     val SELECTED_HINT_ICON_SIZE_DP = intPreferencesKey("selected_hint_icon_size_dp")
@@ -330,6 +339,7 @@ internal object SettingsPreferenceKeys {
     val WIDGET_PANEL_BLUR = booleanPreferencesKey("widget_panel_blur_enabled")
     val WIDGET_PANEL_BLUR_RADIUS_DP = intPreferencesKey("widget_panel_blur_radius_dp")
     val WIDGET_PANEL_CLOSE_ON_CLICK = intPreferencesKey("widget_panel_close_on_click_mode")
+    val WIDGET_PANEL_SHOW_LABELS = booleanPreferencesKey("widget_panel_show_labels")
     val FLOATING_POINTER_SENSITIVITY = floatPreferencesKey("floating_pointer_sensitivity_fraction")
     val FLOATING_POINTER_JOYSTICK_AREA_WIDTH = floatPreferencesKey("floating_pointer_joystick_area_width")
     val FLOATING_POINTER_JOYSTICK_AREA_HEIGHT = floatPreferencesKey("floating_pointer_joystick_area_height")
@@ -543,6 +553,9 @@ internal object SettingsPreferenceKeys {
     val MESSAGE_C_NOTICE_AUTO_DISMISS_SECONDS =
         intPreferencesKey("message_c_notice_auto_dismiss_seconds")
     val MESSAGE_RETURN_CHIP_ENABLED = booleanPreferencesKey("message_return_chip_enabled")
+    val MESSAGE_RETURN_CHIP_ON_RIGHT_EDGE =
+        booleanPreferencesKey("message_return_chip_on_right_edge")
+    val MESSAGE_RETURN_CHIP_Y_FRACTION = floatPreferencesKey("message_return_chip_y_fraction")
     val MESSAGE_RETURN_CHIP_AUTO_DISMISS_SECONDS =
         intPreferencesKey("message_return_chip_auto_dismiss_seconds")
     val MESSAGE_C_NOTICE_HORIZONTAL_EDGE = stringPreferencesKey("message_c_notice_horizontal_edge")
@@ -631,6 +644,9 @@ internal object SettingsPreferenceKeys {
     /** 自定义图片原图宽高比（width / height），导入时写入；0 表示未知。 */
     val FLOAT_BALL_CUSTOM_IMAGE_ASPECT = floatPreferencesKey("float_ball_custom_image_aspect")
     val FLOAT_BALL_SLIDESHOW_URIS = stringSetPreferencesKey("float_ball_slideshow_uris")
+    /** 幻灯片切换间隔（秒）。 */
+    val FLOAT_BALL_SLIDESHOW_INTERVAL_SECONDS =
+        intPreferencesKey("float_ball_slideshow_interval_seconds")
     val FLOAT_BALL_GIF_URI = stringPreferencesKey("float_ball_gif_uri")
     val FLOAT_BALL_PICK_OFFSET_DP = floatPreferencesKey("float_ball_pick_offset_dp")
     val FLOAT_BALL_PICK_TEXT_SIZE_SP = floatPreferencesKey("float_ball_pick_text_size_sp")
@@ -650,11 +666,24 @@ internal object SettingsPreferenceKeys {
     val FLOAT_BALL_PICK_SEARCH_GRID_LAST_EXPANDED = booleanPreferencesKey("float_ball_pick_search_grid_last_expanded")
     val FLOAT_BALL_PICK_TEXT_MODE_DEFAULT = stringPreferencesKey("float_ball_pick_text_mode_default")
     val FLOAT_BALL_PICK_TEXT_MODE_LAST_MODE = stringPreferencesKey("float_ball_pick_text_mode_last_mode")
+    /** 点词粒度：word / character（character = 不分词，按字符选且不画 chip）。 */
+    val FLOAT_BALL_PICK_WORD_TAP_GRANULARITY =
+        stringPreferencesKey("float_ball_pick_word_tap_granularity")
     val FLOAT_BALL_PICK_DEFAULT_SEARCH_ENGINE_ID = stringPreferencesKey("float_ball_pick_default_search_engine_id")
     val FLOAT_BALL_PICK_AUTO_SELECT_ALL = booleanPreferencesKey("float_ball_pick_auto_select_all")
     val FLOAT_BALL_PICK_COPY_DISMISS_PANEL = booleanPreferencesKey("float_ball_pick_copy_dismiss_panel")
     val FLOAT_BALL_PICK_COPY_BUTTON_POSITION = stringPreferencesKey("float_ball_pick_copy_button_position")
     val FLOAT_BALL_PICK_IMAGE_TOOLBAR_POSITION = stringPreferencesKey("float_ball_pick_image_toolbar_position")
+    /** 底栏纯图标模式：文本区与图片区一起切换，开启后两项「位置」设置不再生效。 */
+    val FLOAT_BALL_PICK_ICON_BAR_ENABLED = booleanPreferencesKey("float_ball_pick_icon_bar_enabled")
+    /** 文本区底栏按钮顺序（id 以 U+001F 拼接，见 PickResultBarButtons）。 */
+    val FLOAT_BALL_PICK_TEXT_BAR_ORDER = stringPreferencesKey("float_ball_pick_text_bar_order")
+    /** 文本区底栏被隐藏的按钮 id。 */
+    val FLOAT_BALL_PICK_TEXT_BAR_HIDDEN = stringSetPreferencesKey("float_ball_pick_text_bar_hidden")
+    /** 图片区底栏按钮顺序。 */
+    val FLOAT_BALL_PICK_IMAGE_BAR_ORDER = stringPreferencesKey("float_ball_pick_image_bar_order")
+    /** 图片区底栏被隐藏的按钮 id。 */
+    val FLOAT_BALL_PICK_IMAGE_BAR_HIDDEN = stringSetPreferencesKey("float_ball_pick_image_bar_hidden")
     val FLOAT_BALL_PICK_HAPTIC_ENABLED = booleanPreferencesKey("float_ball_pick_haptic_enabled")
     /** 拖动悬浮球是否取词（关 = 拖动只跟手，不弹取词光标/选区）。 */
     val FLOAT_BALL_DRAG_PICK_ENABLED = booleanPreferencesKey("float_ball_drag_pick_enabled")
@@ -719,6 +748,26 @@ internal object SettingsPreferenceKeys {
         intPreferencesKey("clipboard_history_float_handle_y_portrait")
     val CLIPBOARD_HISTORY_FLOAT_HANDLE_Y_LANDSCAPE =
         intPreferencesKey("clipboard_history_float_handle_y_landscape")
+    // ⚠️ 这三个 key 的**名字**必须带 `_v2`：历史上同名 key 是 int 类型
+    // （`clipboard_history_float_handle_width_dp`，见 e473d6b1 / ee017975），
+    // 而 DataStore 的 `Preferences.Key` 只按名字判等、值保留旧类型 ——
+    // 沿用旧名会在老数据上抛 `ClassCastException: Integer cannot be cast to Float`，
+    // 位置是 SettingsSnapshotReader 读设置那一行，表现是**一启动就崩、无障碍服务被记成 crashed**。
+    val CLIPBOARD_HISTORY_FLOAT_HANDLE_WIDTH_DP =
+        floatPreferencesKey("clipboard_history_float_handle_width_dp_v2")
+    val CLIPBOARD_HISTORY_FLOAT_HANDLE_HEIGHT_DP =
+        floatPreferencesKey("clipboard_history_float_handle_height_dp_v2")
+    val CLIPBOARD_HISTORY_FLOAT_HANDLE_ALPHA =
+        floatPreferencesKey("clipboard_history_float_handle_alpha_v2")
+
+    /**
+     * @deprecated 旧「剪贴历史贴边手柄宽度」，int 类型（v1.10.x 起就存在）。
+     *
+     * 只由 [SettingsSchemaMigrations] 读一次并删除，**任何读设置的地方都不许再碰它**：
+     * 按 float 读同名键会抛 `ClassCastException`（真机：升级后一启动就崩）。
+     */
+    val LEGACY_CLIPBOARD_HISTORY_FLOAT_HANDLE_WIDTH_DP =
+        intPreferencesKey("clipboard_history_float_handle_width_dp")
     val CLIPBOARD_FLOAT_ENABLED = booleanPreferencesKey("clipboard_float_enabled")
     val CLIPBOARD_FLOAT_SHOW_CHIP = booleanPreferencesKey("clipboard_float_show_chip")
     val CLIPBOARD_FLOAT_PIN_POSITION = booleanPreferencesKey("clipboard_float_pin_position")
@@ -827,6 +876,8 @@ internal object SettingsPreferenceKeys {
     val SEARCH_PANEL_WEB_SUGGESTIONS_COUNT = intPreferencesKey("search_panel_web_suggestions_count")
     val SEARCH_PANEL_HISTORY_MAX_ENTRIES = intPreferencesKey("search_panel_history_max_entries")
     val SEARCH_PANEL_SECTION_ALIASES_JSON = stringPreferencesKey("search_panel_section_aliases_json")
+    val SEARCH_PANEL_SHOW_AGGREGATED_IMAGE_ENTRY =
+        booleanPreferencesKey("search_panel_show_aggregated_image_entry")
     val AGGREGATED_IMAGE_SEARCH_ENGINES_JSON = stringPreferencesKey("aggregated_image_search_engines_json")
     val AGGREGATED_IMAGE_SEARCH_ENGINES_INITIALIZED =
         booleanPreferencesKey("aggregated_image_search_engines_initialized")
@@ -852,6 +903,8 @@ internal object SettingsPreferenceKeys {
     /** 层与层之间的环间距（dp）。取代未发布的 corner_gesture_outer_diameter_dp。 */
     val CORNER_GESTURE_RING_SPACING_DP = floatPreferencesKey("corner_gesture_ring_spacing_dp")
     val CORNER_GESTURE_BUBBLE_SIZE_DP = floatPreferencesKey("corner_gesture_bubble_size_dp")
+    /** 槽位气泡/图标形状（FvIconShape.name）；缺省按圆形处理，保持历史观感。 */
+    val CORNER_GESTURE_SLOT_ICON_SHAPE = stringPreferencesKey("corner_gesture_slot_icon_shape")
     /** 轮盘层数（3/4/5）。取代未发布的 corner_gesture_layer4_enabled / layer5_enabled 两个布尔键。 */
     val CORNER_GESTURE_WHEEL_LAYER_COUNT = intPreferencesKey("corner_gesture_wheel_layer_count")
     val CORNER_GESTURE_LEFT_SLOTS = stringSetPreferencesKey("corner_gesture_left_slots")

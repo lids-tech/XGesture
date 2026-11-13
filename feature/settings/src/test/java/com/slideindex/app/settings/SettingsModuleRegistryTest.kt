@@ -52,10 +52,32 @@ class SettingsModuleRegistryTest {
         assertEquals(SettingsModule.SHELL, SettingsModuleRegistry.moduleOfDirectory("shell_icons"))
         assertEquals(SettingsModule.ACTIVITY_SHORTCUTS, SettingsModuleRegistry.moduleOfDirectory("shortcut_icons"))
         assertEquals(SettingsModule.FLOAT_BALL, SettingsModuleRegistry.moduleOfDirectory("float_ball_assets"))
+        assertEquals(SettingsModule.FLOAT_BALL, SettingsModuleRegistry.moduleOfDirectory("fooView"))
+        assertEquals(SettingsModule.THEME_UI, SettingsModuleRegistry.moduleOfDirectory("action_icons"))
+        assertEquals(SettingsModule.QUICK_WHEEL, SettingsModuleRegistry.moduleOfDirectory("quick_wheel_icons"))
+        assertEquals(SettingsModule.QUICK_LAUNCHER, SettingsModuleRegistry.moduleOfDirectory("fv_slot_icons"))
         assertEquals(SettingsModule.STASH, SettingsModuleRegistry.moduleOfDirectory("stash"))
         assertEquals(SettingsModule.CLIPBOARD, SettingsModuleRegistry.moduleOfDirectory("clipboard"))
         assertEquals(SettingsModule.SEARCH, SettingsModuleRegistry.moduleOfDirectory("share_image_ocr_history"))
         assertEquals(null, SettingsModuleRegistry.moduleOfDirectory("not_a_backup_dir"))
+    }
+
+    @Test
+    fun externalStoresMapToOwningModulesAndFilterByModule() {
+        assertEquals(SettingsModule.EDGE_GESTURE, SettingsBackupExternalStore.MACRO.module)
+        assertEquals(SettingsModule.CLIPBOARD, SettingsBackupExternalStore.CLIPBOARD_HISTORY.module)
+        assertTrue(SettingsBackupExternalStore.CLIPBOARD_HISTORY.sensitive)
+        assertEquals(SettingsModule.STASH, SettingsBackupExternalStore.STASH_META.module)
+        assertEquals(SettingsModule.FLOAT_BALL, SettingsBackupExternalStore.FV_GESTURE.module)
+
+        val all = mapOf(
+            SettingsBackupExternalStore.MACRO.id to "{}",
+            SettingsBackupExternalStore.CLIPBOARD_HISTORY.id to "[]",
+        )
+        assertEquals(
+            mapOf(SettingsBackupExternalStore.CLIPBOARD_HISTORY.id to "[]"),
+            all.forModules(setOf(SettingsModule.CLIPBOARD)),
+        )
     }
 
     @Test
@@ -90,34 +112,35 @@ class SettingsModuleRegistryTest {
             .toSet()
 
     private companion object {
-        // 671 = 666 + app_carousel_slide_{reversed,sensitivity}（QUICK_LAUNCHER）
-        //       + shake_menus_json / shake_menu_guard_ms / shake_menu_display_delay_ms（SHAKE）
-        //       - shake_menu_actions（bad9b0b0 起被上面三个键取代）
-        //       + settings_schema_version（GENERAL，96da46a5 的 schema 版本键）。
-        const val EXPECTED_TOTAL_KEYS = 671
+        // 679 = 678 + 1（幻灯片间隔）。
+        // 683 = 679 + 4：剪贴历史贴边把手外观的三个新键（宽/高/透明度，均带 `_v2`）
+        //            + 1 个 int→float 迁移用的 legacy 键（只被 SettingsSchemaMigrations 读一次）。
+        // 四个都落 CLIPBOARD（前缀 `clipboard_`）。
+        // 684 = 683 + 1：小组件面板「显示图标名称」（`widget_panel_show_labels`，落 WIDGET_PANEL）。
+        const val EXPECTED_TOTAL_KEYS = 696
 
         val EXPECTED_COUNTS: Map<SettingsModule, Int> = mapOf(
             SettingsModule.EDGE_GESTURE to 84,
-            SettingsModule.CORNER_WHEEL to 34,
+            SettingsModule.CORNER_WHEEL to 35,
             SettingsModule.QUICK_WHEEL to 2,
-            SettingsModule.FLOAT_BALL to 70,
+            SettingsModule.FLOAT_BALL to 77,
             SettingsModule.FLOATING_POINTER to 52,
             SettingsModule.FINGERTIP_RING to 13,
             SettingsModule.QUICK_LAUNCHER to 93,
-            SettingsModule.WIDGET_PANEL to 7,
-            SettingsModule.MESSAGE to 73,
+            SettingsModule.WIDGET_PANEL to 8,
+            SettingsModule.MESSAGE to 75,
             SettingsModule.OTP to 24,
             SettingsModule.SHAKE to 44,
-            SettingsModule.CLIPBOARD to 59,
+            SettingsModule.CLIPBOARD to 63,
             SettingsModule.DRAG_DROP to 5,
             SettingsModule.STASH to 5,
-            SettingsModule.SEARCH to 40,
+            SettingsModule.SEARCH to 41,
             SettingsModule.FREE_WINDOW to 13,
             SettingsModule.FREEZER to 6,
             SettingsModule.SHELL to 1,
             SettingsModule.ACTIVITY_SHORTCUTS to 3,
             SettingsModule.THEME_UI to 19,
-            SettingsModule.GENERAL to 24,
+            SettingsModule.GENERAL to 33,
         )
     }
 }

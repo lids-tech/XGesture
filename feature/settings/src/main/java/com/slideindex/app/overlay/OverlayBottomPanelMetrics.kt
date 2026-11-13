@@ -15,8 +15,15 @@ private val LandscapePanelMaxWidth = 560.dp
 private const val LandscapePanelWidthFraction = 0.72f
 private const val PortraitPanelMaxHeightFraction = 0.85f
 private const val LandscapePanelMaxHeightFraction = 0.92f
-/** 屏幕中间样式：竖屏高度上限与宽度上限（避免整屏宽的居中大卡片）。 */
-private const val CenteredPortraitPanelMaxHeightFraction = 0.70f
+/**
+ * 屏幕中间样式：竖屏高度上限与宽度上限（避免整屏宽的居中大卡片）。
+ *
+ * 0.70/0.80 都会在「长文本 + 两行搜索网格」或「四行搜索网格」时先顶到上限，
+ * 最后一个子项（搜索区）被压掉整整一行（真机日志：请求 246dp、实测 174.5dp）。
+ * 面板本身是 wrapContent，普通内容不会变高；这里直接放宽到接近满屏，
+ * 优先保证搜索区完整，内容特别多时接受居中面板接近全屏的观感。
+ */
+private const val CenteredPortraitPanelMaxHeightFraction = 0.96f
 private const val CenteredPortraitPanelWidthFraction = 0.92f
 
 /** 覆盖层底部面板：宽 > 高视为横屏。 */

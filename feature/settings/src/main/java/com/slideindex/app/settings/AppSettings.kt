@@ -32,6 +32,24 @@ data class AppSettings(
     val hapticEnabled: Boolean = true,
     val hapticStrengthLevel: Int = HapticStrength.MEDIUM.level,
     val hapticGestureTriggerEnabled: Boolean = true,
+    /** 越过长距阈值时的额外一次震动；关掉后长滑只响首声（issue #57）。 */
+    val hapticLongThresholdEnabled: Boolean = true,
+    /** 越过短距阈值那一声。 */
+    val hapticShortThresholdEnabled: Boolean = true,
+    /** 组合手势第二段转向成立那一声。 */
+    val hapticCompoundTurnEnabled: Boolean = true,
+    /** 折返（滑出又缩回）成立那一声。 */
+    val hapticReturnSwipeEnabled: Boolean = true,
+    /** 越过短距后悬停满足那一声。 */
+    val hapticHoverEnabled: Boolean = true,
+    /** 按住不动判定为长按那一声。 */
+    val hapticLongPressEnabled: Boolean = true,
+    /** 面板/轮盘里划过「字母索引」条目那一声。 */
+    val hapticSlotLetterEnabled: Boolean = true,
+    /** 面板/轮盘里划过「应用图标」条目那一声。 */
+    val hapticSlotAppEnabled: Boolean = true,
+    /** 保存/复制/删除/菜单点按这类通用确认。 */
+    val hapticActionConfirmEnabled: Boolean = true,
     val hapticSlotSelectionEnabled: Boolean = true,
     val hapticConfirmLaunchEnabled: Boolean = true,
     val hideFromRecents: Boolean = false,
@@ -130,6 +148,7 @@ data class AppSettings(
     val widgetPanelBlurEnabled get() = widgetPanel.widgetPanelBlurEnabled
     val widgetPanelBlurRadiusDp get() = widgetPanel.widgetPanelBlurRadiusDp
     val widgetPanelCloseOnClickMode get() = widgetPanel.widgetPanelCloseOnClickMode
+    val widgetPanelShowLabels get() = widgetPanel.widgetPanelShowLabels
 
     val otpCopyToClipboard get() = otp.otpCopyToClipboard
     val otpKeywordsRegex get() = otp.otpKeywordsRegex
@@ -318,6 +337,7 @@ data class AppSettings(
     val floatBallCustomImageNoCrop get() = floatBall.floatBallCustomImageNoCrop
     val floatBallCustomImageAspect get() = floatBall.floatBallCustomImageAspect
     val floatBallSlideshowUris get() = floatBall.floatBallSlideshowUris
+    val floatBallSlideshowIntervalSeconds get() = floatBall.floatBallSlideshowIntervalSeconds
     val floatBallGifUri get() = floatBall.floatBallGifUri
     val floatBallPickOffsetDp get() = floatBall.floatBallPickOffsetDp
     val floatBallPickTextSizeSp get() = floatBall.floatBallPickTextSizeSp
@@ -329,11 +349,17 @@ data class AppSettings(
     val floatBallPickSearchGridLastExpanded get() = floatBall.floatBallPickSearchGridLastExpanded
     val floatBallPickTextModeDefault get() = floatBall.floatBallPickTextModeDefault
     val floatBallPickTextModeLastMode get() = floatBall.floatBallPickTextModeLastMode
+    val floatBallPickWordTapGranularity get() = floatBall.floatBallPickWordTapGranularity
     val floatBallPickDefaultSearchEngineId get() = floatBall.floatBallPickDefaultSearchEngineId
     val floatBallPickAutoSelectAll get() = floatBall.floatBallPickAutoSelectAll
     val floatBallPickCopyDismissPanel get() = floatBall.floatBallPickCopyDismissPanel
     val floatBallPickCopyButtonPosition get() = floatBall.floatBallPickCopyButtonPosition
     val floatBallPickImageToolbarPosition get() = floatBall.floatBallPickImageToolbarPosition
+    val floatBallPickIconBarEnabled get() = floatBall.floatBallPickIconBarEnabled
+    val floatBallPickTextBarOrder get() = floatBall.floatBallPickTextBarOrder
+    val floatBallPickTextBarHidden get() = floatBall.floatBallPickTextBarHidden
+    val floatBallPickImageBarOrder get() = floatBall.floatBallPickImageBarOrder
+    val floatBallPickImageBarHidden get() = floatBall.floatBallPickImageBarHidden
     val floatBallPickHapticEnabled get() = floatBall.floatBallPickHapticEnabled
     val floatBallDragPickEnabled get() = floatBall.floatBallDragPickEnabled
     val floatBallDragPasteEnabled get() = floatBall.floatBallDragPasteEnabled
@@ -373,6 +399,9 @@ data class AppSettings(
     val clipboardHistoryFloatHandleSide get() = clipboard.clipboardHistoryFloatHandleSide
     val clipboardHistoryFloatHandleYPortrait get() = clipboard.clipboardHistoryFloatHandleYPortrait
     val clipboardHistoryFloatHandleYLandscape get() = clipboard.clipboardHistoryFloatHandleYLandscape
+    val clipboardHistoryFloatHandleWidthDp get() = clipboard.clipboardHistoryFloatHandleWidthDp
+    val clipboardHistoryFloatHandleHeightDp get() = clipboard.clipboardHistoryFloatHandleHeightDp
+    val clipboardHistoryFloatHandleAlpha get() = clipboard.clipboardHistoryFloatHandleAlpha
     val clipboardFloatEnabled get() = clipboard.clipboardFloatEnabled
     val clipboardFloatShowChip get() = clipboard.clipboardFloatShowChip
     val clipboardFloatChipFollowIme get() = clipboard.clipboardFloatChipFollowIme
@@ -439,6 +468,7 @@ data class AppSettings(
     val searchPanelHistoryMaxEntries get() = searchPanel.searchPanelHistoryMaxEntries
     val searchPanelSectionAliases get() = searchPanel.searchPanelSectionAliases
     val aggregatedImageSearchEngines get() = searchPanel.aggregatedImageSearchEngines
+    val searchPanelShowAggregatedImageEntry get() = searchPanel.searchPanelShowAggregatedImageEntry
 
     val overlayBlurEnabled get() = overlayBlur.overlayBlurEnabled
 

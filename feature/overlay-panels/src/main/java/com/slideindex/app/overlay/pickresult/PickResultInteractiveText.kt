@@ -36,8 +36,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Deselect
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.UnfoldLess
 import androidx.compose.material.icons.outlined.ViewModule
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,6 +98,18 @@ import kotlinx.coroutines.withContext
 
 private val pickResultTokenCache = android.util.LruCache<String, List<String>>(20)
 
+/**
+ * 自动全选的锁存键。
+ *
+ * 必须带分词模式：同一段文字在「分词 / 不分词」下的 token 下标完全不同，
+ * 只按 (text, mode) 锁存会让字符模式沿用词模式的下标，表现为只选中前一小段。
+ */
+private data class PickResultAutoSelectKey(
+    val text: String,
+    val mode: PickResultTextMode,
+    val granularity: com.slideindex.app.settings.PickResultWordTapGranularity,
+)
+
 @Composable
 fun PickResultInteractiveTextSection(
     text: String,
@@ -131,6 +145,8 @@ fun PickResultInteractiveTextSection(
     onActiveTextChange: (String) -> Unit = {},
     onSearch: (String) -> Unit = {},
     onShare: (String) -> Unit,
+    /** 点按分享键：有默认目标时直发；返回 false 回退到 [onShare]（弹面板）。 */
+    onShareToDefault: ((String) -> Boolean)? = null,
     /** 长按分享键起系统拖拽（载荷与 [onShare] 一致）；null 时不挂这个长按。 */
     onStartDrag: ((String) -> Unit)? = null,
     /** 用其他应用处理；null 时动作条不显示这一项（翻译浮窗等不需要的宿主）。 */
@@ -156,6 +172,7 @@ fun PickResultInteractiveTextSection(
     onShareScreenshot: (() -> Unit)? = null,
     onTextScrollableChange: ((Boolean) -> Unit)? = null,
 ) {
+    val ttsContext = LocalContext.current
     // ?? remember(text)???? onTextChange ????text?key ??????????0??
     var textFieldValue by remember { mutableStateOf(TextFieldValue(text)) }
     var selectedWordIndices by remember { mutableStateOf(setOf<Int>()) }
@@ -173,26 +190,56 @@ fun PickResultInteractiveTextSection(
             ?.collect { appSettings = it }
     }
     val effectiveAutoSelectAll = autoSelectAll ?: appSettings.floatBallPickAutoSelectAll
-    var wordTokens by remember(text) { 
-        mutableStateOf<List<String>>(pickResultTokenCache.get(text) ?: emptyList()) 
+    val wordTapGranularity = appSettings.floatBallPickWordTapGranularity
+    var wordTokens by remember(text) {
+        mutableStateOf<List<String>>(emptyList())
     }
     var wordTokenOverride by remember(text) { mutableStateOf<List<String>?>(null) }
+    /** 当前 wordTokens 对应的（文本, 分词模式）；自动全选必须等它匹配当前模式后才能执行。 */
+    var tokensReadyKey by remember(text) {
+        mutableStateOf<Pair<String, com.slideindex.app.settings.PickResultWordTapGranularity>?>(null)
+    }
+    var autoSelectedKey by remember {
+        mutableStateOf<PickResultAutoSelectKey?>(null)
+    }
     val effectiveWordTokens = wordTokenOverride ?: wordTokens
 
     fun currentWordTokens(): List<String> = wordTokenOverride ?: wordTokens
 
-    LaunchedEffect(text) {
+    LaunchedEffect(text, wordTapGranularity) {
         wordTokenOverride = null
-        if (text.isNotBlank() && pickResultTokenCache.get(text) == null) {
-            val newTokens = withContext(Dispatchers.Default) {
+        tokensReadyKey = null
+        if (text.isBlank()) {
+            wordTokens = emptyList()
+            tokensReadyKey = text to wordTapGranularity
+            return@LaunchedEffect
+        }
+        val cacheKey = "${wordTapGranularity.storageKey}:$text"
+        val cached = pickResultTokenCache.get(cacheKey)
+        if (cached != null) {
+            wordTokens = cached
+            tokensReadyKey = text to wordTapGranularity
+            return@LaunchedEffect
+        }
+        val newTokens = withContext(Dispatchers.Default) {
+            if (wordTapGranularity ==
+                com.slideindex.app.settings.PickResultWordTapGranularity.CHARACTER
+            ) {
+                PickResultWordTokenizer.tokenizeSelectableChars(text)
+            } else {
                 PickResultWordTokenizer.tokenizeSelectableWords(text)
             }
-            pickResultTokenCache.put(text, newTokens)
-            wordTokens = newTokens
         }
+        pickResultTokenCache.put(cacheKey, newTokens)
+        wordTokens = newTokens
+        tokensReadyKey = text to wordTapGranularity
     }
 
-    var autoSelectedKey by remember { mutableStateOf<Pair<String, PickResultTextMode>?>(null) }
+    LaunchedEffect(wordTapGranularity) {
+        // 分词/不分词切换后 token 下标完全不同：清掉旧选中集，也清掉“已自动全选”的锁存。
+        selectedWordIndices = emptySet()
+        autoSelectedKey = null
+    }
 
     LaunchedEffect(text, textMode, effectiveAutoSelectAll) {
         if (!effectiveAutoSelectAll) {
@@ -214,9 +261,18 @@ fun PickResultInteractiveTextSection(
         }
     }
 
-    LaunchedEffect(text, textMode, effectiveAutoSelectAll, effectiveWordTokens) {
-        if (effectiveAutoSelectAll && text.isNotBlank()) {
-            val currentKey = text to textMode
+    LaunchedEffect(
+        text,
+        textMode,
+        effectiveAutoSelectAll,
+        wordTapGranularity,
+        tokensReadyKey,
+        effectiveWordTokens,
+    ) {
+        val readyForWordTap = textMode != PickResultTextMode.WORD_TAP ||
+            tokensReadyKey == (text to wordTapGranularity)
+        if (effectiveAutoSelectAll && text.isNotBlank() && readyForWordTap) {
+            val currentKey = PickResultAutoSelectKey(text, textMode, wordTapGranularity)
             if (autoSelectedKey != currentKey) {
                 when (textMode) {
                     PickResultTextMode.WORD_TAP -> {
@@ -232,7 +288,9 @@ fun PickResultInteractiveTextSection(
                         autoSelectedKey = currentKey
                     }
                     PickResultTextMode.EDIT -> {
-                        if (autoSelectedKey?.second != PickResultTextMode.EDIT || text != textFieldValue.text) {
+                        if (autoSelectedKey?.mode != PickResultTextMode.EDIT ||
+                            text != textFieldValue.text
+                        ) {
                             textFieldValue = TextFieldValue(
                                 text = text,
                                 selection = TextRange(0, text.length),
@@ -298,6 +356,10 @@ fun PickResultInteractiveTextSection(
     fun runOnActiveText(action: (String) -> Unit) {
         activeText().takeIf { it.isNotBlank() }?.let(action)
     }
+
+    /** 同 [runOnActiveText]，但把"有没有真的执行"带回来（分享直发失败要回退面板）。 */
+    fun runOnActiveTextResult(action: (String) -> Boolean): Boolean =
+        activeText().takeIf { it.isNotBlank() }?.let(action) ?: false
 
     fun hasActiveSelection(): Boolean = when (textMode) {
         PickResultTextMode.WORD_TAP -> selectedWordIndices.isNotEmpty()
@@ -414,6 +476,8 @@ fun PickResultInteractiveTextSection(
             val actionBarContent: @Composable () -> Unit = {
                 PickResultTextActionBar(
                     enabled = text.isNotBlank() || barcodeResults.isNotEmpty(),
+                    speaking = PickResultTts.isSpeaking,
+                    onSpeakToggle = { PickResultTts.toggle(ttsContext, text) },
                     translateEnabled = translateEnabled,
                     translateSelected = showingTranslation,
                     showSearch = showSearch,
@@ -441,12 +505,18 @@ fun PickResultInteractiveTextSection(
                     },
                     onDismissOpenLinkChooser = { openLinkChooserExpanded = false },
                     onShare = { runOnActiveText(onShare) },
+                    onShareToDefault = onShareToDefault?.let { direct ->
+                        { runOnActiveTextResult(direct) }
+                    },
                     onStartDrag = onStartDrag?.let { drag -> { runOnActiveText(drag) } },
                     onProcessText = onProcessText?.let { action ->
                         { target -> runOnActiveText { text -> action(text, target) } }
                     },
                     copyDismissEnabled = appSettings.floatBallPickCopyDismissPanel,
                     copyButtonPosition = appSettings.floatBallPickCopyButtonPosition,
+                    iconBarEnabled = appSettings.floatBallPickIconBarEnabled,
+                    iconBarOrder = appSettings.floatBallPickTextBarOrder,
+                    iconBarHidden = appSettings.floatBallPickTextBarHidden,
                     onCopy = { runOnActiveText { onCopy(it, false) } },
                     onCopyKeepOpen = { runOnActiveText { onCopy(it, true) } },
                     onTranslate = { runOnActiveText(onTranslate) },
@@ -694,9 +764,13 @@ fun PickResultInteractiveTextSection(
                             },
                             onWordSelectionChange = { selectedWordIndices = it },
                             onWordLongPress = ::splitWordAt,
+                            wordTapChipFree = wordTapGranularity ==
+                                com.slideindex.app.settings.PickResultWordTapGranularity.CHARACTER,
                             onZoomText = onZoomText,
                             onExitEditMode = ::exitEditMode,
-                            selectionToolbarActions = selectionToolbarActions,
+                            selectionToolbarActions = selectionToolbarActions.takeIf {
+                                textMode != PickResultTextMode.SELECT
+                            },
                             onWordTapScrollableChange = { wordTapScrollable = it },
                         )
                     }
@@ -776,9 +850,13 @@ fun PickResultInteractiveTextSection(
                     },
                     onWordSelectionChange = { selectedWordIndices = it },
                     onWordLongPress = ::splitWordAt,
+                    wordTapChipFree = wordTapGranularity ==
+                        com.slideindex.app.settings.PickResultWordTapGranularity.CHARACTER,
                     onZoomText = onZoomText,
                     onExitEditMode = ::exitEditMode,
-                    selectionToolbarActions = selectionToolbarActions,
+                    selectionToolbarActions = selectionToolbarActions.takeIf {
+                        textMode != PickResultTextMode.SELECT
+                    },
                     onWordTapScrollableChange = { wordTapScrollable = it },
                 )
                 }
@@ -1095,6 +1173,7 @@ fun PickResultTextBody(
     onSelectionChanged: (start: Int, end: Int) -> Unit,
     onWordSelectionChange: (Set<Int>) -> Unit,
     onWordLongPress: (Int) -> Unit,
+    wordTapChipFree: Boolean = false,
     onZoomText: ((Boolean) -> Unit)? = null,
     onExitEditMode: (() -> Unit)? = null,
     selectionToolbarActions: OverlaySelectionToolbarActions? = null,
@@ -1317,6 +1396,7 @@ fun PickResultTextBody(
                     hapticEnabled = hapticEnabled,
                     modifier = paddedModifier,
                     onScrollableChange = onWordTapScrollableChange,
+                    chipFree = wordTapChipFree,
                 )
             }
         }

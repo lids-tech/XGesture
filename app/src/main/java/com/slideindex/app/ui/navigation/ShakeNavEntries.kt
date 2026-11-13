@@ -41,8 +41,10 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
     hiltEntry<AppNavKey.ShakeGestures> {
         val viewModel: ShakeHubViewModel = hiltViewModel()
         val shakeSettings by viewModel.shakeUiSettings.collectAsStateWithLifecycle()
+        val appSettings by viewModel.settings.collectAsStateWithLifecycle()
         ShakeGesturesScreen(
             settings = shakeSettings.shakeGestureSettings,
+            appSettings = appSettings,
             bottomContentPadding = ctx.rootBottomContentPadding,
             bottomNavReselectCount = ctx.bottomNavReselectCount,
             onEnabledChange = { enabled -> viewModel.setEnabled(enabled) },
@@ -359,6 +361,7 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
             onBack = { ctx.navigateBackTo(AppNavKey.ShakeGestures) },
             onOpenAddApp = { ctx.navigate(AppNavKey.ShakeGestureBlacklistPick) },
             onRemoveBlacklistedApp = { packageName -> viewModel.removeShakeBlacklistedApp(packageName) },
+            addSectionSubtitleRes = R.string.shake_gestures_blacklist_section_add_desc,
             showPageHint = false,
         )
     }
@@ -381,11 +384,13 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
     hiltEntry<AppNavKey.ShakeLockScreenSettings> {
         val viewModel: ShakeHubViewModel = hiltViewModel()
         val shakeSettings by viewModel.shakeUiSettings.collectAsStateWithLifecycle()
+        val appSettings by viewModel.settings.collectAsStateWithLifecycle()
         ShakeActionSetSettingsScreen(
             title = stringResource(R.string.shake_gestures_lock_screen),
             subtitle = stringResource(R.string.shake_gestures_lock_screen_settings_desc) + "\n" +
                 stringResource(R.string.shake_work_mode_actions_hint),
             actions = shakeSettings.shakeGestureSettings.lockScreenActions,
+            appSettings = appSettings,
             onBack = { ctx.navigateBackTo(AppNavKey.ShakeGestures) },
             onOpenActionPick = { type ->
                 ctx.navigate(
@@ -401,8 +406,10 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
     hiltEntry<AppNavKey.ShakeFaceDownSettings> {
         val viewModel: ShakeHubViewModel = hiltViewModel()
         val shakeSettings by viewModel.shakeUiSettings.collectAsStateWithLifecycle()
+        val appSettings by viewModel.settings.collectAsStateWithLifecycle()
         FaceDownSettingsScreen(
             faceDownSettings = shakeSettings.faceDownGestureSettings,
+            appSettings = appSettings,
             onBack = { ctx.navigateBackTo(AppNavKey.ShakeGestures) },
             onEnabledChange = { enabled -> viewModel.setFaceDownEnabled(enabled) },
             onHoldDurationChange = { ms -> viewModel.setFaceDownHoldDurationMs(ms) },
@@ -466,6 +473,7 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
     hiltEntry<AppNavKey.ShakePerAppActions> { key ->
         val viewModel: ShakeHubViewModel = hiltViewModel()
         val shakeSettings by viewModel.shakeUiSettings.collectAsStateWithLifecycle()
+        val appSettings by viewModel.settings.collectAsStateWithLifecycle()
         val packageName = key.packageName
         val appLabel = remember(packageName) {
             runCatching {
@@ -481,6 +489,7 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
             ),
             subtitle = stringResource(R.string.shake_gestures_independent_app_desc),
             actions = shakeSettings.shakeGestureSettings.effectivePerAppActions(packageName),
+            appSettings = appSettings,
             onBack = { ctx.navigateBackTo(AppNavKey.ShakeIndependentAppSettings) },
             onOpenActionPick = { type ->
                 ctx.navigate(
@@ -516,11 +525,13 @@ fun NavEntryBuilder.shakeNavEntries(ctx: MainNavContext) {
     hiltEntry<AppNavKey.ShakeMenuEdit> { key ->
         val viewModel: ShakeHubViewModel = hiltViewModel()
         val shakeSettings by viewModel.shakeUiSettings.collectAsStateWithLifecycle()
+        val appSettings by viewModel.settings.collectAsStateWithLifecycle()
         val menus = shakeSettings.shakeGestureSettings.menus
         val index = menus.indexOfFirst { it.id == key.menuId }
         val menu = menus.getOrNull(index).takeIf { index >= 0 }
         ShakeMenuEditScreen(
             menu = menu,
+            appSettings = appSettings,
             menuIndex = if (index >= 0) index else 0,
             onBack = { ctx.navigateBackTo(AppNavKey.ShakeMenuSettings) },
             onRename = { name -> menu?.let { viewModel.updateShakeMenu(it.copy(name = name)) } },

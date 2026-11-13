@@ -546,6 +546,10 @@ class SearchEngineSettingsViewModel @Inject constructor(
         settingsRepository.setSearchPanelWebSuggestionsCount(count)
     }
 
+    fun setSearchPanelShowAggregatedImageEntry(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setSearchPanelShowAggregatedImageEntry(enabled)
+    }
+
     fun setSearchPanelHistoryMaxEntries(maxEntries: Int) = launchSettingsWrite {
         val coerced = SearchPanelHistoryCapacity.coerce(maxEntries)
         val result = settingsRepository.setSearchPanelHistoryMaxEntries(coerced)
@@ -684,10 +688,6 @@ class SearchEngineSettingsViewModel @Inject constructor(
             .onFailure {
                 userMessageBus.showError(appContext.getString(R.string.settings_save_failed))
             }
-    }
-
-    fun setImageSearchPickPanelTransparency(value: Float) = launchSettingsWrite {
-        settingsRepository.setFloatBallImageSearchPickPanelTransparency(value)
     }
 
     private suspend fun persistEngines(

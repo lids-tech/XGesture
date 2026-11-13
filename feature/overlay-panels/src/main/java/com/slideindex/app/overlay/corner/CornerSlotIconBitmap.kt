@@ -9,6 +9,7 @@ import androidx.core.graphics.createBitmap
 import com.slideindex.app.activity.ActivityShortcut
 import com.slideindex.app.data.AppRepository
 import com.slideindex.app.gesture.GestureAction
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.shell.ShellCommand
 import com.slideindex.app.shell.ShellCommandIconResolver
 
@@ -27,16 +28,73 @@ object CornerSlotIconBitmap {
         activityShortcuts: List<ActivityShortcut> = emptyList(),
         shellCommands: List<ShellCommand> = emptyList(),
         appRepository: AppRepository? = null,
+        shape: FvIconShape = FvIconShape.CIRCLE,
+        /** false = 普通动作不烘底板，只返回裸矢量图标（摇杆功能环等场景）。 */
+        plateFallback: Boolean = true,
     ): Bitmap {
-        // 全局图标覆盖优先（扩展 → 图标库）
+        // 「打开快速启动器」：**面板图标优先于动作类型图标**（面板更具体）。
+        // 面板维度只有 `:app` 的 ActionIconKeyResolver 知道，这里借现成的 actionIconBitmapFull
+        // 让它先判；key 带 revision，换图标立即失效（角落轮盘是每帧重绘，必须缓存）。
+        if (action is GestureAction.QuickLauncher) {
+            val panelKey = "ql-panel:${action.payload}:$sizePx:$tintArgb:$plateFallback:${shape.name}:" +
+                com.slideindex.app.overlay.panels.PanelRuntimeHooks.iconCacheRevision?.invoke().orEmpty()
+            appIconCache.get(panelKey)?.let { return it }
+            com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconBitmapFull
+                ?.invoke(context, action, sizePx, tintArgb, true, plateFallback, shape.toPlateShapeOrdinal())
+                ?.let { bitmap ->
+                    appIconCache.put(panelKey, bitmap)
+                    return bitmap
+                }
+        }
+        // 全局图标覆盖优先（扩展 → 图标库），且必须排在下面四个「真实图标」分支之前：
+        // 图标库里按**动作类型**设图标，「打开应用 / 快捷方式 / 运行宏 / 执行命令」也是动作类型，
+        // 只在末尾兜底里查会让这四类继续画默认图标。
+        // 面板模块看不到 `:app` 的 GlobalIconStore：key 走 globalIconKey，位图交回 `:app` 渲染
+        // （字体表在 `:app`，面板解析不了）。
+        // 位图必须缓存：轮盘是每帧重绘，字体图标每次都要重新排版。覆盖变更时
+        // GlobalIconStore 会 clear() 本对象，底板模式变更同理，所以 key 不必再带修订号。
+        val overrideKey = com.slideindex.app.overlay.panels.PanelRuntimeHooks.globalIconKey
+            ?.invoke(action.type.name)
+        if (!overrideKey.isNullOrBlank()) {
+            val overrideCacheKey =
+                "ovr:${action.type.name}:$overrideKey:$sizePx:$tintArgb:$plateFallback:${shape.name}"
+            appIconCache.get(overrideCacheKey)?.let { return it }
+            com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconBitmapFull
+                ?.invoke(
+                    context,
+                    action,
+                    sizePx,
+                    tintArgb,
+                    true,
+                    plateFallback,
+                    shape.toPlateShapeOrdinal(),
+                )
+                ?.let { bitmap ->
+                    appIconCache.put(overrideCacheKey, bitmap)
+                    return bitmap
+                }
+        }
         if (action is GestureAction.LaunchApp) {
             val cacheKey = "app:${action.packageName}:${action.cloneUserId}:$sizePx"
             appIconCache.get(cacheKey)?.let { return it }
             resolveAppIconBitmap(action.packageName, sizePx, appRepository, context)?.let { bitmap ->
-                val decorated = com.slideindex.app.util.CloneBadge.decorate(bitmap, action.cloneUserId > 0) ?: bitmap
-                appIconCache.put(cacheKey, decorated)
-                return decorated
+                // 分身黄点不烘进位图：圆形槽位会把它裁掉，改由渲染器在裁剪外画
+                appIconCache.put(cacheKey, bitmap)
+                return bitmap
             }
+        }
+        // 「运行宏」：复用快速启动器的统一解析（宏目标 App 图标），否则只会落到通用播放键
+        if (action is GestureAction.RunMacro) {
+            val macroKey = "macro:${action.macroId}:$sizePx:${com.slideindex.app.macro.MacroStore.revision}"
+            appIconCache.get(macroKey)?.let { return it }
+            val item = com.slideindex.app.launcher.QuickLauncherItem.action(action)
+            com.slideindex.app.overlay.panels.PanelRuntimeHooks.quickLauncherIconDrawable
+                ?.invoke(item, emptyMap(), context, activityShortcuts, shellCommands)
+                ?.let { drawable ->
+                    val bitmap = drawableToBitmap(drawable, sizePx)
+                    appIconCache.put(macroKey, bitmap)
+                    return bitmap
+                }
         }
         if (action is GestureAction.LaunchShortcut) {
             val managedKey = "managed:${action.payloadKey}:$sizePx:${activityShortcuts.map { it.identityKey() to it.iconPath }.hashCode()}"
@@ -72,13 +130,26 @@ object CornerSlotIconBitmap {
             }
         }
         return com.slideindex.app.overlay.panels.PanelRuntimeHooks.actionIconBitmapFull?.invoke(
+            context,
             action,
             sizePx,
-            android.graphics.Color.WHITE,
+            tintArgb,
             true,
-            true,
-            1, // CIRCLE
+            plateFallback,
+            shape.toPlateShapeOrdinal(),
         ) ?: Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    }
+
+    /**
+     * [GestureActionPlateShape] 在 `:app` 里的声明顺序：
+     * ROUNDED_RECT / CIRCLE / SQUIRCLE / SQUARE。
+     * 面板侧不能依赖 `:app`，所以只在这里维护这一份序号映射。
+     */
+    private fun FvIconShape.toPlateShapeOrdinal(): Int = when (this) {
+        FvIconShape.ROUNDED_RECT -> 0
+        FvIconShape.CIRCLE -> 1
+        FvIconShape.SQUIRCLE -> 2
+        FvIconShape.SQUARE -> 3
     }
 
     private fun resolveAppIconBitmap(

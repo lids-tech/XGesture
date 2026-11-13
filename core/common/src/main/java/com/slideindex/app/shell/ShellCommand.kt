@@ -53,6 +53,8 @@ object ShellCommandCodec {
         }
         val iconPath = parts.getOrNull(4)?.takeIf { it.isNotBlank() }
         val textIcon = parts.getOrNull(5)?.takeIf { it.isNotBlank() }
+        // 旧版本没有 executionMode 字段。null 表示「没有显式设置」，
+        // 执行时由 ShellCommandModeResolver 解析为跟随全局权限模式；这里不要写死。
         val executionMode = ShellExecutionMode.fromStorage(parts.getOrNull(6))
         val resultDisplay = ShellResultDisplay.fromStorage(parts.getOrNull(7))
         return ShellCommand(

@@ -405,6 +405,37 @@ object FloatBallOverlay {
     }
 
     /**
+     * 是否有音量/亮度条正在边缘浮层上显示（条会占住全屏触摸，且和球同层）。
+     *
+     * 条显示期间，它所在的全屏 presentation 会切成可触摸（见 `EdgeGestureLayoutCoordinator`），
+     * 而球和它是**同类型窗口**：z 序只能靠 remove/add 抢。实际顺序是「条先出现（手指还按着，
+     * 拖动中不抬球）→ 松手后把球抬到条上面」，于是球正好盖住条的中段（球 48dp、条 52dp
+     * 且都贴同一边，条的锚点又是手指位置）——手指一落就滑到球上，条收不到那一拍。
+     *
+     * 因此条显示期间球**让出触摸**、并且**不再抢 z 序**（见 [syncTouchForPanelState] 与
+     * [bringChromeAbovePanelsNow] 的早退）。查询是实时的，没有额外状态位，
+     * 窗口被摘/退场动画开始/服务重启后自然恢复为 false。
+     */
+    fun isAdjustBarCoveringBall(): Boolean =
+        SlideIndexAccessibilityService.edgePresentationHasAdjustPanel()
+
+    /**
+     * 面板/音量条的触摸需求变化后，同步球触摸窗的穿透状态。
+     *
+     * 只在「该让触摸 / 该收回来」时改一次 flags，**不做 remove/add**，所以不会翻层级。
+     * 手势进行中一律不动窗口 flags：WM 改 flags 会给正在拖动的窗口发 ACTION_CANCEL；
+     * 那一拍由 [restoreAfterDragEnd] → [setBallTouchHostPassthrough] 按同一份实时条件补上。
+     */
+    fun syncTouchForPanelState() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { syncTouchForPanelState() }
+            return
+        }
+        if (isDragging) return
+        settingsState?.value?.let { syncBallTouchWindowLayout(it) }
+    }
+
+    /**
      * Edge gesture ended with no content panel: presentation is gone or was tracking-only.
      * Clears deferred z-order flags without WM remove/add (avoids trigger/ball flash on tap).
      */
@@ -518,6 +549,16 @@ object FloatBallOverlay {
             if (!chromeZOrderFront) {
                 chromeRaiseDeferredForDrag = true
             }
+            return
+        }
+        // 音量条显示期间：球已经让出触摸（见 isAdjustBarCoveringBall），这里再 remove/add 抬球
+        // 只会让球盖住条、并在松手那一帧翻一次层级。只补一次触摸窗同步，不动窗口顺序。
+        if (isAdjustBarCoveringBall()) {
+            EdgeDiag.log(
+                "zorder",
+                "音量条显示中：跳过 chrome 抬升（球让触摸）chromeFront=$chromeZOrderFront",
+            )
+            settingsState?.value?.let { syncBallTouchWindowLayout(it) }
             return
         }
         // 只有「面板真的还压在 chrome 上面」时，remove+add 抬 z 序才是必须的。
@@ -849,19 +890,21 @@ object FloatBallOverlay {
         return centerX to centerY
     }
 
-    /** 与悬浮球 Compose 窗体一致的布局密度与屏幕宽（圆环启动器须同源，避免 applicationContext 密度偏低）。 */
-    fun overlayLayoutMetrics(settings: AppSettings? = null): Pair<Float, Float>? {
+    /**
+     * 浮层布局用的密度提示（让圆环与球的手感同源，并纠正部分 ROM 上 applicationContext 密度偏低）。
+     *
+     * 只回传**密度**，不回传屏幕宽：宽度必须由调用方按**当前方向**自己算。历史上这里回传的是
+     * `(density, screenWidth)` 一整对，调用方一兜底常量就把假宽度（1080f）和假密度（1f）
+     * 一起带了进来，圆环整圈按 1dp=1px 画（只有正常的 36%）。
+     *
+     * 返回 null 表示"没有更好的参考值"：球窗没建起来（未开启 / 被排除应用、临时暂停、锁屏
+     * 抑制而 dismiss）时都属于这种情况，调用方按真实屏幕度量算即可。
+     */
+    fun ballDensityHint(settings: AppSettings? = null): Float? {
         val view = displayView ?: return null
-        val wm = windowManager
-        val viewMetrics = view.resources.displayMetrics
-        val ballDensityHint = settings?.let { ballLayoutDensityHint(it, viewMetrics.density) }
-        val layoutMetrics = OverlayDisplayMetrics.resolve(
-            context = view.context,
-            windowManager = wm,
-            densityHint = ballDensityHint ?: viewMetrics.density
-        )
-        val screenWidth = OverlayDisplayMetrics.screenWidthPx(view.context, wm, layoutMetrics)
-        return layoutMetrics.density to screenWidth
+        val viewDensity = view.resources.displayMetrics.density
+        // 有设置时按球的实际尺寸反推；没有就退回球视图自己的密度。
+        return settings?.let { ballLayoutDensityHint(it, viewDensity) } ?: viewDensity
     }
 
     private fun ballLayoutDensityHint(settings: AppSettings, viewDensity: Float): Float {
@@ -926,8 +969,6 @@ object FloatBallOverlay {
 
     internal fun ensureWindows(hostContext: Context, settings: AppSettings) {
         FloatBallStashPanel.warmUpBelowChrome(hostContext)
-        FloatBallPickResultPanel.warmUp(hostContext)
-        com.slideindex.app.overlay.searchpanel.SearchPanelOverlayWindow.warmUp(hostContext)
         val wm = hostContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val overlayContext = OverlayCompose.themedContext(hostContext)
         val state = FloatBallSceneState(settings)
@@ -1473,7 +1514,7 @@ object FloatBallOverlay {
             screenHeightPx = screenH,
             isLandscape = isLandscape,
         )
-        if (captureSuppressed || passthroughRestorePending) {
+        if (captureSuppressed || passthroughRestorePending || isAdjustBarCoveringBall()) {
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         } else {
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
@@ -1637,8 +1678,7 @@ object FloatBallOverlay {
     ): WindowManager.LayoutParams {
         var flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         if (!touchModal) {
             flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
         }
@@ -3315,6 +3355,13 @@ object FloatBallOverlay {
             append(settings.floatBallCustomImageAspect)
             append('|')
             append(settings.floatBallSlideshowUris.joinToString(","))
+            append('|')
+            // 间隔本身不改窗口尺寸，但改完必须让 FloatBallIconView 重新 bind 以重建计时器。
+            append(
+                com.slideindex.app.settings.FloatBallSettings.normalizeSlideshowIntervalSeconds(
+                    settings.floatBallSlideshowIntervalSeconds,
+                ),
+            )
         }
     }
 

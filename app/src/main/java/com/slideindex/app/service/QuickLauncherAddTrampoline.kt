@@ -2,62 +2,57 @@ package com.slideindex.app.service
 
 import android.content.Context
 import android.content.Intent
-import com.slideindex.app.launcher.QuickLauncherItem
 import com.slideindex.app.overlay.PanelSide
 
 /**
- * Opens the quick-launcher add picker in a transparent [Activity] so list scrolling uses the
- * normal window touch pipeline (overlay [ComposeView] + [LazyColumn] is unreliable).
+ * Opens the quick-launcher add picker in a transparent [Activity] so the Miuix page
+ * (settings-style scaffold, list scrolling) uses the normal window touch pipeline.
+ *
+ * The Activity hosts the **same** pages as the settings entry
+ * (`QuickLauncherAddFlowScreen` + `ExtensionSettingsViewModel`); this trampoline only
+ * tracks the "add flow active" lifecycle so the overlay panel can hide/resume.
  */
 object QuickLauncherAddTrampoline {
     @Volatile
     private var active = false
     private var onPrepare: (() -> Unit)? = null
     private var onDismiss: (() -> Unit)? = null
-    private var onAdd: ((QuickLauncherItem) -> Unit)? = null
-    private var onRemove: ((QuickLauncherItem) -> Unit)? = null
 
     fun isActive(): Boolean = active
 
+    /**
+     * 打开透明 Activity 的添加入口。
+     *
+     * @return true = Activity 已在途；false = 启动失败（OEM 后台启动限制等），
+     *   调用方应回退到浮层 sheet。失败时也会走一次 [onDismiss]，让面板恢复。
+     */
     fun launch(
         context: Context,
+        panelId: String,
         panelSide: PanelSide,
-        configuredAppPackages: Set<String>,
-        configuredShortcutKeys: Set<String>,
-        configuredActionKeys: Set<String>,
         onPrepare: () -> Unit,
         onDismiss: () -> Unit,
-        onAdd: (QuickLauncherItem) -> Unit,
-        onRemove: (QuickLauncherItem) -> Unit
-    ) {
+    ): Boolean {
         cancelPending()
         active = true
         this.onPrepare = onPrepare
         this.onDismiss = onDismiss
-        this.onAdd = onAdd
-        this.onRemove = onRemove
         onPrepare()
-        runCatching {
+        return runCatching {
             context.startActivity(
                 QuickLauncherAddTrampolineActivity.createIntent(
                     context = context,
+                    panelId = panelId,
                     panelSide = panelSide,
-                    configuredAppPackages = configuredAppPackages,
-                    configuredShortcutKeys = configuredShortcutKeys,
-                    configuredActionKeys = configuredActionKeys
                 )
             )
-        }.onFailure {
-            deliverDismiss()
-        }
-    }
-
-    internal fun onItemAdd(item: QuickLauncherItem) {
-        onAdd?.invoke(item)
-    }
-
-    internal fun onItemRemove(item: QuickLauncherItem) {
-        onRemove?.invoke(item)
+        }.fold(
+            onSuccess = { true },
+            onFailure = {
+                deliverDismiss()
+                false
+            },
+        )
     }
 
     internal fun deliverDismiss() {
@@ -76,7 +71,5 @@ object QuickLauncherAddTrampoline {
     private fun clearCallbacks() {
         onPrepare = null
         onDismiss = null
-        onAdd = null
-        onRemove = null
     }
 }

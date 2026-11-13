@@ -19,6 +19,7 @@ import com.slideindex.app.gesture.SideGestureDefaults
 import com.slideindex.app.gesture.TriggerHandle
 import com.slideindex.app.gesture.TriggerHandleCodec
 import com.slideindex.app.launcher.QuickLauncherItemCodec
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.message.MessageSettingsCodec
 import com.slideindex.app.message.MessageStyle
@@ -212,6 +213,25 @@ internal object SettingsSnapshotReader {
             hapticEnabled = prefs[SettingsPreferenceKeys.HAPTIC_ENABLED] ?: true,
             hapticStrengthLevel = prefs[SettingsPreferenceKeys.HAPTIC_STRENGTH] ?: HapticStrength.MEDIUM.level,
             hapticGestureTriggerEnabled = prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            hapticLongThresholdEnabled = prefs[SettingsPreferenceKeys.HAPTIC_LONG_THRESHOLD_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            // 新开关缺键时回落到老的「手势唤起振动」：老用户把它关掉的，升级后这几类仍然不响。
+            hapticShortThresholdEnabled = prefs[SettingsPreferenceKeys.HAPTIC_SHORT_THRESHOLD_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            hapticCompoundTurnEnabled = prefs[SettingsPreferenceKeys.HAPTIC_COMPOUND_TURN_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            hapticReturnSwipeEnabled = prefs[SettingsPreferenceKeys.HAPTIC_RETURN_SWIPE_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            hapticHoverEnabled = prefs[SettingsPreferenceKeys.HAPTIC_HOVER_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            hapticLongPressEnabled = prefs[SettingsPreferenceKeys.HAPTIC_LONG_PRESS_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_GESTURE_TRIGGER_ENABLED] ?: true,
+            // 槽位选择拆成两类：缺键时回落到原来的「滑动选项目振动」总开关。
+            hapticSlotLetterEnabled = prefs[SettingsPreferenceKeys.HAPTIC_SLOT_LETTER_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_SLOT_SELECTION_ENABLED] ?: true,
+            hapticSlotAppEnabled = prefs[SettingsPreferenceKeys.HAPTIC_SLOT_APP_ENABLED]
+                ?: prefs[SettingsPreferenceKeys.HAPTIC_SLOT_SELECTION_ENABLED] ?: true,
+            hapticActionConfirmEnabled = prefs[SettingsPreferenceKeys.HAPTIC_ACTION_CONFIRM_ENABLED] ?: true,
             hapticSlotSelectionEnabled = prefs[SettingsPreferenceKeys.HAPTIC_SLOT_SELECTION_ENABLED] ?: true,
             hapticConfirmLaunchEnabled = prefs[SettingsPreferenceKeys.HAPTIC_CONFIRM_LAUNCH_ENABLED] ?: true,
             hideFromRecents = prefs[SettingsPreferenceKeys.HIDE_FROM_RECENTS] ?: false,
@@ -323,6 +343,7 @@ internal object SettingsSnapshotReader {
                 widgetPanelBlurRadiusDp = prefs[SettingsPreferenceKeys.WIDGET_PANEL_BLUR_RADIUS_DP]
                     ?: AppSettings.WIDGET_PANEL_BLUR_RADIUS_DEFAULT_DP,
                 widgetPanelCloseOnClickMode = prefs[SettingsPreferenceKeys.WIDGET_PANEL_CLOSE_ON_CLICK] ?: 0,
+                widgetPanelShowLabels = prefs[SettingsPreferenceKeys.WIDGET_PANEL_SHOW_LABELS] ?: true,
             ),
             floatingPointer = FloatingPointerSettings(
             floatingPointerSensitivityFraction = readFloatingPointerSensitivityFraction(prefs),
@@ -491,6 +512,10 @@ internal object SettingsSnapshotReader {
                 ?.filter { it.isNotBlank() }
                 ?.toList()
                 ?: emptyList(),
+            floatBallSlideshowIntervalSeconds = FloatBallSettings.normalizeSlideshowIntervalSeconds(
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_SLIDESHOW_INTERVAL_SECONDS]
+                    ?: FloatBallSettings.DEFAULT_SLIDESHOW_INTERVAL_SECONDS,
+            ),
             floatBallGifUri = prefs[SettingsPreferenceKeys.FLOAT_BALL_GIF_URI].orEmpty(),
             floatBallPickOffsetDp = prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_OFFSET_DP] ?: 48f,
             floatBallPickTextSizeSp =
@@ -517,6 +542,10 @@ internal object SettingsSnapshotReader {
                 ),
             floatBallPickTextModeLastMode =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_MODE_LAST_MODE].orEmpty(),
+            floatBallPickWordTapGranularity =
+                PickResultWordTapGranularity.fromStorageKey(
+                    prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_WORD_TAP_GRANULARITY],
+                ),
             floatBallPickDefaultSearchEngineId =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_DEFAULT_SEARCH_ENGINE_ID],
             floatBallPickAutoSelectAll =
@@ -531,6 +560,20 @@ internal object SettingsSnapshotReader {
                 PickResultImageToolbarPosition.fromStorageKey(
                     prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_TOOLBAR_POSITION],
                 ),
+            floatBallPickIconBarEnabled =
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_ICON_BAR_ENABLED] ?: false,
+            floatBallPickTextBarOrder = PickResultBarButtons.decodeOrder(
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_BAR_ORDER],
+            ),
+            floatBallPickTextBarHidden = PickResultBarButtons.sanitizeHiddenText(
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_TEXT_BAR_HIDDEN].orEmpty(),
+            ),
+            floatBallPickImageBarOrder = PickResultBarButtons.decodeOrder(
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_BAR_ORDER],
+            ),
+            floatBallPickImageBarHidden = PickResultBarButtons.sanitizeHiddenImage(
+                prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_IMAGE_BAR_HIDDEN].orEmpty(),
+            ),
             floatBallPickHapticEnabled =
                 prefs[SettingsPreferenceKeys.FLOAT_BALL_PICK_HAPTIC_ENABLED] ?: true,
             floatBallDragPickEnabled =
@@ -633,6 +676,18 @@ internal object SettingsSnapshotReader {
             clipboardHistoryFloatHandleYLandscape =
                 prefs[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_Y_LANDSCAPE]
                     ?: HistoryFloatHandlePosition.UNSET_POSITION,
+            clipboardHistoryFloatHandleWidthDp = HistoryFloatHandleAppearance.coerceWidthDp(
+                prefs[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_WIDTH_DP]
+                    ?: HistoryFloatHandleAppearance.DEFAULT_WIDTH_DP,
+            ),
+            clipboardHistoryFloatHandleHeightDp = HistoryFloatHandleAppearance.coerceHeightDp(
+                prefs[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_HEIGHT_DP]
+                    ?: HistoryFloatHandleAppearance.DEFAULT_HEIGHT_DP,
+            ),
+            clipboardHistoryFloatHandleAlpha = HistoryFloatHandleAppearance.coerceAlpha(
+                prefs[SettingsPreferenceKeys.CLIPBOARD_HISTORY_FLOAT_HANDLE_ALPHA]
+                    ?: HistoryFloatHandleAppearance.DEFAULT_ALPHA,
+            ),
             clipboardFloatEnabled = prefs[SettingsPreferenceKeys.CLIPBOARD_FLOAT_ENABLED] ?: false,
             clipboardFloatShowChip = prefs[SettingsPreferenceKeys.CLIPBOARD_FLOAT_SHOW_CHIP] ?: true,
             clipboardFloatChipFollowIme =
@@ -823,6 +878,8 @@ internal object SettingsSnapshotReader {
                 prefs[SettingsPreferenceKeys.SEARCH_PANEL_SECTION_ALIASES_JSON],
             ),
             aggregatedImageSearchEngines = readAggregatedImageSearchEngines(prefs),
+            searchPanelShowAggregatedImageEntry =
+                prefs[SettingsPreferenceKeys.SEARCH_PANEL_SHOW_AGGREGATED_IMAGE_ENTRY] ?: true,
             ),
         ).withResolvedHandleEdgeWidths()
     }
@@ -1009,6 +1066,12 @@ internal object SettingsSnapshotReader {
             innerDiameterDp = CornerGestureSettings.clampInnerDiameterDp(inner),
             ringSpacingDp = ringSpacingDp,
             bubbleSizeDp = bubbleSizeDp,
+            slotIconShape = FvIconShape.entries.firstOrNull {
+                it.name.equals(
+                    prefs[SettingsPreferenceKeys.CORNER_GESTURE_SLOT_ICON_SHAPE],
+                    ignoreCase = true,
+                )
+            } ?: FvIconShape.CIRCLE,
             wheelLayerCount = wheelLayerCount,
             cancelOutsideWheel = prefs[SettingsPreferenceKeys.CORNER_GESTURE_CANCEL_OUTSIDE_WHEEL] ?: true,
             progressiveLayers = prefs[SettingsPreferenceKeys.CORNER_GESTURE_PROGRESSIVE_LAYERS] ?: false,
@@ -1061,7 +1124,7 @@ internal object SettingsSnapshotReader {
 
     private fun readFloatingPointerSensitivityFraction(prefs: Preferences): Float {
         prefs[SettingsPreferenceKeys.FLOATING_POINTER_SENSITIVITY]?.let { stored ->
-            return stored.coerceIn(0.2f, 0.75f)
+            return stored.coerceIn(0.2f, 1f)
         }
         val legacyWidth = prefs[SettingsPreferenceKeys.FLOATING_POINTER_JOYSTICK_AREA_WIDTH] ?: 703f
         val legacyZoom = prefs[SettingsPreferenceKeys.FLOATING_POINTER_JOYSTICK_AREA_ZOOM] ?: 0.8f
@@ -1266,6 +1329,13 @@ internal object SettingsSnapshotReader {
                 (prefs[SettingsPreferenceKeys.MESSAGE_RETURN_CHIP_AUTO_DISMISS_SECONDS]
                     ?: base.returnChipAutoDismissSeconds)
                     .coerceIn(0, 60),
+            returnChipOnRightEdge =
+                prefs[SettingsPreferenceKeys.MESSAGE_RETURN_CHIP_ON_RIGHT_EDGE]
+                    ?: base.returnChipOnRightEdge,
+            returnChipYFraction =
+                (prefs[SettingsPreferenceKeys.MESSAGE_RETURN_CHIP_Y_FRACTION]
+                    ?: base.returnChipYFraction)
+                    .coerceIn(0f, 1f),
         )
     }
 

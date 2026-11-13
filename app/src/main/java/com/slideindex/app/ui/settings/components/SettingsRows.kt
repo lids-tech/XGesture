@@ -1,6 +1,8 @@
 package com.slideindex.app.ui.settings.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,14 +20,21 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,9 +58,17 @@ import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-internal fun Modifier.settingsGroupedRowBackground(index: Int, count: Int): Modifier {
+internal fun Modifier.settingsGroupedRowBackground(
+    index: Int,
+    count: Int,
+    color: Color? = null,
+): Modifier {
     if (LocalSettingsCardSegmentMode.current) return fillMaxWidth()
-    return miuixGroupedCardItem(index, count)
+    return if (color == null) {
+        miuixGroupedCardItem(index, count)
+    } else {
+        miuixGroupedCardItem(index, count, color = color)
+    }
 }
 
 @Composable
@@ -73,6 +90,52 @@ fun SettingsCardScope.SettingSwitchRow(
             onCheckedChange = onCheckedChange,
             startAction = icon?.let { { SettingIconContainer { it(title) } } },
         )
+    }
+}
+
+/** 纯展开行（不带开关）：点标题展开/收起子行，默认收起，用于「先收起、别碍事」的次级设置。 */
+@Composable
+fun SettingsCardScope.SettingExpandableRow(
+    title: String,
+    subtitle: String? = null,
+    expanded: Boolean,
+    enabled: Boolean = true,
+    onExpandedChange: (Boolean) -> Unit,
+    expandedContent: @Composable () -> Unit,
+) {
+    SettingsCardRow(key = "$title-expandable") { position ->
+        Column(modifier = Modifier.settingsGroupedRowBackground(position.index, position.count)) {
+            val rotation by animateFloatAsState(
+                targetValue = if (expanded) 90f else 0f,
+                animationSpec = tween(200),
+            )
+            BasicComponent(
+                modifier = Modifier.fillMaxWidth(),
+                title = title,
+                summary = subtitle,
+                enabled = enabled,
+                onClick = { if (enabled) onExpandedChange(!expanded) },
+                endActions = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .rotate(rotation),
+                    )
+                },
+            )
+            AnimatedVisibility(
+                visible = expanded && enabled,
+                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    expandedContent()
+                }
+            }
+        }
     }
 }
 
@@ -367,12 +430,14 @@ fun SettingsCardScope.SettingNavigationRow(
     onClick: () -> Unit,
     trailingContent: (@Composable () -> Unit)? = null,
     insideMargin: PaddingValues = BasicComponentDefaults.InsideMargin,
+    /** 行卡片底色；null 用默认 surfaceContainer（白）。bottom sheet 内容可传 secondaryContainer 拿灰卡。 */
+    backgroundColor: Color? = null,
 ) {
     val deferredClick = rememberDeferredNavigationClick(onClick)
     SettingsCardRow(key = title) { position ->
         if (trailingContent != null) {
             BasicComponent(
-                modifier = Modifier.settingsGroupedRowBackground(position.index, position.count),
+                modifier = Modifier.settingsGroupedRowBackground(position.index, position.count, backgroundColor),
                 insideMargin = insideMargin,
                 title = title,
                 summary = subtitle,
@@ -383,7 +448,7 @@ fun SettingsCardScope.SettingNavigationRow(
             )
         } else {
             ArrowPreference(
-                modifier = Modifier.settingsGroupedRowBackground(position.index, position.count),
+                modifier = Modifier.settingsGroupedRowBackground(position.index, position.count, backgroundColor),
                 insideMargin = insideMargin,
                 title = title,
                 summary = subtitle,

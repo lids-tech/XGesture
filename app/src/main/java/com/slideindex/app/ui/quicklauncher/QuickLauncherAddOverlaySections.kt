@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Shortcut
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.data.AppInfo
 import com.slideindex.app.gesture.GestureAction
+import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.gesture.KeyEventPresets
+import com.slideindex.app.launcher.AppTarget
 import com.slideindex.app.launcher.QuickLauncherItem
 import com.slideindex.app.launcher.QuickLauncherItemCodec
 import com.slideindex.app.launcher.QuickLauncherItemType
@@ -68,6 +71,7 @@ import com.slideindex.app.ui.picker.ActivityShortcutPickAppScreen
 import com.slideindex.app.ui.picker.pickerHorizontalSlideTransitionByDepth
 import com.slideindex.app.ui.quicklauncher.quickLauncherAddPickerActionItems
 import com.slideindex.app.ui.quicklauncher.rememberQuickLauncherFilteredActions
+import com.slideindex.app.ui.picker.APP_PICKER_GRID_COLUMNS
 import com.slideindex.app.ui.picker.activityShortcutPickerToggleSection
 import com.slideindex.app.ui.picker.shortcutFolderCardsSection
 import com.slideindex.app.ui.picker.filterShortcutCatalog
@@ -153,6 +157,8 @@ internal fun QuickLauncherAddOverlaySheetBody(
     onSubScreenChange: (QuickLauncherAddSubScreen) -> Unit,
     selectedTab: Int,
     singleSelect: Boolean = false,
+    /** 打开时定位到的条目 key（动作/应用/快捷方式各自编码）；单选槽位传当前绑定值。 */
+    focusItemKey: String? = null,
     pinNoneAtTop: Boolean = false,
     slotEmpty: Boolean = false,
     onClearSlot: () -> Unit = {},
@@ -451,6 +457,7 @@ internal fun QuickLauncherAddOverlaySheetBody(
                         pinNoneAtTop = pinNoneAtTop,
                         noneSelected = slotEmpty,
                         onSelectNone = onClearSlot,
+                        focusKey = focusItemKey,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -469,6 +476,7 @@ internal fun QuickLauncherAddOverlaySheetBody(
                             onToggle(QuickLauncherItem.app(app.packageName, app.label, app.cloneUserId), added)
                         },
                         singleSelect = singleSelect,
+                        focusKey = focusItemKey,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -529,7 +537,7 @@ fun QuickLauncherToggleRow(
         segmentCount = segmentCount,
         title = resolvedTitle,
         subtitle = resolvedSubtitle,
-        selected = if (singleSelect) false else added,
+        selected = added,
         onClick = if (showAction) onToggle else null,
         modifier = modifier,
         leadingContent = {
@@ -538,7 +546,7 @@ fun QuickLauncherToggleRow(
                 missingIcon = Icons.AutoMirrored.Outlined.Shortcut,
             )
         },
-        trailingMode = if (singleSelect) PickerTrailingMode.None else if (showAction) PickerTrailingMode.Toggle else PickerTrailingMode.None,
+        trailingMode = if (singleSelect) PickerTrailingMode.Radio else if (showAction) PickerTrailingMode.Toggle else PickerTrailingMode.None,
         onTrailingClick = if (singleSelect) null else if (showAction) onToggle else null,
     )
 }
@@ -584,16 +592,38 @@ fun QuickLauncherActionRow(
         segmentCount = segmentCount,
         title = label,
         subtitle = subtitle,
-        selected = if (singleSelect) false else added,
+        selected = added,
         onClick = onToggle,
         leadingContent = {
             Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
             com.slideindex.app.ui.ActionIconSlot(action = action, sizeDp = 24)
         }
         },
-        trailingMode = if (singleSelect) PickerTrailingMode.None else PickerTrailingMode.Toggle,
+        trailingMode = if (singleSelect) PickerTrailingMode.Radio else PickerTrailingMode.Toggle,
         onTrailingClick = if (singleSelect) null else onToggle,
     )
+}
+
+private const val ACTION_GRID_COLUMNS = 4
+
+/**
+ * 动作 tab 里某个动作对应第几个 LazyColumn item（含分区标题）。
+ * 用于打开时定位到当前绑定动作；找不到返回 -1。
+ */
+private fun actionGridItemIndex(actions: List<GestureAction>, key: String): Int {
+    val sections = com.slideindex.app.ui.picker.GestureActionCatalog.groupIntoSections(actions)
+    var itemIndex = 0
+    sections.forEach { section ->
+        itemIndex += 1 // 分区标题
+        val rows = section.actions.chunked(ACTION_GRID_COLUMNS)
+        rows.forEachIndexed { rowIndex, row ->
+            if (row.any { QuickLauncherItemCodec.actionKey(it) == key }) {
+                return itemIndex + rowIndex
+            }
+        }
+        itemIndex += rows.size
+    }
+    return -1
 }
 
 @Composable
@@ -611,15 +641,39 @@ private fun QuickLauncherAddActionsTab(
     pinNoneAtTop: Boolean = false,
     noneSelected: Boolean = false,
     onSelectNone: () -> Unit = {},
+    focusKey: String? = null,
 ) {
     val filtered = rememberQuickLauncherFilteredActions(searchQuery)
+    // 「无」与边角轮盘一致：作为普通动作进目录，落在「导航与系统」第一格；
+    // 不再单独在顶部插一条卡片行（那会占一整行、还是白卡片）。
+    val noneLabel = stringResource(R.string.gesture_action_none)
+    val actions = remember(filtered, pinNoneAtTop, searchQuery, noneLabel) {
+        if (
+            pinNoneAtTop &&
+            (searchQuery.isBlank() || noneLabel.contains(searchQuery, ignoreCase = true)) &&
+            filtered.none { it.type == GestureActionType.NONE }
+        ) {
+            listOf(GestureAction.None) + filtered
+        } else {
+            filtered
+        }
+    }
+    val listState = rememberLazyListState()
+    // 打开时定位到当前绑定的动作（与边角轮盘一致）。
+    LaunchedEffect(actions, focusKey) {
+        if (focusKey != null) {
+            val index = actionGridItemIndex(actions, focusKey)
+            if (index >= 0) listState.scrollToItem(index)
+        }
+    }
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(pickerListSegmentedGap()),
     ) {
         quickLauncherAddPickerActionItems(
-            filtered = filtered,
+            filtered = actions,
             configuredActionKeys = configuredActionKeys,
             onToggleItem = onToggleItem,
             onOpenExecuteShellCommand = onOpenExecuteShellCommand,
@@ -627,7 +681,6 @@ private fun QuickLauncherAddActionsTab(
             onOpenSimulateKeyEvent = onOpenSimulateKeyEvent,
             onRequestRunMacro = onRequestRunMacro,
             singleSelect = singleSelect,
-            pinNoneAtTop = pinNoneAtTop,
             noneSelected = noneSelected,
             onSelectNone = onSelectNone,
             searchQuery = searchQuery,
@@ -643,6 +696,7 @@ private fun QuickLauncherAddAppsTab(
     onToggle: (AppInfo, Boolean) -> Unit,
     modifier: Modifier,
     singleSelect: Boolean = false,
+    focusKey: String? = null,
 ) {
     val query = searchQuery.trim().lowercase()
     val filtered = remember(apps, query) {
@@ -653,7 +707,17 @@ private fun QuickLauncherAddAppsTab(
                 app.pinyinKey.contains(query)
         }.sortedBy { it.pinyinKey }
     }
+    val listState = rememberLazyListState()
+    LaunchedEffect(filtered, focusKey) {
+        if (focusKey != null) {
+            val index = filtered.indexOfFirst {
+                AppTarget.encode(it.packageName, it.cloneUserId) == focusKey
+            }
+            if (index >= 0) listState.scrollToItem(index / APP_PICKER_GRID_COLUMNS)
+        }
+    }
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(pickerListSegmentedGap()),
@@ -763,10 +827,10 @@ private fun QuickLauncherShortcutToggleRow(
         segmentCount = segmentCount,
         title = shortcut.label,
         subtitle = shortcut.targetComponent?.takeIf { it.isNotBlank() },
-        selected = if (singleSelect) false else added,
+        selected = added,
         onClick = onToggle,
         leadingContent = { Md3PickerAppLeading(app) },
-        trailingMode = if (singleSelect) PickerTrailingMode.None else PickerTrailingMode.Toggle,
+        trailingMode = if (singleSelect) PickerTrailingMode.Radio else PickerTrailingMode.Toggle,
         onTrailingClick = if (singleSelect) null else onToggle,
         trailingChip = shortcutKindChip(shortcut.kind),
     )

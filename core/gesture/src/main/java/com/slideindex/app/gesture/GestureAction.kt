@@ -215,6 +215,23 @@ enum class GestureActionType(val id: Int) {
      * 一个基础晃动方向绑定本动作后，这个方向就变成「打开某个菜单」而不是直接执行动作。
      */
     SHAKE_MENU(112),
+
+    /**
+     * 「NFC 开关」：把 NFC 取反。
+     *
+     * NFC 没有「第三方 App 直接开关」的公开 API（`NfcAdapter.enable()` 是 @SystemApi，且被
+     * `WRITE_SECURE_SETTINGS` 拦住），但有两条不需要系统签名的路：给本应用授一次
+     * `WRITE_SECURE_SETTINGS` 后进程内反射调用，或借 Shizuku 的 shell 身份直调 NFC 的 binder。
+     * **不要用 `svc nfc`**：它在部分 ROM 上执行完不退出，等待进程结束会把主线程卡到 ANR。
+     * 两条路都不通时执行器降级打开系统 NFC 设置页；没有 NFC 硬件的机型只吐一句提示。
+     */
+    TOGGLE_NFC(113),
+
+    /** 「蓝牙开关」：把蓝牙取反；与 [TOGGLE_NFC] 同一套特权/降级策略（`cmd bluetooth_manager`）。 */
+    TOGGLE_BLUETOOTH(114),
+
+    /** 音量条：弹出音量键那种系统音量条，但不改变音量值。 */
+    OPEN_VOLUME_SLIDER(115),
     ;
 
     companion object {
@@ -705,10 +722,16 @@ sealed class GestureAction {
         override val payload = ""
     }
 
-    /** Samsung OHO+ style widget popup hosting system App Widgets via [com.slideindex.app.overlay.WidgetPopupOverlayWindow]. */
-    data object WidgetPopupOverlay : GestureAction() {
+    /**
+     * Samsung OHO+ style widget popup hosting system App Widgets via
+     * [com.slideindex.app.overlay.WidgetPopupOverlayWindow].
+     *
+     * @param panelId 打开时停在哪一页（`WidgetPanelPage.id` 的十进制字符串）。
+     *   空串 = 第一页：旧数据没有这个字段，解析出来就是空串，行为与以前一致。
+     */
+    data class WidgetPopupOverlay(val panelId: String = "") : GestureAction() {
         override val type = GestureActionType.WIDGET_POPUP_OVERLAY
-        override val payload = ""
+        override val payload = panelId
     }
     /** Edge-gesture regional screenshot & text pick (no persistent float ball). */
     data object RegionalScreenshotPick : GestureAction() {
@@ -884,6 +907,19 @@ sealed class GestureAction {
 
     data object ToggleMobileData : GestureAction() {
         override val type = GestureActionType.TOGGLE_MOBILE_DATA
+        override val payload = ""
+    }
+
+    /** 「NFC 开关」：优先进程内反射（需 `WRITE_SECURE_SETTINGS`，可由 Shizuku/Root 代授），
+     *  其次 Shizuku binder，否则打开系统 NFC 设置页。 */
+    data object ToggleNfc : GestureAction() {
+        override val type = GestureActionType.TOGGLE_NFC
+        override val payload = ""
+    }
+
+    /** 「蓝牙开关」：需 Shizuku / Root（`cmd bluetooth_manager`）；无特权时执行器打开蓝牙设置页。 */
+    data object ToggleBluetooth : GestureAction() {
+        override val type = GestureActionType.TOGGLE_BLUETOOTH
         override val payload = ""
     }
 
@@ -1083,9 +1119,15 @@ sealed class GestureAction {
         override val payload = ""
     }
 
-    /** 调出系统原生声音调节面板。 */
+    /** 调出系统原生声音调节面板（设置页样式的多路滑块）。 */
     data object OpenVolumePanel : GestureAction() {
         override val type = GestureActionType.OPEN_VOLUME_PANEL
+        override val payload = ""
+    }
+
+    /** 弹出系统音量条（与音量键同款），但不改变音量。 */
+    data object OpenVolumeSlider : GestureAction() {
+        override val type = GestureActionType.OPEN_VOLUME_SLIDER
         override val payload = ""
     }
 
@@ -1260,7 +1302,7 @@ sealed class GestureAction {
                 GestureActionType.QUICK_TOOLS_OVERLAY -> QuickToolsOverlay
                 GestureActionType.QUICK_MENU -> QuickMenu
                 GestureActionType.SHAKE_MENU -> OpenShakeMenu(payload)
-                GestureActionType.WIDGET_POPUP_OVERLAY -> WidgetPopupOverlay
+                GestureActionType.WIDGET_POPUP_OVERLAY -> WidgetPopupOverlay(payload)
                 GestureActionType.OPEN_STASH_PANEL -> StashPanel
                 GestureActionType.OPEN_CLIPBOARD_PANEL -> ClipboardPanel
                 GestureActionType.OPEN_CLIPBOARD_FLOAT -> ClipboardFloat
@@ -1281,6 +1323,8 @@ sealed class GestureAction {
                 GestureActionType.TOGGLE_SHAKE_GESTURE -> ToggleShakeGesture
                 GestureActionType.TOGGLE_FLOAT_BALL -> ToggleFloatBall
                 GestureActionType.TOGGLE_MOBILE_DATA -> ToggleMobileData
+                GestureActionType.TOGGLE_NFC -> ToggleNfc
+                GestureActionType.TOGGLE_BLUETOOTH -> ToggleBluetooth
                 GestureActionType.SWITCH_INPUT_METHOD -> SwitchInputMethod
                 GestureActionType.CORNER_INNER_CANCEL -> CornerInnerCancel
                 GestureActionType.CORNER_INNER_PIN_WHEEL -> CornerInnerPinWheel
@@ -1307,6 +1351,7 @@ sealed class GestureAction {
                 GestureActionType.TOGGLE_AUTO_BRIGHTNESS -> ToggleAutoBrightness
                 GestureActionType.OPEN_INTERNET_PANEL -> OpenInternetPanel
                 GestureActionType.OPEN_VOLUME_PANEL -> OpenVolumePanel
+                GestureActionType.OPEN_VOLUME_SLIDER -> OpenVolumeSlider
                 GestureActionType.CURRENT_APP_INFO -> CurrentAppInfo
                 GestureActionType.SIMULATE_KEY_EVENT -> SimulateKeyEvent.fromPayload(payload)
                 GestureActionType.SCREEN_OFF_KEEP_AWAKE -> ScreenOffKeepAwake
@@ -1365,6 +1410,25 @@ fun GestureAction.isCornerInnerZoneOnly(): Boolean =
 /** Actions that only work with [GestureTriggerMode.CONTINUOUS] (not on-release / immediate). */
 fun GestureAction.requiresContinuousTriggerOnly(): Boolean =
     this is GestureAction.RegionalScreenshotPick
+
+/**
+ * 触发瞬间会抓屏的动作。
+ *
+ * 这类动作执行前不能弹任何浮层：提示胶囊是 `TYPE_ACCESSIBILITY_OVERLAY`，
+ * 会被 `AccessibilityService.takeScreenshot` 一起拍进结果里（issue #60）。
+ */
+val GestureAction.capturesScreen: Boolean
+    get() = when (this) {
+        GestureAction.Screenshot,
+        GestureAction.SmartScreenshot,
+        GestureAction.FullscreenScreenshotPick,
+        GestureAction.RegionalScreenshotPick,
+        GestureAction.ScreenSearch,
+        GestureAction.ScreenTranslate,
+        GestureAction.UniversalCopy,
+        -> true
+        else -> false
+    }
 
 /** [GestureAction.continuousTrackingActions] membership by action kind (not payload). */
 fun GestureAction.isContinuousTrackingKind(): Boolean =

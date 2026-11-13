@@ -9,6 +9,7 @@ import com.slideindex.app.gesture.GestureTriggerType
 import com.slideindex.app.gesture.ActionPickerCatalogPolicy
 import com.slideindex.app.gesture.SlotPickerKind
 import com.slideindex.app.gesture.isEligibleForSlotPicker
+import com.slideindex.app.gesture.requiresContinuousTriggerOnly
 import com.slideindex.app.gesture.slotPickerKindOrNull
 import com.slideindex.app.ui.gesturepicker.filterGestureActions
 
@@ -48,10 +49,19 @@ object GestureActionCatalog {
             GestureActionCatalogScope.QuickLauncher -> buildQuickLauncherActions()
         }
         val slotPickerKind = catalogPolicy.slotPickerKindOrNull()
-        return if (slotPickerKind == null) {
+        val base = if (slotPickerKind == null) {
             actions
         } else {
             actions.filter { it.isEligibleForSlotPicker(slotPickerKind) }
+        }
+        // 「只能持续触发」的动作需要按住拖动阶段；单击/双击/点按槽位没有这个阶段，即使
+        // EdgeGesture 策略整体保留持续动作，也要按当前槽位的触发类型再过滤一次。
+        val acceptsContinuousOnly = slotPickerKind == null &&
+            trigger !in GestureTriggerType.pressTapEntries()
+        return if (acceptsContinuousOnly) {
+            base
+        } else {
+            base.filterNot { it.requiresContinuousTriggerOnly() }
         }
     }
 
@@ -123,6 +133,8 @@ object GestureActionCatalog {
         // 2. 开关与调节 (Controls & Media)
         GestureActionType.TOGGLE_WIFI,
         GestureActionType.TOGGLE_MOBILE_DATA,
+        GestureActionType.TOGGLE_NFC,
+        GestureActionType.TOGGLE_BLUETOOTH,
         GestureActionType.FLASHLIGHT,
         GestureActionType.TOGGLE_DND,
         GestureActionType.TIMED_DND,
@@ -135,6 +147,7 @@ object GestureActionCatalog {
         GestureActionType.VOLUME_UP,
         GestureActionType.VOLUME_DOWN,
         GestureActionType.OPEN_VOLUME_PANEL,
+        GestureActionType.OPEN_VOLUME_SLIDER,
         GestureActionType.OPEN_INTERNET_PANEL,
         GestureActionType.TOGGLE_MUTE,
         GestureActionType.MEDIA_PLAY_PAUSE,
@@ -295,6 +308,8 @@ object GestureActionCatalog {
         // 2. 开关与调节 (Controls & Media)
         GestureAction.ToggleWifi,
         GestureAction.ToggleMobileData,
+        GestureAction.ToggleNfc,
+        GestureAction.ToggleBluetooth,
         GestureAction.OpenInternetPanel,
         GestureAction.Flashlight,
         GestureAction.ToggleDnd,
@@ -308,6 +323,7 @@ object GestureActionCatalog {
         GestureAction.VolumeUp,
         GestureAction.VolumeDown,
         GestureAction.OpenVolumePanel,
+        GestureAction.OpenVolumeSlider,
         GestureAction.ToggleMute,
         GestureAction.ToggleShakeGesture,
         GestureAction.ToggleFloatBall,
@@ -344,7 +360,7 @@ object GestureActionCatalog {
         GestureAction.ClipboardPick,
         GestureAction.ClipboardPaste,
         GestureAction.StashPanel,
-        GestureAction.WidgetPopupOverlay,
+        GestureAction.WidgetPopupOverlay(),
         GestureAction.QuickToolsOverlay,
         GestureAction.QuickMenu,
         GestureAction.OpenShakeMenu(),

@@ -10,7 +10,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-private val Context.shareSheetDataStore: DataStore<Preferences> by preferencesDataStore(
+/**
+ * 分享面板自己的 DataStore：钉住列表（[ShareSheetPins]）与默认目标（[ShareSheetDefaults]）共用，
+ * 备份也走同一个外部存储项（`SettingsBackupExternalStore.SHARE_SHEET` / `SHARE_DEFAULTS`）。
+ */
+internal val Context.shareSheetDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "slide_index_share_sheet",
 )
 
@@ -68,5 +72,25 @@ object ShareSheetPins {
             cached = updated
         }
         return updated
+    }
+
+    /** 备份用：DataStore 里的原始 JSON。 */
+    suspend fun exportRawJson(context: Context): String =
+        runCatching { context.shareSheetDataStore.data.first()[KEY] }
+            .getOrNull()
+            .orEmpty()
+
+    /** 恢复用：整份写回并替换内存缓存。 */
+    suspend fun importRawJson(context: Context, raw: String) {
+        if (raw.isBlank()) return
+        val decoded = runCatching { json.decodeFromString<List<String>>(raw) }
+            .getOrNull() ?: return
+        val sanitized = decoded.distinct().take(MAX_PINS)
+        runCatching {
+            context.shareSheetDataStore.edit { prefs ->
+                prefs[KEY] = json.encodeToString(sanitized)
+            }
+        }
+        cached = sanitized
     }
 }

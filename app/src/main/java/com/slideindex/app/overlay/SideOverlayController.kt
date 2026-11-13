@@ -357,10 +357,24 @@ class SideOverlayController(
         }
     }
 
-    fun showEdge(metrics: ScreenMetricsSnapshot? = null) {
+    /**
+     * 挂上这一侧的画布与触摸捕获窗。
+     *
+     * [sourceSettings] 传进来就用它按**当前方向**刷新一次设置缓存：`canHoldPresentation()` 读的是
+     * 缓存里的 `triggerHandles`，缓存停在另一个方向（横屏那份该侧没有触钮）时会立刻 `hideEdge()`，
+     * 调用方看到 `isEdgeInitialized()==false` 又反复调 `showEdge` —— 死循环，只能等下一次改设置
+     * （= 手动开关一次手势）才解开。旋转重挂必须带上最新设置，见 OverlayManager.ensureSideEdge。
+     */
+    fun showEdge(
+        metrics: ScreenMetricsSnapshot? = null,
+        sourceSettings: AppSettings? = null,
+    ) {
         val resolvedMetrics = metrics ?: OverlayScreenMetrics.snapshot(context)
         val isLandscape = resolvedMetrics.isLandscape
         lastIsLandscape = isLandscape
+        if (sourceSettings != null) {
+            settings = effectiveSettings(sourceSettings, resolvedMetrics)
+        }
 
         screenWidthPx = resolvedMetrics.widthPx
         screenHeightPx = resolvedMetrics.heightPx
@@ -486,6 +500,10 @@ class SideOverlayController(
                     windowManager.syncPresentationTouchState()
                     windowManager.detachPresentationUnlessRequired()
                 }
+                // 条已收起（状态先清空、这个回调后到）：把球的触摸收回来。
+                if (FloatBallOverlay.isShowing) {
+                    FloatBallOverlay.syncTouchForPanelState()
+                }
             },
             onClickPassthroughCallback = { rawX, rawY, onComplete ->
                 val handler = clickPassthroughHandler
@@ -518,6 +536,10 @@ class SideOverlayController(
                         view.syncOverlayDialogZOrder()
                     }
                     windowManager.detachPresentationUnlessRequired()
+                }
+                // 音量条出现/收起时球要让出/收回触摸（手势进行中由松手那一拍同步）。
+                if (FloatBallOverlay.isShowing) {
+                    FloatBallOverlay.syncTouchForPanelState()
                 }
                 onComposeOverlayDialogStateChanged()
             }
@@ -689,6 +711,19 @@ class SideOverlayController(
     }
 
     fun edgePresentationNeedsChromeRaise(): Boolean = windowManager.needsChromeRaisedAbovePresentation()
+
+    /**
+     * 音量/亮度条是否正在这一侧的 presentation 上显示**且还要接触摸**。
+     *
+     * 退场动画期间条已经立刻让出触摸（见 `AdjustPanelOverlayController.dismissAdjustPanel`），
+     * 这里同步返回 false，球的触摸也就同一拍收回来。窗口摘掉/挂起时同样返回 false，
+     * 保证悬浮球不会因为一个残留状态一直处于不可点。
+     */
+    fun hasAdjustPanel(): Boolean {
+        if (windowManager.edgeOverlayDetached || windowManager.overlayLayoutSuspended()) return false
+        val view = overlayPresentation ?: return false
+        return view.hasAdjustPanel() && !view.isAdjustPanelDismissing()
+    }
 
     fun markChromeBelowPanel() {
         windowManager.markChromeBelowPanel()

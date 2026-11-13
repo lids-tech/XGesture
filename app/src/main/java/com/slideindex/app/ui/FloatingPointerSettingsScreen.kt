@@ -1,6 +1,5 @@
-﻿package com.slideindex.app.ui
+package com.slideindex.app.ui
 
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.ui.gestureActionTypeOutlinedIcon
@@ -59,8 +58,9 @@ fun FloatingPointerSettingsScreen(
             key = "section-joystick-area",
             title = joystickAreaSectionTitle
         )
+        // 速度和行程范围预览是同一件事（一段行程 = 一屏指针位移），放同一张卡。
         groupedCardItems(
-            keyPrefix = "floating-pointer-preview",
+            keyPrefix = "floating-pointer-move",
             items = buildList {
                 add(
                     settingsCardScopeItem("area-preview") {
@@ -77,24 +77,15 @@ fun FloatingPointerSettingsScreen(
                         )
                     }
                 )
-            }
-        )
-        if (areaPreviewEnabled) {
-            settingsLazyHint(
-                key = "floating-pointer-preview-hint",
-                text = previewDragHint
-            )
-        }
-        groupedCardItems(
-            keyPrefix = "floating-pointer-sensitivity",
-            items = buildList {
                 add(
                     settingsCardScopeItem("sensitivity") {
                         SettingsSliderRow(
                             title = stringResource(R.string.floating_pointer_sensitivity),
                             value = settings.floatingPointerSensitivityFraction,
-                            valueRange = FloatingPointerBounds.SENSITIVITY_MIN..FloatingPointerBounds.SENSITIVITY_MAX,
-                            steps = 10,
+                            valueRange = FloatingPointerBounds.SENSITIVITY_MIN..
+                                FloatingPointerBounds.FLOATING_POINTER_SPEED_MAX,
+                            // 20%–100%，每档 5%。
+                            steps = 15,
                             enabled = true,
                             label = stringResource(
                                 R.string.floating_pointer_percent_value,
@@ -110,6 +101,12 @@ fun FloatingPointerSettingsScreen(
                 )
             }
         )
+        if (areaPreviewEnabled) {
+            settingsLazyHint(
+                key = "floating-pointer-preview-hint",
+                text = previewDragHint
+            )
+        }
         settingsLazySmallTitle(
             key = "section-appearance",
             title = appearanceSectionTitle
@@ -141,7 +138,7 @@ fun FloatingPointerSettingsScreen(
                         SettingNavigationRow(
                             icon = { label ->
                                 Icon(
-                                    gestureActionTypeOutlinedIcon(GestureActionType.SIMULATE_POINTER_SWIPE),
+                                    imageVector = ThinActionIcons.Joystick,
                                     contentDescription = label
                                 )
                             },
@@ -172,7 +169,7 @@ fun FloatingPointerSettingsScreen(
                 add(
                     settingsCardScopeItem("edge-settings") {
                         SettingNavigationRow(
-                            icon = { label -> Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = label) },
+                            icon = { label -> SymbolsIcon("KeyboardArrowUp", contentDescription = label) },
                             title = stringResource(R.string.floating_pointer_edge_settings_title),
                             subtitle = stringResource(R.string.floating_pointer_edge_settings_summary),
                             onClick = onOpenEdgeActionsSettings

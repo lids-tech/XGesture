@@ -207,6 +207,13 @@ fun gestureActionSearchAliases(context: Context, action: GestureAction): List<St
         context.getString(R.string.gesture_search_volume_3),
         "volume panel",
     )
+    GestureActionType.OPEN_VOLUME_SLIDER -> listOf(
+        context.getString(R.string.gesture_search_volume_1),
+        context.getString(R.string.gesture_search_volume_2),
+        context.getString(R.string.gesture_search_volume_3),
+        "volume slider",
+        "volume hud",
+    )
     GestureActionType.VOLUME_UP -> listOf(
         context.getString(R.string.gesture_search_volume_1),
         context.getString(R.string.gesture_search_volume_2),
@@ -238,6 +245,9 @@ fun gestureActionSearchAliases(context: Context, action: GestureAction): List<St
         context.getString(R.string.gesture_search_float_ball_show),
         "float ball",
     )
+    // 中文界面里搜「bluetooth」「near field」也能找到这两个开关（标签本身只有中/本地化文案）。
+    GestureActionType.TOGGLE_NFC -> listOf("near field", "nfc toggle")
+    GestureActionType.TOGGLE_BLUETOOTH -> listOf("bluetooth", "bt")
     else -> emptyList()
 }
 
@@ -292,6 +302,7 @@ fun gestureActionDescriptionText(context: Context, action: GestureAction): Strin
         GestureActionType.SNOOZE_OVERLAYS -> context.getString(R.string.gesture_action_snooze_overlays_desc)
         GestureActionType.OPEN_INTERNET_PANEL -> context.getString(R.string.gesture_action_open_internet_panel_desc)
         GestureActionType.OPEN_VOLUME_PANEL -> context.getString(R.string.gesture_action_open_volume_panel_desc)
+        GestureActionType.OPEN_VOLUME_SLIDER -> context.getString(R.string.gesture_action_open_volume_slider_desc)
         GestureActionType.VOLUME_UP -> context.getString(R.string.gesture_action_volume_up_desc)
         GestureActionType.VOLUME_DOWN -> context.getString(R.string.gesture_action_volume_down_desc)
         GestureActionType.FORCE_STOP_CURRENT_APP -> context.getString(R.string.gesture_action_force_stop_current_app_desc)
@@ -438,9 +449,12 @@ fun gestureActionLabelText(context: Context, action: GestureAction): String = wh
         GestureActionType.TOGGLE_SHAKE_GESTURE -> context.getString(R.string.gesture_action_toggle_shake)
         GestureActionType.TOGGLE_FLOAT_BALL -> context.getString(R.string.gesture_action_toggle_float_ball)
         GestureActionType.TOGGLE_MOBILE_DATA -> context.getString(R.string.gesture_action_toggle_mobile_data)
+        GestureActionType.TOGGLE_NFC -> context.getString(R.string.gesture_action_toggle_nfc)
+        GestureActionType.TOGGLE_BLUETOOTH -> context.getString(R.string.gesture_action_toggle_bluetooth)
         GestureActionType.SWITCH_INPUT_METHOD -> context.getString(R.string.gesture_action_switch_input_method)
         GestureActionType.OPEN_INTERNET_PANEL -> context.getString(R.string.gesture_action_open_internet_panel)
         GestureActionType.OPEN_VOLUME_PANEL -> context.getString(R.string.gesture_action_open_volume_panel)
+        GestureActionType.OPEN_VOLUME_SLIDER -> context.getString(R.string.gesture_action_open_volume_slider)
         GestureActionType.CURRENT_APP_INFO -> context.getString(R.string.gesture_action_current_app_info)
         GestureActionType.SCREEN_OFF_KEEP_AWAKE -> context.getString(R.string.gesture_action_screen_off_keep_awake)
         GestureActionType.TOUCH_BLOCK -> context.getString(R.string.gesture_action_touch_block)
@@ -495,6 +509,16 @@ fun gestureActionLabel(action: GestureAction, settings: AppSettings? = null): St
             stringResource(
                 R.string.gesture_action_quick_launcher_named,
                 quickLauncherPanelLabel(settings, action.panelId),
+            )
+        }
+    }
+    is GestureAction.WidgetPopupOverlay -> {
+        if (action.panelId.isBlank() || settings == null) {
+            stringResource(R.string.gesture_action_widget_popup_overlay)
+        } else {
+            stringResource(
+                R.string.gesture_action_widget_popup_overlay_named,
+                com.slideindex.app.ui.widgetPanelPageLabel(settings, action.panelId),
             )
         }
     }
@@ -608,9 +632,12 @@ fun gestureActionLabel(action: GestureAction, settings: AppSettings? = null): St
         GestureActionType.TOGGLE_SHAKE_GESTURE -> stringResource(R.string.gesture_action_toggle_shake)
         GestureActionType.TOGGLE_FLOAT_BALL -> stringResource(R.string.gesture_action_toggle_float_ball)
         GestureActionType.TOGGLE_MOBILE_DATA -> stringResource(R.string.gesture_action_toggle_mobile_data)
+        GestureActionType.TOGGLE_NFC -> stringResource(R.string.gesture_action_toggle_nfc)
+        GestureActionType.TOGGLE_BLUETOOTH -> stringResource(R.string.gesture_action_toggle_bluetooth)
         GestureActionType.SWITCH_INPUT_METHOD -> stringResource(R.string.gesture_action_switch_input_method)
         GestureActionType.OPEN_INTERNET_PANEL -> stringResource(R.string.gesture_action_open_internet_panel)
         GestureActionType.OPEN_VOLUME_PANEL -> stringResource(R.string.gesture_action_open_volume_panel)
+        GestureActionType.OPEN_VOLUME_SLIDER -> stringResource(R.string.gesture_action_open_volume_slider)
         GestureActionType.CURRENT_APP_INFO -> stringResource(R.string.gesture_action_current_app_info)
         GestureActionType.SCREEN_OFF_KEEP_AWAKE -> stringResource(R.string.gesture_action_screen_off_keep_awake)
         GestureActionType.TOUCH_BLOCK -> stringResource(R.string.gesture_action_touch_block)
@@ -700,6 +727,7 @@ fun gestureActionDescription(action: GestureAction): String? = when (action.type
     GestureActionType.LOCK_SCREEN_AND_MUTE_ALL -> stringResource(R.string.gesture_action_lock_screen_and_mute_all_desc)
     GestureActionType.OPEN_INTERNET_PANEL -> stringResource(R.string.gesture_action_open_internet_panel_desc)
     GestureActionType.OPEN_VOLUME_PANEL -> stringResource(R.string.gesture_action_open_volume_panel_desc)
+    GestureActionType.OPEN_VOLUME_SLIDER -> stringResource(R.string.gesture_action_open_volume_slider_desc)
     GestureActionType.CURRENT_APP_INFO -> stringResource(R.string.gesture_action_current_app_info_desc)
     GestureActionType.SCREEN_OFF_KEEP_AWAKE -> stringResource(R.string.gesture_action_screen_off_keep_awake_desc)
     GestureActionType.TOUCH_BLOCK -> stringResource(R.string.gesture_action_touch_block_desc)
@@ -788,6 +816,7 @@ fun gestureActionPermissionHintText(context: Context, action: GestureAction): St
             }
         }
         GestureActionType.TOGGLE_WIFI, GestureActionType.TOGGLE_MOBILE_DATA,
+        GestureActionType.TOGGLE_NFC, GestureActionType.TOGGLE_BLUETOOTH,
         GestureActionType.EXECUTE_SHELL_COMMAND,
         GestureActionType.FORCE_STOP_CURRENT_APP,
         -> {
@@ -939,7 +968,7 @@ fun requestPermissionForAdjustAction(context: Context, action: GestureAction) {
                 context.startActivity(PermissionHelper.accessibilitySettingsIntent())
             }
         }
-        GestureAction.WidgetPopupOverlay -> {
+        is GestureAction.WidgetPopupOverlay -> {
             if (!PermissionHelper.isAccessibilityServiceEnabledForOverlays(context)) {
                 context.startActivity(PermissionHelper.accessibilitySettingsIntent())
             }

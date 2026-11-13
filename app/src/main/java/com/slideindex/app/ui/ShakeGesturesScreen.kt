@@ -12,15 +12,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.RotateLeft
-import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.ScreenRotation
-import androidx.compose.material.icons.filled.SwipeLeft
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -37,11 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.gesture.GestureAction
+import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.shake.ShakeGestureSettings
 import com.slideindex.app.shake.ShakeGestureType
 import com.slideindex.app.shake.ShakeSensitivityScale
@@ -65,6 +63,7 @@ import com.slideindex.app.ui.settings.components.settingsLazySmallTitle
 @Composable
 fun ShakeGesturesScreen(
     settings: ShakeGestureSettings,
+    appSettings: AppSettings? = null,
     bottomContentPadding: Dp = 0.dp,
     bottomNavReselectCount: Int = 0,
     onEnabledChange: (Boolean) -> Unit,
@@ -109,10 +108,8 @@ fun ShakeGesturesScreen(
     val workModeBatteryHint = stringResource(R.string.shake_work_mode_battery_hint)
     val workModeLockScreenHint = stringResource(R.string.shake_work_mode_lock_screen_actions_hint)
     val actionScopeSectionTitle = stringResource(R.string.shake_gestures_section_action_scope)
-    val otherGesturesSectionTitle = stringResource(R.string.shake_gestures_section_other)
     val otherGesturesHint = stringResource(R.string.shake_gestures_other_hint)
     val sensitivitySectionTitle = stringResource(R.string.shake_gestures_section_sensitivity)
-    val sensitivityHint = stringResource(R.string.shake_gestures_sensitivity_hint)
     val feedbackSectionTitle = stringResource(R.string.shake_gestures_section_feedback)
     val advancedFeaturesSectionTitle = stringResource(R.string.shake_gestures_section_advanced_features)
 
@@ -131,7 +128,12 @@ fun ShakeGesturesScreen(
                         SettingSwitchRow(
                             title = stringResource(R.string.shake_gestures_title),
                             subtitle = null,
-                            icon = { label -> Icon(Icons.Default.ScreenRotation, contentDescription = label) },
+                            icon = { label ->
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_nav_shake_outlined),
+                                    contentDescription = label,
+                                )
+                            },
                             checked = settings.enabled,
                             enabled = true,
                             onCheckedChange = onEnabledChange,
@@ -141,6 +143,8 @@ fun ShakeGesturesScreen(
             ),
         )
         settingsLazySmallTitle(key = "shake-basic", title = basicSectionTitle)
+        val workModes = settings.workModes
+        // 基础动作与生效时段合到同一张卡：基础动作下面是"什么时候生效"，语义上是一组。
         groupedCardItems(
             keyPrefix = "shake-basic-actions",
             items = buildList {
@@ -153,18 +157,13 @@ fun ShakeGesturesScreen(
                                 title = shakeGestureLabel(type),
                                 action = settings.actionFor(type),
                                 enabled = true,
+                                activityShortcuts = appSettings?.activityShortcuts.orEmpty(),
+                                shellCommands = appSettings?.shellCommands.orEmpty(),
                                 onClick = { onOpenBasicActionPick(type) },
                             )
                         },
                     )
                 }
-            },
-        )
-        settingsLazySmallTitle(key = "shake-work-mode", title = workModeSectionTitle)
-        val workModes = settings.workModes
-        groupedCardItems(
-            keyPrefix = "shake-work-mode",
-            items = buildList {
                 add(
                     settingsCardScopeItem("shake-work-mode-always") {
                         SettingCheckboxRow(
@@ -208,6 +207,16 @@ fun ShakeGesturesScreen(
             keyPrefix = "shake-action-scope",
             items = buildList {
                 add(
+                    settingsCardScopeItem("shake-disable-landscape") {
+                        SettingSwitchRow(
+                            title = stringResource(R.string.shake_gestures_disable_landscape),
+                            checked = settings.disableInLandscape,
+                            enabled = settings.enabled,
+                            onCheckedChange = onDisableInLandscapeChange,
+                        )
+                    },
+                )
+                add(
                     settingsCardScopeItem("shake-lock-screen") {
                         SettingNavigationRow(
                             title = stringResource(R.string.shake_gestures_lock_screen),
@@ -243,9 +252,47 @@ fun ShakeGesturesScreen(
                         )
                     },
                 )
+                add(
+                    settingsCardScopeItem("shake-app-blacklist") {
+                        SettingNavigationRow(
+                            icon = { label ->
+                                ColoredSettingIcon(
+                                    icon = Icons.Default.Block,
+                                    background = Color(0xFFFF9800),
+                                    contentDescription = label,
+                                )
+                            },
+                            title = stringResource(R.string.shake_gestures_app_blacklist),
+                            subtitle = stringResource(R.string.shake_gestures_app_blacklist_desc),
+                            enabled = settings.enabled,
+                            onClick = onOpenAppBlacklist,
+                            trailingContent = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    if (settings.blacklistedPackages.isNotEmpty()) {
+                                        Text(
+                                            text = settings.blacklistedPackages.size.toString(),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                        contentDescription = stringResource(R.string.cd_navigate_forward),
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                        )
+                    },
+                )
             },
         )
         settingsLazySmallTitle(key = "shake-sensitivity", title = sensitivitySectionTitle)
+        // 灵敏度与反馈都是"手感"，合到同一张卡。
         groupedCardItems(
             keyPrefix = "shake-sensitivity",
             items = buildList {
@@ -270,13 +317,6 @@ fun ShakeGesturesScreen(
                         SettingSwitchNavigationRow(
                             title = stringResource(R.string.shake_gestures_independent_sensitivity),
                             subtitle = stringResource(R.string.shake_gestures_independent_sensitivity_desc),
-                            icon = { label ->
-                                ColoredSettingIcon(
-                                    icon = Icons.Default.ScreenRotation,
-                                    background = Color(0xFF26A69A),
-                                    contentDescription = label,
-                                )
-                            },
                             checked = settings.independentSensitivityEnabled,
                             enabled = settings.enabled,
                             onCheckedChange = onIndependentSensitivityEnabledChange,
@@ -284,13 +324,6 @@ fun ShakeGesturesScreen(
                         )
                     },
                 )
-            },
-        )
-        settingsLazyHint(key = "shake-sensitivity-hint", text = sensitivityHint)
-        settingsLazySmallTitle(key = "shake-feedback", title = feedbackSectionTitle)
-        groupedCardItems(
-            keyPrefix = "shake-feedback",
-            items = buildList {
                 add(
                     settingsCardScopeItem("shake-vibration-feedback") {
                         SettingSwitchRow(
@@ -367,89 +400,40 @@ fun ShakeGesturesScreen(
                     },
                 )
                 add(
-                    settingsCardScopeItem("shake-disable-landscape") {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.shake_gestures_disable_landscape),
-                            checked = settings.disableInLandscape,
-                            enabled = settings.enabled,
-                            onCheckedChange = onDisableInLandscapeChange,
+                    settingsCardScopeItem("face-down-settings") {
+                        SettingNavigationRow(
+                            icon = { label ->
+                                ColoredSettingIcon(
+                                    icon = Icons.Default.PhoneAndroid,
+                                    background = Color(0xFF78909C),
+                                    contentDescription = label,
+                                )
+                            },
+                            title = stringResource(R.string.face_down_gestures_title),
+                            subtitle = stringResource(R.string.face_down_gestures_subtitle),
+                            onClick = onOpenFaceDownSettings,
                         )
                     },
                 )
                 add(
-                    settingsCardScopeItem("shake-app-blacklist") {
+                    settingsCardScopeItem("back-tap-settings") {
                         SettingNavigationRow(
                             icon = { label ->
                                 ColoredSettingIcon(
-                                    icon = Icons.Default.Block,
-                                    background = Color(0xFFFF9800),
+                                    icon = Icons.Default.TouchApp,
+                                    background = Color(0xFF26A69A),
                                     contentDescription = label,
                                 )
                             },
-                            title = stringResource(R.string.shake_gestures_app_blacklist),
-                            subtitle = stringResource(R.string.shake_gestures_app_blacklist_desc),
-                            enabled = settings.enabled,
-                            onClick = onOpenAppBlacklist,
-                            trailingContent = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    if (settings.blacklistedPackages.isNotEmpty()) {
-                                        Text(
-                                            text = settings.blacklistedPackages.size.toString(),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                        contentDescription = stringResource(R.string.cd_navigate_forward),
-                                        modifier = Modifier.size(20.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
+                            title = stringResource(R.string.extension_back_tap_title),
+                            subtitle = stringResource(R.string.extension_back_tap_subtitle),
+                            onClick = onOpenBackTapSettings,
                         )
                     },
                 )
             },
         )
-        settingsLazySmallTitle(key = "shake-other-gestures", title = otherGesturesSectionTitle)
-        settingsLazyHint(key = "shake-other-gestures-hint", text = otherGesturesHint)
-        groupedCardItems(
-            keyPrefix = "shake-other-gestures",
-            items = listOf(
-                settingsCardScopeItem("face-down-settings") {
-                    SettingNavigationRow(
-                        icon = { label ->
-                            ColoredSettingIcon(
-                                icon = Icons.Default.PhoneAndroid,
-                                background = Color(0xFF78909C),
-                                contentDescription = label,
-                            )
-                        },
-                        title = stringResource(R.string.face_down_gestures_title),
-                        subtitle = stringResource(R.string.face_down_gestures_subtitle),
-                        onClick = onOpenFaceDownSettings,
-                    )
-                },
-                settingsCardScopeItem("back-tap-settings") {
-                    SettingNavigationRow(
-                        icon = { label ->
-                            ColoredSettingIcon(
-                                icon = Icons.Default.TouchApp,
-                                background = Color(0xFF26A69A),
-                                contentDescription = label,
-                            )
-                        },
-                        title = stringResource(R.string.extension_back_tap_title),
-                        subtitle = stringResource(R.string.extension_back_tap_subtitle),
-                        onClick = onOpenBackTapSettings,
-                    )
-                },
-            ),
-        )
+        settingsLazyHint(key = "shake-advanced-features-hint", text = otherGesturesHint)
     }
 }
 
@@ -460,6 +444,8 @@ private fun SettingsCardScope.ShakeActionRow(
     title: String,
     action: GestureAction,
     enabled: Boolean,
+    activityShortcuts: List<com.slideindex.app.activity.ActivityShortcut> = emptyList(),
+    shellCommands: List<com.slideindex.app.shell.ShellCommand> = emptyList(),
     onClick: () -> Unit,
 ) {
     SettingNavigationRow(
@@ -474,6 +460,8 @@ private fun SettingsCardScope.ShakeActionRow(
             GestureActionSettingTrailing(
                 action = action,
                 enabled = enabled,
+                activityShortcuts = activityShortcuts,
+                shellCommands = shellCommands,
                 onClick = onClick,
             )
         },

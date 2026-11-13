@@ -60,8 +60,40 @@ class HomeViewModel @AssistedInject constructor(
         }
     }
 
-    fun setHapticGestureTriggerEnabled(enabled: Boolean) = launchSettingsWrite {
-        settingsRepository.setHapticGestureTriggerEnabled(enabled)
+    fun setHapticShortThresholdEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticShortThresholdEnabled(enabled)
+    }
+
+    fun setHapticCompoundTurnEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticCompoundTurnEnabled(enabled)
+    }
+
+    fun setHapticReturnSwipeEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticReturnSwipeEnabled(enabled)
+    }
+
+    fun setHapticHoverEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticHoverEnabled(enabled)
+    }
+
+    fun setHapticLongPressEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticLongPressEnabled(enabled)
+    }
+
+    fun setHapticLongThresholdEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticLongThresholdEnabled(enabled)
+    }
+
+    fun setHapticSlotLetterEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticSlotLetterEnabled(enabled)
+    }
+
+    fun setHapticSlotAppEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticSlotAppEnabled(enabled)
+    }
+
+    fun setHapticActionConfirmEnabled(enabled: Boolean) = launchSettingsWrite {
+        settingsRepository.setHapticActionConfirmEnabled(enabled)
     }
 
     fun setHapticSlotSelectionEnabled(enabled: Boolean) = launchSettingsWrite {

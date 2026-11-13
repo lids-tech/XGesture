@@ -298,6 +298,8 @@ data class FloatBallSettings(
     val floatBallCustomImageAspect: Float = 0f,
     /** 幻灯片图片 URI 列表（[floatBallStyleType] 为 SLIDESHOW 时使用）。 */
     val floatBallSlideshowUris: List<String> = emptyList(),
+    /** 幻灯片切换间隔（秒）；1 秒 ~ 7 天，默认 3 秒 = 历史固定值。 */
+    val floatBallSlideshowIntervalSeconds: Int = DEFAULT_SLIDESHOW_INTERVAL_SECONDS,
     /** GIF 图片 URI（[floatBallStyleType] 为 GIF 时使用）。 */
     val floatBallGifUri: String = "",
     /** Gap between ball edge and pick crosshair in dp (above / below). */
@@ -325,6 +327,9 @@ data class FloatBallSettings(
      * 空串表示还没有记录过，读取方需回落默认值。
      */
     val floatBallPickTextModeLastMode: String = "",
+    /** 点词粒度：分词（可见 chip）或不分词（按字符选、无 chip）。 */
+    val floatBallPickWordTapGranularity: PickResultWordTapGranularity =
+        PickResultWordTapGranularity.WORD,
     /** Pick panel: engine used by search-button long-press quick search (null = long press idle). */
     val floatBallPickDefaultSearchEngineId: String? = null,
     /** Pick panel: auto-select all text when the panel opens after word pick or screenshot. */
@@ -334,6 +339,16 @@ data class FloatBallSettings(
     /** Pick panel: primary copy chip on the left or right of the bottom action bar. */
     val floatBallPickCopyButtonPosition: PickResultCopyButtonPosition = PickResultCopyButtonPosition.LEFT,
     val floatBallPickImageToolbarPosition: PickResultImageToolbarPosition = PickResultImageToolbarPosition.LEFT,
+    /** Pick panel: 底栏纯图标模式（文本区 + 图片区一起切换）。开启后两项「位置」设置不再生效。 */
+    val floatBallPickIconBarEnabled: Boolean = false,
+    /** 文本区底栏按钮顺序（空 = 默认顺序）。 */
+    val floatBallPickTextBarOrder: List<String> = emptyList(),
+    /** 文本区底栏被隐藏的按钮 id。 */
+    val floatBallPickTextBarHidden: Set<String> = emptySet(),
+    /** 图片区底栏按钮顺序（空 = 默认顺序）。 */
+    val floatBallPickImageBarOrder: List<String> = emptyList(),
+    /** 图片区底栏被隐藏的按钮 id。 */
+    val floatBallPickImageBarHidden: Set<String> = emptySet(),
     /** Pick panel: enable subtle haptic feedback for copy and word tap drag selection. */
     val floatBallPickHapticEnabled: Boolean = true,
     /**
@@ -413,6 +428,29 @@ data class FloatBallSettings(
         const val IMAGE_ASPECT_MIN = 0.05f
         const val IMAGE_ASPECT_MAX = 20f
 
+        /** 幻灯片默认切换间隔（秒）。与 FV 一致，默认 10 秒。 */
+        const val DEFAULT_SLIDESHOW_INTERVAL_SECONDS = 10
+
+        /** FV 同款固定选项：10 秒 ~ 7 天。 */
+        val SLIDESHOW_INTERVAL_OPTIONS_SECONDS: List<Int> = listOf(
+            10,
+            60,
+            3 * 60,
+            5 * 60,
+            10 * 60,
+            30 * 60,
+            60 * 60,
+            12 * 60 * 60,
+            24 * 60 * 60,
+            7 * 24 * 60 * 60,
+        )
+
+        /** 只接受 FV 选项；旧值/脏值按最接近的选项归一。 */
+        fun normalizeSlideshowIntervalSeconds(value: Int): Int =
+            SLIDESHOW_INTERVAL_OPTIONS_SECONDS.minByOrNull { option ->
+                kotlin.math.abs(option - value)
+            } ?: DEFAULT_SLIDESHOW_INTERVAL_SECONDS
+
         /** 触发带宽度的默认值：与旧默认 4%（在 1080px / density 3 的竖屏上被 24dp 下限顶住）一致。 */
         const val DEFAULT_LINE_WIDTH_DP = 24f
         /** 下限 0 = 该侧线条只显示、不接收触摸。 */
@@ -476,6 +514,12 @@ data class ClipboardSettings(
     val clipboardHistoryFloatHandleYPortrait: Int = HistoryFloatHandlePosition.UNSET_POSITION,
     /** Saved handle top offset in px for landscape; [HistoryFloatHandlePosition.UNSET_POSITION] = default. */
     val clipboardHistoryFloatHandleYLandscape: Int = HistoryFloatHandlePosition.UNSET_POSITION,
+    /** 贴边把手视觉粗细（dp），见 [HistoryFloatHandleAppearance]。 */
+    val clipboardHistoryFloatHandleWidthDp: Float = HistoryFloatHandleAppearance.DEFAULT_WIDTH_DP,
+    /** 贴边把手视觉长度（dp）。 */
+    val clipboardHistoryFloatHandleHeightDp: Float = HistoryFloatHandleAppearance.DEFAULT_HEIGHT_DP,
+    /** 贴边把手静止态不透明度（0..1）。 */
+    val clipboardHistoryFloatHandleAlpha: Float = HistoryFloatHandleAppearance.DEFAULT_ALPHA,
     /** Floating clipboard window for input scenarios (grid, resize, paste on tap). */
     val clipboardFloatEnabled: Boolean = false,
     /** When true, show a chip above the keyboard before expanding the full window. */
@@ -574,6 +618,8 @@ data class SearchPanelSettings(
     val searchPanelSectionAliases: SearchPanelSectionAliasSettings = SearchPanelSectionAliasSettings(),
     val aggregatedImageSearchEngines: List<AggregatedImageSearchEngineConfig> =
         AppSettings.defaultAggregatedImageSearchEngines(),
+    /** 搜图面板的引擎区是否显示合成的「聚合搜图」入口。 */
+    val searchPanelShowAggregatedImageEntry: Boolean = true,
 )
 
 /** 自由小窗模式与尺寸。 */
@@ -607,6 +653,14 @@ data class WidgetPanelSettings(
     val widgetPanelBlurRadiusDp: Int = AppSettings.WIDGET_PANEL_BLUR_RADIUS_DEFAULT_DP,
     /** 点击小组件后收起面板的策略：0=仅外部 Activity，1=总是，2=从不。 */
     val widgetPanelCloseOnClickMode: Int = 0,
+    /**
+     * 是否在应用/快捷方式/动作图标下方显示名称。
+     *
+     * 关掉后只显示图标、图标垂直居中；名称仍用于无障碍朗读与点击命中区域。
+     * 开着时如果格子小到放不下（图标压缩到下限仍然越界），也会自动只画图标，
+     * 避免文字被下一行图标裁掉。
+     */
+    val widgetPanelShowLabels: Boolean = true,
 )
 
 /** 验证码提取与自动填充规则。 */

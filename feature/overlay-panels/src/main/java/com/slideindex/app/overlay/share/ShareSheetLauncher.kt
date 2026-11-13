@@ -1,5 +1,6 @@
 package com.slideindex.app.overlay.share
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -15,8 +16,15 @@ object ShareSheetLauncher {
 
     private const val TAG = "ShareSheetLauncher"
 
+    /**
+     * 总开关从设置快照读（[com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot]，
+     * `:app` 启动时已绑定）。不再单开专用钩子：专用槽位一旦漏绑定，就会静默退化成"永远关"，
+     * 而这里没有任何兜底能看出来 —— v1.64.0 的内置分享面板正是这样失效的。
+     */
     fun isEnabled(context: Context): Boolean =
-        com.slideindex.app.overlay.panels.PanelRuntimeHooks.isShareSheetEnabled?.invoke(context) == true
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot
+            ?.invoke(context)
+            ?.shareSheetEnabled == true
 
     /**
      * 分享 [payload]。
@@ -30,8 +38,13 @@ object ShareSheetLauncher {
         payload: ShareSheetPayload,
         dismissSource: (() -> Unit)? = null,
     ): Boolean {
-        if (isEnabled(context) && ShareSheetOverlayWindow.show(context, payload, beforeSend = dismissSource)) {
+        val enabled = isEnabled(context)
+        if (enabled && ShareSheetOverlayWindow.show(context, payload, beforeSend = dismissSource)) {
             return true
+        }
+        if (!enabled) {
+            // 开关为关时不再一言不发：曾经因为"静默回退"完全看不出面板为什么没出现。
+            Log.d(TAG, "share sheet disabled in settings, falling back to system chooser")
         }
         // 没开开关 / 无障碍宿主不在：退回老路。系统面板必须由我们先把浮层收掉才能露出来。
         runCatching { dismissSource?.invoke() }
@@ -48,5 +61,39 @@ object ShareSheetLauncher {
             Log.w(TAG, "system chooser failed", it)
             false
         }
+    }
+
+    /**
+     * 直发到默认目标（取词面板文字 / 图片分享键的"点一下就走"）。
+     *
+     * 没设默认、目标被卸载 / 禁用、或启动失败都返回 false —— 调用方据此退回 [share]
+     * （弹面板），所以这里**失败时不要先收起来源浮窗**。
+     */
+    fun shareToDefault(
+        context: Context,
+        payload: ShareSheetPayload,
+        dismissSource: (() -> Unit)? = null,
+    ): Boolean {
+        if (!ShareSheetDefaults.supports(payload.kind)) return false
+        val target = ShareSheetDefaults.resolve(context, payload.kind) ?: return false
+        return shareToTarget(context, payload, target, dismissSource)
+    }
+
+    /** 直发到指定目标：补 `component` 后 StartActivity；成功启动返回 true。 */
+    fun shareToTarget(
+        context: Context,
+        payload: ShareSheetPayload,
+        target: ShareDefaultTarget,
+        dismissSource: (() -> Unit)? = null,
+    ): Boolean {
+        val intent = payload.intent().apply {
+            component = ComponentName(target.packageName, target.activityClassName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        // 目标 App 起来后必须压在浮层上面：先用调用方给的 lambda 收起来源浮窗。
+        runCatching { dismissSource?.invoke() }
+        return runCatching { context.startActivity(intent) }
+            .onFailure { Log.w(TAG, "default target launch failed: ${target.key}", it) }
+            .isSuccess
     }
 }

@@ -1,6 +1,5 @@
 package com.slideindex.app.ui
 
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -29,6 +28,7 @@ import com.slideindex.app.ui.settings.components.SettingNavigationRow
 import com.slideindex.app.ui.settings.components.SettingsHintText
 import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
+import com.slideindex.app.ui.settings.components.settingsLazyHint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -132,7 +132,7 @@ fun SearchPanelShortcutSearchSettingsScreen(
                 add(
                     settingsCardScopeItem("index-refresh") {
                         SettingNavigationRow(
-                            icon = { label -> Icon(Icons.Default.Bolt, contentDescription = label) },
+                            icon = { label -> SymbolsIcon("Bolt", contentDescription = label) },
                             title = stringResource(R.string.search_panel_shortcut_index_refresh),
                             subtitle = indexCount?.let {
                                 pluralStringResource(R.plurals.search_panel_shortcut_index_count, it, it)
@@ -192,13 +192,9 @@ fun SearchPanelClipboardSearchSettingsScreen(
                         )
                     },
                 )
-                add(
-                    settingsCardScopeItem("index-hint") {
-                        SettingsHintText(indexHint)
-                    },
-                )
             },
         )
+        settingsLazyHint(key = "clipboard-index-hint", text = indexHint)
     }
 
     MiuixConfirmDialog(

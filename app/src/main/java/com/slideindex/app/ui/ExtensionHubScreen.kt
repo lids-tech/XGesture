@@ -4,8 +4,6 @@ package com.slideindex.app.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Shortcut
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.Gavel
@@ -193,7 +191,7 @@ fun ExtensionHubScreen(
                 add(
                     settingsCardScopeItem("freezer") {
                         SettingNavigationRow(
-                            icon = { label -> Icon(Icons.Outlined.AcUnit, contentDescription = label) },
+                            icon = { label -> SymbolsIcon("AcUnit", contentDescription = label) },
                             title = stringResource(R.string.extension_freezer_title),
                             subtitle = stringResource(R.string.extension_freezer_subtitle),
                             onClick = onOpenFreezer
@@ -239,7 +237,7 @@ fun ExtensionHubScreen(
                 add(
                     settingsCardScopeItem("share-sheet") {
                         SettingNavigationRow(
-                            icon = { label -> Icon(Icons.Outlined.Share, contentDescription = label) },
+                            icon = { label -> SymbolsIcon("Share", contentDescription = label) },
                             title = stringResource(R.string.share_sheet_settings_title),
                             subtitle = stringResource(R.string.share_sheet_hub_subtitle),
                             onClick = onOpenShareSheet,
@@ -251,7 +249,7 @@ fun ExtensionHubScreen(
                         SettingNavigationRow(
                             icon = { label ->
                                 Icon(
-                                    Icons.AutoMirrored.Filled.Shortcut,
+                                    ThinActionIcons.Shortcut,
                                     contentDescription = label,
                                 )
                             },
@@ -334,7 +332,7 @@ fun SettingsCardScope.NativeEnginePacksEntryCard(
     onClick: () -> Unit
 ) {
     SettingNavigationRow(
-        icon = { label -> Icon(Icons.Outlined.Memory, contentDescription = label) },
+        icon = { label -> SymbolsIcon("Memory", contentDescription = label) },
         title = stringResource(R.string.extension_native_engine_packs_entry_title),
         subtitle = stringResource(R.string.extension_native_engine_packs_entry_desc),
         onClick = onClick
@@ -347,7 +345,7 @@ fun SettingsCardScope.DiagnosticLogsEntryCard(
     onClick: () -> Unit
 ) {
     SettingNavigationRow(
-        icon = { label -> Icon(Icons.Outlined.BugReport, contentDescription = label) },
+        icon = { label -> SymbolsIcon("BugReport", contentDescription = label) },
         title = stringResource(R.string.diagnostic_report_entry_title),
         subtitle = stringResource(R.string.diagnostic_report_entry_subtitle),
         onClick = onClick
@@ -370,7 +368,7 @@ fun SettingsCardScope.AboutEntryCard(
 @Composable
 fun SettingsCardScope.PrivacyPolicyEntryCard(onClick: () -> Unit) {
     SettingNavigationRow(
-        icon = { label -> Icon(Icons.AutoMirrored.Outlined.Article, contentDescription = label) },
+        icon = { label -> SymbolsIcon("Article", contentDescription = label, mirrored = true) },
         title = stringResource(R.string.privacy_policy_entry_title),
         subtitle = stringResource(R.string.privacy_policy_entry_desc),
         onClick = onClick
@@ -380,7 +378,7 @@ fun SettingsCardScope.PrivacyPolicyEntryCard(onClick: () -> Unit) {
 @Composable
 fun SettingsCardScope.OpenSourceLicenseEntryCard(onClick: () -> Unit) {
     SettingNavigationRow(
-        icon = { label -> Icon(Icons.Outlined.Gavel, contentDescription = label) },
+        icon = { label -> SymbolsIcon("Gavel", contentDescription = label) },
         title = stringResource(R.string.about_open_source_license_title),
         subtitle = stringResource(R.string.about_open_source_license_desc),
         onClick = onClick
@@ -390,7 +388,7 @@ fun SettingsCardScope.OpenSourceLicenseEntryCard(onClick: () -> Unit) {
 @Composable
 fun SettingsCardScope.ThirdPartyNoticesEntryCard(onClick: () -> Unit) {
     SettingNavigationRow(
-        icon = { label -> Icon(Icons.Outlined.Favorite, contentDescription = label) },
+        icon = { label -> SymbolsIcon("Favorite", contentDescription = label) },
         title = stringResource(R.string.about_third_party_notices_title),
         subtitle = stringResource(R.string.about_third_party_notices_subtitle),
         onClick = onClick

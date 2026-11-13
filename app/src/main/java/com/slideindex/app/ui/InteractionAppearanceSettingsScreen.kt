@@ -61,11 +61,7 @@ fun InteractionAppearanceSettingsScreen(
     onBack: () -> Unit,
     onIconPlateModeChange: (com.slideindex.app.settings.IconPlateMode) -> Unit = {},
     iconPlateMode: com.slideindex.app.settings.IconPlateMode = com.slideindex.app.settings.IconPlateMode.SYSTEM_DARK,
-    onHapticEnabledChange: (Boolean) -> Unit,
-    onHapticStrengthChange: (Int) -> Unit,
-    onHapticGestureTriggerEnabledChange: (Boolean) -> Unit,
-    onHapticSlotSelectionEnabledChange: (Boolean) -> Unit,
-    onHapticConfirmLaunchEnabledChange: (Boolean) -> Unit,
+    onOpenHapticSettings: () -> Unit,
     onSwipeDismissEnabledChange: (Boolean) -> Unit,
     onPredictiveBackEnabledChange: (Boolean) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
@@ -98,19 +94,6 @@ fun InteractionAppearanceSettingsScreen(
     )
 
 
-    val view = LocalView.current
-    val hapticLightLabel = stringResource(R.string.haptic_strength_light)
-    val hapticMediumLabel = stringResource(R.string.haptic_strength_medium)
-    val hapticStrongLabel = stringResource(R.string.haptic_strength_strong)
-    val hapticFormatLabel = remember(hapticLightLabel, hapticMediumLabel, hapticStrongLabel) {
-        { level: Float ->
-            when (level.roundToInt()) {
-                0 -> hapticLightLabel
-                2 -> hapticStrongLabel
-                else -> hapticMediumLabel
-            }
-        }
-    }
     val themeAppearanceItems = themeAppearanceSettingsCardItems(
         outlinedPreferenceIcons = true,
         themeModeId = settings.themeModeId,
@@ -218,55 +201,12 @@ fun InteractionAppearanceSettingsScreen(
             items = buildList {
                 add(
                     settingsCardScopeItem("haptic") {
-                        SettingExpandableSwitchRow(
-                            title = stringResource(R.string.haptic_enabled),
-                            checked = settings.hapticEnabled,
-                            enabled = true,
-                            onCheckedChange = onHapticEnabledChange,
-                        ) {
-                            SettingsSliderRow(
-                                title = stringResource(R.string.haptic_strength),
-                                value = settings.hapticStrengthLevel.toFloat(),
-                                valueRange = 0f..2f,
-                                steps = 1,
-                                enabled = true,
-                                label = hapticFormatLabel(settings.hapticStrengthLevel.toFloat()),
-                                formatLabel = hapticFormatLabel,
-                                commitOnFinish = true,
-                                triggersLayoutPreview = true,
-                                onLayoutPreviewValueChange = { level ->
-                                    HapticHelper.preview(
-                                        view,
-                                        AppSettings(
-                                            hapticEnabled = true,
-                                            hapticStrengthLevel = level.roundToInt(),
-                                        ),
-                                    )
-                                },
-                                onValueChange = { onHapticStrengthChange(it.roundToInt()) },
-                            )
-                            SwitchPreference(
-                                title = stringResource(R.string.haptic_gesture_trigger_title),
-                                summary = stringResource(R.string.haptic_gesture_trigger_desc),
-                                checked = settings.hapticGestureTriggerEnabled,
-                                enabled = true,
-                                onCheckedChange = onHapticGestureTriggerEnabledChange,
-                            )
-                            SwitchPreference(
-                                title = stringResource(R.string.haptic_slot_selection_title),
-                                summary = stringResource(R.string.haptic_slot_selection_desc),
-                                checked = settings.hapticSlotSelectionEnabled,
-                                enabled = true,
-                                onCheckedChange = onHapticSlotSelectionEnabledChange,
-                            )
-                            SwitchPreference(
-                                title = stringResource(R.string.haptic_confirm_launch_title),
-                                summary = stringResource(R.string.haptic_confirm_launch_desc),
-                                checked = settings.hapticConfirmLaunchEnabled,
-                                enabled = true,
-                                onCheckedChange = onHapticConfirmLaunchEnabledChange,
-                            )
-                        }
+                        SettingNavigationRow(
+                            icon = { label -> Icon(HomeLeadingIcons.haptic(true), contentDescription = label) },
+                            title = stringResource(R.string.haptic_settings_title),
+                            subtitle = stringResource(R.string.haptic_settings_desc),
+                            onClick = onOpenHapticSettings,
+                        )
                     },
                 )
                 add(

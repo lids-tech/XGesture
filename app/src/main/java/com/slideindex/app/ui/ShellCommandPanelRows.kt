@@ -37,6 +37,7 @@ import com.slideindex.app.privilege.PrivilegeGateway
 import com.slideindex.app.privilege.PrivilegeUiStrings
 import androidx.compose.foundation.layout.width
 import com.slideindex.app.shell.ShellCommand
+import com.slideindex.app.shell.ShellCommandModeResolver
 import com.slideindex.app.shell.ShellExecutionMode
 import com.slideindex.app.ui.miuix.MiuixFormDialog
 import com.slideindex.app.ui.settings.components.SettingLinkRow
@@ -196,11 +197,11 @@ internal fun ShellExecutionEnvironmentCard(
     }
     val shizukuNeedsGrant = !shizukuGranted && PrivilegeGateway.isShizukuMode()
     var showDetails by remember { mutableStateOf(false) }
-    val statusColor = when {
-        checkingRoot || restartingService -> MaterialTheme.colorScheme.outline
-        rootAvailable == false || shizukuNeedsGrant -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.primary
-    }
+    val statusColor = shellEnvironmentStatus(
+        checking = checkingRoot || restartingService,
+        rootAvailable = rootAvailable,
+        shizukuGranted = shizukuGranted,
+    ).color()
 
     val card = settingsCardItems(rootAvailable, checkingRoot, shizukuGranted, restartingService) {
         SettingsCardRow(key = "shell_environment") { position ->
@@ -295,10 +296,12 @@ internal fun ShellCommandCard(
     item: ShellCommand,
     running: Boolean,
     enabled: Boolean,
+    available: Boolean = true,
     onEdit: () -> Unit,
     onRun: () -> Unit,
 ) {
     Card(
+        onClick = onEdit,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -316,15 +319,13 @@ internal fun ShellCommandCard(
                     command = item,
                     modifier = Modifier
                         .padding(top = 2.dp, end = 8.dp)
-                        .size(32.dp)
-                        .clickable(onClick = onEdit),
+                        .size(32.dp),
                 )
             }
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = 4.dp)
-                    .clickable(onClick = onEdit),
+                    .padding(end = 4.dp),
             ) {
                 Text(
                     text = item.label,
@@ -335,14 +336,21 @@ internal fun ShellCommandCard(
                 )
                 Text(
                     text = stringResource(
-                        when (item.executionMode) {
+                        when (item.executionMode ?: ShellCommandModeResolver.currentDefault()) {
                             ShellExecutionMode.ROOT -> R.string.shell_panel_mode_root
                             ShellExecutionMode.SHIZUKU -> R.string.shell_panel_mode_shizuku
-                            null -> R.string.shell_panel_mode_unset
                         },
-                    ),
+                    ) + if (!available) {
+                        " · " + stringResource(R.string.shell_panel_mode_status_unavailable)
+                    } else {
+                        ""
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (available) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -368,7 +376,11 @@ internal fun ShellCommandCard(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = stringResource(R.string.shell_panel_run),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (available) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }

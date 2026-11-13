@@ -112,12 +112,37 @@ object RingLauncherOverlayWindow {
             return
         }
         val hostContext = overlayHostContext() ?: return
-        val settings = lastSettings
         val axis = currentAxis()
+        // 优先独立 Activity 的整页编辑器（与边角轮盘一致）；圆环先挂起，Activity 结束时
+        // `resumeAfterSlotIconEditor` 恢复。启动失败才退回浮层 sheet。
+        suspendForSlotIconEditor()
+        val launched = com.slideindex.app.overlay.panels.PanelRuntimeHooks.ringSlotConfigSheetContent
+            ?.launchExternalEditor(hostContext, axis, slotIndex) == true
+        if (launched) return
+        resumeAfterSlotIconEditor()
+        showSlotPickerOverlay(hostContext, axis, slotIndex)
+    }
+
+    /** 兜底：外置编辑页起不来时，仍在浮层里弹槽位 sheet。 */
+    private fun showSlotPickerOverlay(
+        hostContext: Context,
+        axis: FvRingLauncherAxis,
+        slotIndex: Int,
+    ) {
+        val settings = lastSettings
         val currentItem = settings.fvRingLauncherFor(axis).itemAt(slotIndex)
         val dialogHost = slotConfigDialogHost ?: OverlayComposeDialogHost(
             context = hostContext,
-            applyTheme = { content -> ModuleTheme(settings = lastSettings) { content() } },
+            applyTheme = { content ->
+                ModuleTheme(settings = lastSettings) {
+                    // 槽位面板复用快捷启动器的「添加」区，里面的可组合会读 AppRepository。
+                    // 浮层合成默认没有 LocalAppDependencies，必须在这里补上，
+                    // 否则点开槽位就抛 "AppDependencies not provided" 闪退。
+                    val provider =
+                        com.slideindex.app.overlay.panels.PanelRuntimeHooks.appDependenciesComposition
+                    if (provider != null) provider.provide(content) else content()
+                }
+            },
         ).also { slotConfigDialogHost = it }
 
         // 圆环槽位的应用列表要和动作选择 / 索引一致：带分身条目、带冻结 / 暂停状态。
@@ -226,17 +251,22 @@ object RingLauncherOverlayWindow {
         val appsByPackage = apps.associateBy { it.packageName }
 
         val wm = hostContext.getSystemService(android.view.WindowManager::class.java)
-        val (density, screenWidth) = com.slideindex.app.overlay.panels.PanelFloatBallHooks.overlayLayoutMetrics?.invoke(settings)
-            ?: (context.resources.displayMetrics.density to
-                context.resources.displayMetrics.widthPixels.toFloat())
-            ?: run {
-                val layoutMetrics = OverlayDisplayMetrics.resolve(hostContext, wm, null)
-                layoutMetrics.density to OverlayDisplayMetrics.screenWidthPx(hostContext, wm, layoutMetrics)
-            }
-        val screenHeight = run {
-            val layoutMetrics = OverlayDisplayMetrics.resolve(hostContext, wm, density)
-            layoutMetrics.heightPixels.toFloat().coerceAtLeast(1f)
-        }
+        // 一次算清 density / 宽 / 高：三者必须来自**同一帧** WindowMetrics。
+        // 分两次读的话，旋转瞬间 bounds 可能已经换了一帧，宽度和高度来自不同方向，
+        // resolveFvSide() 就会把左右上下判错（表现为圆环贴错边）。
+        //
+        // 密度允许带提示（悬浮球按自己的视图反推的那个），但宽度绝不允许从外面传进来：
+        // 1.64.x 的故障就是兜底常量把假密度（1f）和假宽度（1080f）一起带了进来，
+        // 圆环按 1dp=1px 画，在 2.75 密度的机器上只剩 36%，还贴着屏幕左边。
+        val layoutMetrics = OverlayDisplayMetrics.resolve(
+            context = hostContext,
+            windowManager = wm,
+            densityHint = com.slideindex.app.overlay.panels.PanelFloatBallHooks.layoutDensityHint
+                ?.invoke(settings),
+        )
+        val density = layoutMetrics.density
+        val screenWidth = layoutMetrics.widthPixels.toFloat().coerceAtLeast(1f)
+        val screenHeight = layoutMetrics.heightPixels.toFloat().coerceAtLeast(1f)
         val side = resolveFvSide(anchorRawX, anchorRawY, screenWidth, screenHeight, edgePanelSide)
         activeSide = side
         val fvSettings = settings.fvRingLauncherFor(side)

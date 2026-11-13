@@ -53,7 +53,9 @@ import com.slideindex.app.service.SlideIndexAccessibilityService
 import com.slideindex.app.translate.overlay.ScreenTranslationController
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.shell.ShellCommand
+import com.slideindex.app.shell.ShellCommandModeResolver
 import com.slideindex.app.util.ShellCommandRunner
+import com.slideindex.app.util.ShellResultFormatter
 import com.slideindex.app.util.AssistantLauncher
 import com.slideindex.app.util.VoiceActionHelper
 import com.slideindex.app.util.ContinuousAdjustController
@@ -61,6 +63,7 @@ import com.slideindex.app.util.FlashlightHelper
 import com.slideindex.app.util.FreeWindowTriggerAnchor
 import com.slideindex.app.util.InputMethodHelper
 import com.slideindex.app.util.InputTapUtil
+import com.slideindex.app.util.NfcToggleHelper
 import com.slideindex.app.util.OverlayBrightnessControl
 import com.slideindex.app.util.QuickToolsHelper
 import com.slideindex.app.util.ScreenRecordHelper
@@ -311,9 +314,15 @@ class ActionExecutor(
                         anchorMode = action.anchorMode,
                     )
                 }
-            GestureAction.WidgetPopupOverlay ->
+            is GestureAction.WidgetPopupOverlay ->
                 overlayPanels.showStandaloneOverlay(anchorRawY) { y ->
-                    WidgetPopupOverlayWindow.show(context, settings, resolvedSide, y)
+                    WidgetPopupOverlayWindow.show(
+                        context = context,
+                        settings = settings,
+                        side = resolvedSide,
+                        anchorRawY = y,
+                        initialPageId = action.panelId,
+                    )
                 }
             GestureAction.StashPanel -> FloatBallStashPanel.toggle(
                 context = context,
@@ -402,6 +411,12 @@ class ActionExecutor(
             }
             GestureAction.ToggleWifi -> QuickToolsHelper.toggleWifi(context) == true
             GestureAction.ToggleMobileData -> QuickToolsHelper.toggleMobileData(context) == true
+            GestureAction.ToggleNfc -> {
+                // NFC 的开关调用走反射 / binder，绝不放主线程（历史上 `svc nfc` 不退出，直接把主线程卡到 ANR）。
+                CoroutineScope(Dispatchers.IO).launch { performNfcToggle() }
+                true
+            }
+            GestureAction.ToggleBluetooth -> toggleBluetoothAction()
             GestureAction.ToggleShakeGesture -> {
                 CoroutineScope(Dispatchers.IO).launch {
                     val deps = com.slideindex.app.di.OverlayDependencyAccess.overlayDependencies(context)
@@ -452,6 +467,7 @@ class ActionExecutor(
             GestureAction.MediaNext -> SystemGestureActions.dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
             GestureAction.OpenInternetPanel -> SystemGestureActions.openNativeInternetPanel(context)
             GestureAction.OpenVolumePanel -> SystemGestureActions.openNativeVolumePanel(context)
+            GestureAction.OpenVolumeSlider -> SystemGestureActions.openNativeVolumeHud(context)
             GestureAction.VolumeUp -> {
                 SystemGestureActions.volumeUp(context)
                 true
@@ -635,17 +651,50 @@ class ActionExecutor(
         }
     }
 
+    /**
+     * NFC 开关（在 IO 线程执行）：优先进程内反射，其次 Shizuku binder，最后降级系统设置页。
+     * 没有 NFC 硬件的机型只给一句提示。
+     */
+    private fun performNfcToggle() {
+        when (NfcToggleHelper.toggle(context)) {
+            NfcToggleHelper.Outcome.TOGGLED -> Unit
+            NfcToggleHelper.Outcome.UNSUPPORTED -> NfcToggleHelper.notifyUnsupported(context)
+            NfcToggleHelper.Outcome.NEEDS_SETTINGS -> NfcToggleHelper.openSettings(context)
+        }
+    }
+
+    /** 蓝牙开关：无特权时降级打开蓝牙设置页。 */
+    private fun toggleBluetoothAction(): Boolean {
+        if (QuickToolsHelper.toggleBluetooth(context) == null) {
+            QuickToolsHelper.openBluetoothSettings(context)
+            return false
+        }
+        return true
+    }
+
     private fun executeShellCommand(action: GestureAction.ExecuteShellCommand): Boolean {
         val commandLine = action.command.trim()
         if (commandLine.isEmpty()) return false
         Thread {
-            ShellCommandRunner.execute(
+            val outcome = ShellCommandRunner.execute(
                 context = context,
                 command = ShellCommand(
                     label = "Gesture",
-                    command = commandLine
+                    command = commandLine,
+                    // 动作没有单独的执行方式：跟随全局权限模式，
+                    // 避免 1.62 之后被固定成默认的 Shizuku。
+                    executionMode = ShellCommandModeResolver.currentDefault(),
                 )
             )
+            if (outcome.exitCode != 0) {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(
+                        context,
+                        ShellResultFormatter.toast(context, outcome.exitCode, outcome.output),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
         }.start()
         return true
     }

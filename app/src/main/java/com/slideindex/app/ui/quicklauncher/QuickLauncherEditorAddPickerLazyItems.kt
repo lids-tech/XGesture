@@ -41,7 +41,6 @@ import com.slideindex.app.overlay.TaskSwitcherMenuItem
 import com.slideindex.app.ui.AppPackageEntry
 import com.slideindex.app.ui.gestureActionIcon
 import com.slideindex.app.ui.gesturepicker.gestureActionDescription
-import com.slideindex.app.ui.gesturepicker.gestureActionLabel
 import com.slideindex.app.ui.gesturepicker.gestureActionLabelText
 import com.slideindex.app.ui.picker.FilteredShortcutCatalog
 import com.slideindex.app.ui.picker.GestureActionCatalog
@@ -70,45 +69,18 @@ fun LazyListScope.quickLauncherAddPickerActionItems(
      */
     onRequestRunMacro: ((GestureAction) -> Unit) -> Unit = {},
     singleSelect: Boolean = false,
-    pinNoneAtTop: Boolean = false,
     noneSelected: Boolean = false,
     onSelectNone: () -> Unit = {},
     searchQuery: String = "",
 ) {
-    if (pinNoneAtTop) {
-        item(key = "ql-action-none") {
-            val noneLabel = stringResource(R.string.gesture_action_none)
-            val showNone = searchQuery.isBlank() || noneLabel.contains(searchQuery, ignoreCase = true)
-            if (showNone) {
-                com.slideindex.app.ui.Md3PickerListRow(
-                    segmentIndex = 0,
-                    segmentCount = 1,
-                    title = noneLabel,
-                    subtitle = null,
-                    selected = noneSelected,
-                    onClick = onSelectNone,
-                    leadingContent = {
-                        com.slideindex.app.ui.Md3PickerIconLeading(
-                            icon = gestureActionIcon(GestureAction.None, outlined = true),
-                            selected = noneSelected,
-                        )
-                    },
-                    trailingMode = com.slideindex.app.ui.PickerTrailingMode.Radio,
-                )
-            }
-        }
-    }
-
     if (filtered.isEmpty()) {
-        if (!pinNoneAtTop || !searchQuery.isBlank()) {
-            item(key = "actions_empty") {
-                Text(
-                    text = stringResource(R.string.search_no_actions),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
-                )
-            }
+        item(key = "actions_empty") {
+            Text(
+                text = stringResource(R.string.search_no_actions),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
+            )
         }
         return
     }
@@ -129,16 +101,27 @@ fun LazyListScope.quickLauncherAddPickerActionItems(
             ) {
                 rowActions.forEach { action ->
                     val context = LocalContext.current
+                    val isNone = action.type == GestureActionType.NONE
                     val added = QuickLauncherItemCodec.actionKey(action) in configuredActionKeys
-                    val cellLabel = if (action.type == GestureActionType.RUN_MACRO) {
-                        stringResource(R.string.macro_action_run_macro)
-                    } else {
-                        gestureActionLabel(action)
+                    val cellLabel = when {
+                        isNone -> stringResource(R.string.gesture_action_none)
+                        action.type == GestureActionType.RUN_MACRO ->
+                            stringResource(R.string.macro_action_run_macro)
+                        else -> {
+                            // 不能在这里用可组合版 gestureActionLabel()：这块添加区被浮层面板复用
+                            //（圆环槽位编辑），浮层合成里没有 LocalAppDependencies，调用会直接抛异常。
+                            gestureActionLabelText(context, action)
+                        }
                     }
                     PickerGridCell(
                         label = cellLabel,
-                        selected = !singleSelect && added,
+                        selected = if (isNone) noneSelected else added,
+                        singleSelect = singleSelect,
                         onClick = {
+                            if (isNone) {
+                                onSelectNone()
+                                return@PickerGridCell
+                            }
                             when (action.type) {
                                 GestureActionType.OPEN_LINK -> onOpenOpenLink()
                                 GestureActionType.EXECUTE_SHELL_COMMAND -> {
@@ -195,7 +178,8 @@ fun LazyListScope.quickLauncherAddPickerAppItems(
 ) {
     appPickerGridItems(
         apps = filtered,
-        selectedKeys = if (singleSelect) emptySet() else configuredAppPackages,
+        selectedKeys = configuredAppPackages,
+        singleSelect = singleSelect,
         onAppClick = { app ->
             val added = com.slideindex.app.launcher.AppTarget.encode(app.packageName, app.cloneUserId) in
                 configuredAppPackages
@@ -250,6 +234,7 @@ fun LazyListScope.quickLauncherAddPickerShortcutItems(
                 segmentIndex = segmentIndex,
                 segmentCount = segmentCount,
                 added = added,
+                singleSelect = singleSelect,
                 onToggle = { onToggle(group.app, shortcut, if (singleSelect) false else added) },
             )
         },
@@ -303,6 +288,8 @@ private fun PickerGridCell(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 单选（槽位）用高亮，多选（加入面板）才用右上角勾选徽标。 */
+    singleSelect: Boolean = false,
     icon: @Composable () -> Unit,
 ) {
     Column(
@@ -317,12 +304,18 @@ private fun PickerGridCell(
                 modifier = Modifier
                     .size(58.dp)
                     .clip(RoundedCornerShape(17.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainerHigh),
+                    .background(
+                        if (selected && singleSelect) {
+                            MiuixTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        } else {
+                            MiuixTheme.colorScheme.surfaceContainerHigh
+                        },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 icon()
             }
-            if (selected) {
+            if (selected && !singleSelect) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -348,7 +341,11 @@ private fun PickerGridCell(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            color = if (selected && singleSelect) {
+                MiuixTheme.colorScheme.primary
+            } else {
+                MiuixTheme.colorScheme.onSurfaceVariantSummary
+            },
             modifier = Modifier.padding(top = 5.dp, start = 2.dp, end = 2.dp),
         )
     }

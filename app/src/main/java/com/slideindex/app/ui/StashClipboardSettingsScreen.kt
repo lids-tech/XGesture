@@ -6,7 +6,6 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
@@ -32,6 +31,7 @@ import com.slideindex.app.settings.ClipboardHistoryCapacity
 import com.slideindex.app.settings.ClipboardMonitoringMode
 import com.slideindex.app.settings.ClipboardOverlayScale
 import com.slideindex.app.settings.ExtensionHubSettings
+import com.slideindex.app.settings.HistoryFloatHandleAppearance
 import com.slideindex.app.settings.StashPanelHandleOpenTab
 import com.slideindex.app.settings.StashPanelWidthMode
 import com.slideindex.app.settings.toMinimalAppSettings
@@ -106,7 +106,7 @@ fun StashClipboardSettingsScreen(
             items = listOf(
                 settingsCardScopeItem("clipboard-history") {
                     SettingNavigationRow(
-                        icon = { label -> Icon(Icons.Outlined.History, contentDescription = label) },
+                        icon = { label -> SymbolsIcon("History", contentDescription = label) },
                         title = stringResource(R.string.stash_clipboard_section_clipboard),
                         subtitle = clipboardIndexHistorySubtitle(settings, monitoringUi, clipboardEntryCount),
                         onClick = onOpenClipboardHistory,
@@ -114,7 +114,7 @@ fun StashClipboardSettingsScreen(
                 },
                 settingsCardScopeItem("stash-panel") {
                     SettingNavigationRow(
-                        icon = { label -> Icon(Icons.Outlined.Layers, contentDescription = label) },
+                        icon = { label -> SymbolsIcon("Layers", contentDescription = label) },
                         title = stringResource(R.string.floating_panel_title),
                         subtitle = stringResource(R.string.stash_clipboard_index_stash_panel_desc),
                         onClick = onOpenStashPanel,
@@ -122,7 +122,7 @@ fun StashClipboardSettingsScreen(
                 },
                 settingsCardScopeItem("clipboard-float") {
                     SettingNavigationRow(
-                        icon = { label -> Icon(Icons.Outlined.ContentPaste, contentDescription = label) },
+                        icon = { label -> SymbolsIcon("ContentPaste", contentDescription = label) },
                         title = stringResource(R.string.clipboard_float_section),
                         subtitle = stringResource(R.string.stash_clipboard_index_clipboard_float_desc),
                         onClick = onOpenClipboardFloat,
@@ -411,6 +411,9 @@ fun StashPanelSettingsScreen(
     onClipboardHistoryFloatEnabledChange: (Boolean) -> Unit,
     onClipboardHistoryFloatEnabledLandscapeChange: (Boolean) -> Unit,
     onClipboardHistoryFloatLockPositionChange: (Boolean) -> Unit,
+    onClipboardHistoryFloatHandleWidthChange: (Float) -> Unit,
+    onClipboardHistoryFloatHandleHeightChange: (Float) -> Unit,
+    onClipboardHistoryFloatHandleAlphaChange: (Float) -> Unit,
     onStashPanelHandleOpenTabChange: (StashPanelHandleOpenTab) -> Unit,
     onStashPanelWidthModeChange: (StashPanelWidthMode) -> Unit,
     onOpenOverlayPermission: () -> Unit,
@@ -492,6 +495,34 @@ fun StashPanelSettingsScreen(
                                 checked = settings.clipboardHistoryFloatLockPosition,
                                 enabled = true,
                                 onCheckedChange = onClipboardHistoryFloatLockPositionChange,
+                            )
+                            SettingsSliderRow(
+                                title = stringResource(R.string.clipboard_history_float_handle_width_title),
+                                value = settings.clipboardHistoryFloatHandleWidthDp,
+                                valueRange = HistoryFloatHandleAppearance.MIN_WIDTH_DP..
+                                    HistoryFloatHandleAppearance.MAX_WIDTH_DP,
+                                enabled = true,
+                                label = "${settings.clipboardHistoryFloatHandleWidthDp.roundToInt()} dp",
+                                onValueChange = onClipboardHistoryFloatHandleWidthChange,
+                            )
+                            SettingsSliderRow(
+                                title = stringResource(R.string.clipboard_history_float_handle_height_title),
+                                value = settings.clipboardHistoryFloatHandleHeightDp,
+                                valueRange = HistoryFloatHandleAppearance.MIN_HEIGHT_DP..
+                                    HistoryFloatHandleAppearance.MAX_HEIGHT_DP,
+                                enabled = true,
+                                label = "${settings.clipboardHistoryFloatHandleHeightDp.roundToInt()} dp",
+                                onValueChange = onClipboardHistoryFloatHandleHeightChange,
+                            )
+                            SettingsSliderRow(
+                                title = stringResource(R.string.clipboard_history_float_handle_alpha_title),
+                                value = settings.clipboardHistoryFloatHandleAlpha,
+                                valueRange = HistoryFloatHandleAppearance.MIN_ALPHA..
+                                    HistoryFloatHandleAppearance.MAX_ALPHA,
+                                enabled = true,
+                                label = "${(settings.clipboardHistoryFloatHandleAlpha * 100).roundToInt()}%",
+                                formatLabel = { "${(it * 100).roundToInt()}%" },
+                                onValueChange = onClipboardHistoryFloatHandleAlphaChange,
                             )
                             // 点指示条 / 从指示条横向拉出，两条路都按这一档走（长按=就地记一条不受影响）。
                             SettingDropdownRow(

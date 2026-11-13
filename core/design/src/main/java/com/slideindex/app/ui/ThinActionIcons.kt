@@ -458,6 +458,30 @@ object ThinActionIcons {
         }
     }
 
+    /**
+     * 禁止触摸：手指 + 斜杠（用户指定的 24dp 填充图标，直接转 ImageVector）。
+     *
+     * 与 [TouchApp] 的细线风格不同，这个图是实心路径；动作列表里用它区分
+     * 「禁止触摸」和普通「点击/触摸」。
+     */
+    val TouchBlockOff: ImageVector by lazy {
+        createThinIcon("ThinTouchBlockOff") {
+            addPath(
+                pathData = PathParser().parsePathString(TOUCH_BLOCK_OFF_PATH).toNodes(),
+                fill = SolidColor(Color.White),
+            )
+        }
+    }
+
+    private const val TOUCH_BLOCK_OFF_PATH =
+        "M20.5,17.68L19,16.18V5.25q0-0.32 0.22-0.53T19.75,4.5t0.53,0.22T20.5,5.25V17.68ZM9,6.18L7.5," +
+            "4.68V4.53q0-0.32 0.22-0.53T8.25,3.78T8.78,3.99T9,4.53V6.18Zm3.84,3.84l-1.5-1.5V2.53q0-0.32 " +
+            "0.22-0.53t0.53-0.22t0.53,0.22t0.22,0.53v7.49Zm3.84,1.84h-1.5V3.53q0-0.32 0.22-0.53t0.53-0.22t0.53," +
+            "0.22t0.22,0.53v8.33Zm1.43,8.37L9,11.12v5.32L4.94,13.6l4.5,6.59q0.16,0.26 0.44,0.41t0.6," +
+            "0.15h6.27q0.39,0 0.75-0.14t0.61-0.38Zm-7.62,2.02q-0.69,0-1.28-0.31T8.21,21.06L1.96," +
+            "11.9l0.41-0.39q0.4-0.4 0.94-0.45T4.3,11.33l3.2,2.23V9.62L1.28,3.4L2.35,2.33L21.86," +
+            "21.85l-1.07,1.07l-1.61-1.61q-0.49,0.43-1.1,0.69t-1.33,0.26H10.48Zm3.08-6.57Zm1.1-3.83Z"
+
     val Back: ImageVector by lazy {
         createThinIcon("ThinBack") {
             path(
@@ -1704,6 +1728,21 @@ object ThinActionIcons {
         }
     }
 
+    /** 应用内直达：标准 OpenInNew（方框 + 右上外跳箭头，约 1.5 填充）。 */
+    val OpenInNew: ImageVector by lazy {
+        createThinIcon("ThinOpenInNew") {
+            addPath(
+                pathData = PathParser().parsePathString(OPEN_IN_NEW_PATH).toNodes(),
+                fill = SolidColor(Color.White),
+            )
+        }
+    }
+
+    private const val OPEN_IN_NEW_PATH =
+        "M5.31,20.5q-0.76,0-1.28-0.52T3.5,18.69V5.31q0-0.76 0.52-1.28T5.31,3.5h6.31V5H5.31Q5.19,5 5.1,5.1T5," +
+        "5.31V18.69q0,0.12 0.1,0.21T5.31,19H18.69q0.12,0 0.21-0.1T19,18.69V12.38h1.5v6.31q0,0.76-0.52," +
+        "1.28T18.69,20.5H5.31Zm4.41-5.17L8.67,14.28L17.95,5H14V3.5h6.5V10H19V6.05L9.72,15.33Z"
+
     val VisibilityOff: ImageVector by lazy {
         createThinIcon("ThinVisibilityOff") {
             path(
@@ -1873,6 +1912,31 @@ object ThinActionIcons {
         }
     }
 
+    val Joystick: ImageVector by lazy {
+        createThinIcon("ThinJoystick") {
+            path(
+                stroke = strokeBrush,
+                strokeLineWidth = STROKE_WIDTH,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                // 底座
+                moveTo(4f, 19.5f)
+                lineTo(20f, 19.5f)
+                // 摇杆杆
+                moveTo(12f, 19.5f)
+                lineTo(12f, 13.5f)
+                // 顶帽
+                moveTo(12f, 6f)
+                curveTo(14.2f, 6f, 16f, 7.8f, 16f, 10f)
+                curveTo(16f, 12.2f, 14.2f, 14f, 12f, 14f)
+                curveTo(9.8f, 14f, 8f, 12.2f, 8f, 10f)
+                curveTo(8f, 7.8f, 9.8f, 6f, 12f, 6f)
+                close()
+            }
+        }
+    }
+
     val PenTablet: ImageVector by lazy {
         createThinIcon("ThinPenTablet") {
             // 与细线集同宽（原来是写死的 2f，比同组粗 33%）
@@ -1909,7 +1973,7 @@ object ThinActionIcons {
 
     val Favicon: ImageVector by lazy {
         createThinIcon("ThinFavicon") {
-            val strokeWidth = 2f
+            val strokeWidth = 1.75f
             val paths = listOf(
                 "M2 8a3 3 0 0 1 3 -3h14a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-14a3 3 0 0 1 -3 -3l0 -8",
                 "M6 10v4",
@@ -1930,11 +1994,11 @@ object ThinActionIcons {
 
     /**
      * Tabler `icons`：圆 / 三角 / 叉 / 方块四种形状，表达「一套图标」。
-     * 用于扩展页「图标包」入口；描边 2f，与同组 Material Outlined 行观感一致。
+     * 用于扩展页「图标包」入口；描边 1.75f，与同组 Material Symbols 行观感一致。
      */
     val IconSet: ImageVector by lazy {
         createThinIcon("ThinIconSet") {
-            val strokeWidth = 2f
+            val strokeWidth = 1.75f
             val paths = listOf(
                 "M3 6.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0",
                 "M2.5 21h8l-4 -7l-4 7",

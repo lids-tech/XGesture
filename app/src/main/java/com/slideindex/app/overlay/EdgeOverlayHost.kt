@@ -79,6 +79,10 @@ class EdgeOverlayHost(
     private var stopRequested = false
 
     fun start() {
+        // 进程内只允许一份浮层宿主。系统重绑 / 重复 onServiceConnected 时，新宿主不能只是
+        // 把旧引用覆盖掉：旧宿主的触钮捕获窗与协程会继续活着，和新宿主叠成两套完全重合的
+        // 窗口（点击穿透注入的那一下会被旧层吞掉，真机表现就是「触钮消失底下还有一层」）。
+        stopPreviousHostOnStart()
         stopRequested = false
         AccessibilityLink.noteAlive("host.start")
         AccessibilityLink.attachRecovery(::onAccessibilityLinkBroken)
@@ -87,6 +91,25 @@ class EdgeOverlayHost(
         startCollectorsAndLease()
         ensureStarted()
         Log.d("XGStartup", "host.start done overlayManager=${overlayManager != null}")
+    }
+
+    /**
+     * 新宿主启动前回收进程内上一代宿主。
+     *
+     * 这是「同一进程出现两套触钮窗口」的最后一道防线：即使服务侧漏了 stop，
+     * 新宿主也会在这里把旧宿主的窗口/订阅停干净，保证屏幕上永远只有一套触钮。
+     */
+    private fun stopPreviousHostOnStart() {
+        val previous = synchronized(hostLock) {
+            val existing = activeHost
+            activeHost = this
+            existing
+        }
+        if (previous == null || previous === this) return
+        Log.w(TAG, "start: 上一代 EdgeOverlayHost 仍存活 → 先 stop，避免两套触钮窗口叠加")
+        EdgeDiag.log("host", "start: 上一代 host 仍存活，先 stop 再启动新宿主")
+        runCatching { previous.stop() }
+            .onFailure { Log.e(TAG, "stop previous host failed", it) }
     }
 
     /**
@@ -310,6 +333,9 @@ class EdgeOverlayHost(
         OverlayCompose.clearWindowContextCache()
         // 放在最后：万一上面的拆卸半途失败，租约超时还能兜底把残留窗口再摘一次。
         OverlayHostLease.unregister(HOST_LEASE_KEY)
+        synchronized(hostLock) {
+            if (activeHost === this) activeHost = null
+        }
     }
 
     /**
@@ -322,7 +348,29 @@ class EdgeOverlayHost(
      */
     private fun onAccessibilityLinkBroken(reason: String) {
         scope.launch {
-            Log.e(TAG, "accessibility link broken: $reason → teardown + rebind")
+            Log.e(TAG, "accessibility link broken: $reason → verify before teardown")
+            // 拆家之前先做一次**真实探活**。
+            //
+            // 单次建窗失败 / 一次动作被拒都不代表连接已经断了，而拆掉整批窗口的代价极高：
+            // 触钮、悬浮球、轮盘同时消失，重绑又需要 WRITE_SECURE_SETTINGS，没有权限的用户
+            // 只能手动开关一次无障碍才能恢复。探活（`Service.windows` 为空才是真断）能把
+            // 绝大多数误判挡在拆窗之前。
+            val service = SlideIndexAccessibilityService.accessibilityInstance()
+            val windowsAlive = if (service == null) {
+                false
+            } else {
+                withContext(Dispatchers.Default) {
+                    runCatching { service.windows?.isNotEmpty() == true }.getOrDefault(false)
+                }
+            }
+            if (windowsAlive) {
+                Log.w(TAG, "link probe says alive (reason=$reason) → 撤销掉线判定，不拆窗")
+                AccessibilityLink.noteAlive("recover-probe")
+                AccessibilityLink.noteRecoveryResult("ok")
+                return@launch
+            }
+
+            Log.e(TAG, "link probe says dead (reason=$reason) → teardown + rebind")
             runCatching { teardownOverlayWindows() }
                 .onFailure { Log.e(TAG, "teardown after link broken failed", it) }
             val settings = deps.settingsRepository.readSnapshot()
@@ -332,6 +380,10 @@ class EdgeOverlayHost(
             if (outcome == AccessibilityRecoverOutcome.Connected) {
                 AccessibilityLink.noteAlive("recover")
                 AccessibilityLink.noteRecoveryResult("ok")
+                // 拆掉的窗口立刻按当前设置重挂，不等 12s 自愈巡检：
+                // 否则用户看到的是"触钮没了十几秒"，很容易以为"再也回不来了"。
+                runCatching { ensureStarted() }
+                    .onFailure { Log.e(TAG, "rebuild overlays after recovery failed", it) }
             } else {
                 Log.w(TAG, "accessibility recovery failed (outcome=$outcome), notifying user")
                 AccessibilityLink.noteRecoveryResult("failed($outcome)")
@@ -559,6 +611,9 @@ class EdgeOverlayHost(
     fun edgePresentationNeedsChromeRaise(): Boolean =
         overlayManager?.edgePresentationNeedsChromeRaise() == true
 
+    fun edgePresentationHasAdjustPanel(): Boolean =
+        overlayManager?.edgePresentationHasAdjustPanel() == true
+
     fun notifyEdgeChromeBelowPanel() {
         overlayManager?.notifyEdgeChromeBelowPanel()
     }
@@ -697,6 +752,10 @@ class EdgeOverlayHost(
     private companion object {
         const val TAG = "EdgeOverlayHost"
         const val HOST_LEASE_KEY = "edge-overlay-host"
+
+        /** 进程内当前唯一存活的浮层宿主；新宿主 start 时用它回收上一代（见 [stopPreviousHostOnStart]）。 */
+        val hostLock = Any()
+        var activeHost: EdgeOverlayHost? = null
 
         /** 触钮自愈巡检间隔：足够快（用户几乎察觉不到）又足够便宜。 */
         const val TRIGGER_HEAL_INTERVAL_MS = 12_000L

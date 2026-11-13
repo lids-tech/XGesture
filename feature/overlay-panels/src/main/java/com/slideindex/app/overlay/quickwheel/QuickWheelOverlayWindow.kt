@@ -340,6 +340,7 @@ object QuickWheelOverlayWindow {
                                         scope.launch { persistWheel(appContext, updated) }
                                     },
                                     onOpenSlot = { path ->
+                                        // 配置页在 :app：用类名显式启动，避免模块反向依赖。
                                         runCatching {
                                             appContext.startActivity(
                                                 android.content.Intent().apply {
@@ -355,13 +356,14 @@ object QuickWheelOverlayWindow {
                                                     ),
                                             )
                                         }
-                                        // ⚠️ 必须先收起浮层：配置页是普通应用窗口，
-                                        // 会被 TYPE_APPLICATION_OVERLAY 的轮盘压在下面（真机反馈的"被遮挡"）。
+                                        // 必须先收起浮层：配置页是普通应用窗口，会被轮盘压在下面。
                                         dismissForSession(mySession)
                                     },
                                     onClose = { editing = false },
-                                    // 交给编辑层自己居中：用触发点当锚点时，从右边缘呼出整组网格会溢出屏幕。
+                                    // 交给编辑层自己居中，避免从边缘呼出时整组网格溢出屏幕。
                                     anchorOverride = null,
+                                    // 浮层是全屏窗口，底部药丸落在系统导航区，整体上抬。
+                                    modifier = Modifier.padding(top = 32.dp, bottom = 72.dp),
                                 )
                             }
                         } else {
@@ -386,6 +388,8 @@ object QuickWheelOverlayWindow {
                                 // 容器以外区域的黑色遮罩浓度（容器本身不透明，不受影响）。
                                 backdropDimAlpha = QuickWheelLayoutEngine
                                     .clampBackdropDimPercent(editorWheel.backdropDimPercent) / 100f,
+                                // 上游新增：HUD 里 Shell 命令按用户自定义名回查。
+                                shellCommands = settings.shellCommands,
                                 onExternalHandlers = { move, up ->
                                     externalMoveHandler = move
                                     externalUpHandler = up

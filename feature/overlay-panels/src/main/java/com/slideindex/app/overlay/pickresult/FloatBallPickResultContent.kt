@@ -92,6 +92,8 @@ fun FloatBallPickResultContent(
     onTextChange: (String) -> Unit,
     onCopy: (String, keepPanelOpen: Boolean) -> Unit,
     onShareText: (String) -> Unit,
+    /** 点按分享键：有默认目标时直发；返回 false 回退到 [onShareText]（弹面板）。 */
+    onShareTextToDefault: ((String) -> Boolean)? = null,
     /** 长按文字底栏的分享键 = 把当前这段文字拖出去。 */
     onStartTextDrag: (String) -> Unit,
     onProcessText: (String, PickResultProcessTextTarget) -> Unit,
@@ -100,6 +102,8 @@ fun FloatBallPickResultContent(
     onSaveScreenshot: () -> Unit,
     onSaveScreenshotLongClick: (() -> Unit)? = null,
     onShareScreenshot: () -> Unit,
+    /** 点按分享键：有默认目标时直发；返回 false 回退到 [onShareScreenshot]（弹面板）。 */
+    onShareScreenshotToDefault: (() -> Boolean)? = null,
     /** 长按图片底栏的分享键 = 把当前这张图拖出去。 */
     onStartImageDrag: () -> Unit,
     onImageShareEngineClick: (com.slideindex.app.settings.SearchEngineConfig) -> Unit,
@@ -114,6 +118,9 @@ fun FloatBallPickResultContent(
     onImageClick: () -> Unit,
     onCopyImage: (() -> Unit)? = null,
     onImageIndexChange: (Int) -> Unit,
+    /** 面板内全屏查看当前图片（工具栏「查看图片」按钮 / 返回键共用这一份状态）。 */
+    imageViewerVisible: Boolean = false,
+    onImageViewerVisibleChange: (Boolean) -> Unit = {},
     screenRect: Rect?,
     layoutMeta: ScreenshotLayoutMeta?
 ) {
@@ -409,6 +416,19 @@ fun FloatBallPickResultContent(
     // 真机实测（MEIZU 21，居中落位）：键盘弹出时 containerSize 不缩（一直 851dp），ime 读到 320dp；
     // 若在这里先减一次 ime，卡片只能长到 275dp，反而填不满键盘上方那块空间。
     val panelContentHeight = maxPanelHeight
+    val containerHeightForLog = overlayContainerHeightDp()
+
+    LaunchedEffect(panelShowToken) {
+        com.slideindex.app.diagnostic.EdgeDiag.log(
+            "pickPanelMetrics",
+            "placement=${appSettings.floatBallPickPanelPlacement} centered=$centeredPanel " +
+                "containerH=$containerHeightForLog maxPanelH=$maxPanelHeight " +
+                "contentH=$panelContentHeight reservedGrid=$searchGridReservedHeight " +
+                "expandedGrid=$expandedSearchGridContentHeight gridVisible=${isSearchGridVisible.value} " +
+                "hasGrid=$hasSearchGrid textFirst=$textFirstPanelEnabled " +
+                "showText=$showTextSection showImage=$showImageSection ime=$overlayImeBottom",
+        )
+    }
 
     val isTabPaged = appSettings.floatBallPickPanelStyle == com.slideindex.app.settings.PickResultPanelStyle.TAB_PAGED && !landscapeDualColumn
     val showTabBar = isTabPaged && hasImageContent && showTextSection
@@ -489,11 +509,14 @@ fun FloatBallPickResultContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectPickResultDismissOutsidePanelTap(
-                        panelBoundsInRoot = { panelBoundsState.value },
-                        onDismiss = onDismiss
-                    )
+                .pointerInput(imageViewerVisible) {
+                    // 查看器盖住整屏时不能再认「点面板外 = 关面板」，否则点一下图就把面板关了。
+                    if (!imageViewerVisible) {
+                        detectPickResultDismissOutsidePanelTap(
+                            panelBoundsInRoot = { panelBoundsState.value },
+                            onDismiss = onDismiss
+                        )
+                    }
                 },
             contentAlignment = if (centeredPanel) Alignment.Center else Alignment.BottomCenter
         ) {
@@ -542,12 +565,14 @@ fun FloatBallPickResultContent(
                 onSaveScreenshot = onSaveScreenshot,
                 onSaveScreenshotLongClick = onSaveScreenshotLongClick,
                 onShareScreenshot = onShareScreenshot,
+                onShareScreenshotToDefault = onShareScreenshotToDefault,
                 onStartImageDrag = onStartImageDrag,
                 onImageSearch = onImageSearch,
                 onImageShareEngineClick = onImageShareEngineClick,
                 onPinImageToScreen = onPinImageToScreen,
                 onStashImage = onStashImage,
                 onImageClick = onImageClick,
+                onViewImage = { onImageViewerVisibleChange(true) },
                 onCopyImage = onCopyImage,
                 onImageIndexChange = onImageIndexChange,
                 onImageSectionExpandedChange = { expanded ->
@@ -583,6 +608,7 @@ fun FloatBallPickResultContent(
                 onTextModeChange = onTextModeChange,
                 onTextChange = onTextChange,
                 onShareText = onShareText,
+                onShareTextToDefault = onShareTextToDefault,
                 onStartTextDrag = onStartTextDrag,
                 onProcessText = onProcessText,
                 onCopy = onCopy,
@@ -652,6 +678,15 @@ fun FloatBallPickResultContent(
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
+                }
+            }
+            if (imageViewerVisible) {
+                // 盖在面板之上的全屏查看器：满宽 + 纵向滚动，关闭后回到原面板状态。
+                screenshot?.let { bitmap ->
+                    PickResultFullscreenImage(
+                        bitmap = bitmap,
+                        onClose = { onImageViewerVisibleChange(false) },
+                    )
                 }
             }
         }

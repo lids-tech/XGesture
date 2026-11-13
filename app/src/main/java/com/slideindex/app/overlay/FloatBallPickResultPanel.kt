@@ -44,7 +44,9 @@ import com.slideindex.app.overlay.pickresult.PickResultTextModeStore
 import com.slideindex.app.overlay.pickresult.preloadPickResultSearchEngineIcons
 import com.slideindex.app.overlay.pickresult.resolvePickResultEnterTextMode
 import com.slideindex.app.overlay.pickresult.translateErrorMessage
+import com.slideindex.app.overlay.searchpanel.SearchPanelOverlayWindow
 import com.slideindex.app.overlay.searchpanel.SearchPanelQueryBridge
+import com.slideindex.app.overlay.searchpanel.SearchPanelSessionState
 import com.slideindex.app.perf.PickPerf
 import com.slideindex.app.search.SearchEngineLauncher
 import com.slideindex.app.service.RegionalScreenshotOcr
@@ -124,12 +126,18 @@ object FloatBallPickResultPanel {
     private var ocrSwitchOnComplete = false
     private var captureSuppressed = false
     private var captureDetached = false
+    /** 因「搜图」把面板临时藏起来（搜索面板窗口层级比取词面板低，见 hideForSearchPanel 注释）。 */
+    private var hiddenBySearchPanel = false
+    /** hide 之前的窗口 flags，恢复时按原样还原（点词/图片模式本来就是 NOT_FOCUSABLE）。 */
+    private var flagsBeforeSearchHide = 0
     private var pickPanelVisible = false
     private var panelDismissing = false
     private var panelVisibilityState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null
     private var panelShowTokenState: androidx.compose.runtime.MutableIntState? = null
     private var settingsState: MutableState<AppSettings>? = null
     private var panelRevealedState: MutableState<Boolean>? = null
+    /** 图片全屏查看器是否展开：返回键要先关它，再关面板。 */
+    private var imageViewerVisibleState: MutableState<Boolean>? = null
     private var panelRevealGeneration = 0
 
     /**
@@ -275,6 +283,61 @@ object FloatBallPickResultPanel {
         }
     }
 
+    /**
+     * 搜图期间把取词面板藏起来。
+     *
+     * 取词面板挂在无障碍服务的 2032 WindowToken 上，搜索面板挂在 2038 window context token 上，
+     * 两者 mBaseLayer 相同，系统把取词面板排在搜索面板之上（真机 dumpsys 已确认），
+     * 所以搜索面板会被压住、怎么也提不上来。直接 INVISIBLE 而不是销毁：回来时状态、位图都还在。
+     */
+    fun hideForSearchPanel() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { hideForSearchPanel() }
+            return
+        }
+        val wm = windowManager ?: return
+        val view = composeView ?: return
+        val params = layoutParams ?: return
+        if (!pickPanelVisible || view.visibility != View.VISIBLE) return
+        hiddenBySearchPanel = true
+        flagsBeforeSearchHide = params.flags
+        params.flags = params.flags or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        view.clearFocus()
+        view.visibility = View.INVISIBLE
+        runCatching { wm.updateViewLayout(view, params) }
+        // 搜索面板的 dismiss / 系统返回 / Home / 熄屏都会走 destroyWindow()，恢复收敛到那一处。
+        com.slideindex.app.overlay.searchpanel.SearchPanelSessionState.onPanelClosed = {
+            restoreAfterSearchPanel()
+        }
+    }
+
+    private fun restoreAfterSearchPanel() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { restoreAfterSearchPanel() }
+            return
+        }
+        com.slideindex.app.overlay.searchpanel.SearchPanelSessionState.onPanelClosed = null
+        if (!hiddenBySearchPanel) return
+        hiddenBySearchPanel = false
+        val wm = windowManager ?: return
+        val view = composeView ?: return
+        val params = layoutParams ?: return
+        // 按 hide 之前的 flags 还原：点词/图片模式本来就是 NOT_FOCUSABLE，不能借恢复把焦点抢回来。
+        params.flags = flagsBeforeSearchHide
+        view.visibility = View.VISIBLE
+        runCatching { wm.updateViewLayout(view, params) }
+        if ((params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) == 0) {
+            view.requestFocus()
+        }
+        // 搜索面板关闭时 scene 已回 Idle：把内容面板状态与 chrome 层级补回来。
+        OverlaySceneController.onContentPanelShown()
+        if (FloatBallOverlay.isShowing) {
+            FloatBallOverlay.scheduleChromeAbovePanels(delayMs = 0L)
+        }
+    }
+
     private fun updateWindowFocusableForMode(mode: PickResultTextMode) {
         updateWindowFocusable(focusable = true)
         val wm = windowManager ?: return
@@ -306,6 +369,11 @@ object FloatBallPickResultPanel {
     }
 
     private fun handlePanelBack() {
+        // 全屏查看器在最上层：返回键先关它，不能直接把整个取词面板关掉。
+        if (imageViewerVisibleState?.value == true) {
+            imageViewerVisibleState?.value = false
+            return
+        }
         if (textModeState?.value == PickResultTextMode.EDIT) {
             if (isPanelImeVisible()) {
                 hidePanelKeyboard()
@@ -447,6 +515,7 @@ object FloatBallPickResultPanel {
         captureDetached = false
         panelDismissing = false
         dragSuspended = false
+        imageViewerVisibleState?.value = false
         clearDragImageCache()
         pickPanelVisible = true
         composeView?.visibility = View.VISIBLE
@@ -892,6 +961,8 @@ object FloatBallPickResultPanel {
         }
         panelDismissing = true
         pickPanelVisible = false
+        // 关面板时把图片查看器一起收掉，下次打开不残留全屏层。
+        imageViewerVisibleState?.value = false
         dragSuspended = false
         clearDragImageCache()
         // 「记住上次」：面板隐藏时记录当前模式，下次进入按它还原。
@@ -938,6 +1009,7 @@ object FloatBallPickResultPanel {
                 }
                 clearTranslateState()
                 applyPanelShellPassive()
+                destroy()
                 panelDismissing = false
                 com.slideindex.app.service.SlideIndexAccessibilityService.recoverTriggerInteraction(forceReAddChrome = true)
                 com.slideindex.app.service.SlideIndexAccessibilityService.refreshOverlaySuppression()
@@ -953,6 +1025,8 @@ object FloatBallPickResultPanel {
             return
         }
         Log.i(TAG, "destroy invoked pickPanelVisible=$pickPanelVisible")
+        hiddenBySearchPanel = false
+        com.slideindex.app.overlay.searchpanel.SearchPanelSessionState.onPanelClosed = null
         val currentOwner = owner
         val view = composeView
         val wm = windowManager
@@ -1113,6 +1187,8 @@ object FloatBallPickResultPanel {
         settingsState = settingsHolder
         val panelRevealedHolder = mutableStateOf(false)
         panelRevealedState = panelRevealedHolder
+        val imageViewerVisibleHolder = mutableStateOf(false)
+        imageViewerVisibleState = imageViewerVisibleHolder
 
         panelVisibilityState = androidx.compose.animation.core.MutableTransitionState(false)
         val panelShowTokenHolder = mutableIntStateOf(0)
@@ -1151,6 +1227,7 @@ object FloatBallPickResultPanel {
                 val showingTranslation by showingTranslationHolder
                 val translateLoading by translateLoadingHolder
                 val settings by settingsHolder
+                val imageViewerVisible by imageViewerVisibleHolder
                 LaunchedEffect(overlayContext) {
                     val flow = OverlayDependencyAccess.overlayDependencies(overlayContext)
                         ?.settingsRepository
@@ -1225,6 +1302,8 @@ object FloatBallPickResultPanel {
                     onImageIndexChange = { index ->
                         setCurrentImageIndex(overlayContext, index)
                     },
+                    imageViewerVisible = imageViewerVisible,
+                    onImageViewerVisibleChange = { imageViewerVisibleHolder.value = it },
                     onTextSourceChange = { source ->
                         if (source == PickResultTextSource.A11Y && !a11ySourceEnabledHolder.value) {
                             return@FloatBallPickResultContent
@@ -1310,6 +1389,10 @@ object FloatBallPickResultPanel {
                     onShareText = {
                         // 分享面板点中目标前会调这个 lambda 收起本面板，避免目标 App 被它盖住。
                         FloatBallTextPick.shareText(context, it) { dismiss() }
+                    },
+                    onShareTextToDefault = { value ->
+                        // 设了默认目标：点一下直接发；没发出去（没设/已卸载）回退到弹面板。
+                        FloatBallTextPick.shareTextToDefault(context, value) { dismiss() }
                     },
                     onStartTextDrag = { value ->
                         // 长按分享键：起系统拖拽，面板自己会藏起来（见 suspendForDrag），
@@ -1409,9 +1492,19 @@ object FloatBallPickResultPanel {
                         }
                     },
                     onShareScreenshot = {
+                        // 同文字分享：弹出面板时先留着本面板，点中目标（或退回系统面板）时才收 ——
+                        // 否则取消分享会把 OCR 结果和这张图一起丢掉。
                         val bitmap = screenshotHolder.value ?: return@FloatBallPickResultContent
-                        FloatBallTextPick.shareScreenshot(context, bitmap)
-                        dismiss()
+                        FloatBallTextPick.shareScreenshot(context, bitmap) { dismiss() }
+                    },
+                    onShareScreenshotToDefault = {
+                        // 设了默认目标：点一下直接发；没发出去（没设/已卸载）回退到弹面板。
+                        val bitmap = screenshotHolder.value
+                        if (bitmap == null || bitmap.isRecycled) {
+                            false
+                        } else {
+                            FloatBallTextPick.shareScreenshotToDefault(context, bitmap) { dismiss() }
+                        }
                     },
                     onImageShareEngineClick = { engine ->
                         val bitmap = screenshotHolder.value ?: return@FloatBallPickResultContent
@@ -1421,8 +1514,36 @@ object FloatBallPickResultPanel {
                         }
                     },
                     onImageSearch = {
-                        val bitmap = screenshotHolder.value ?: return@FloatBallPickResultContent
-                        FloatBallImageSearchPanel.show(context, bitmap)
+                        val bitmap = screenshotHolder.value
+                            ?.takeIf { !it.isRecycled }
+                            ?: return@FloatBallPickResultContent
+                        // 图片走搜索面板的「搜图」模式（与系统分享 / 拖拽进来的图片同一条路）。
+                        // 取词面板这里**不收起**：搜索面板盖在上面，返回后自然回到取词面板。
+                        //
+                        // 交给搜索面板的是**副本**：取词面板 dismiss 时会 recycle 自己那张图，
+                        // 搜索面板还活着的话共享引用会直接踩到 recycled bitmap。
+                        val shareCopy = runCatching {
+                            bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, false)
+                        }.getOrNull()
+                        if (shareCopy == null) {
+                            FloatBallImageSearchPanel.show(context, bitmap)
+                        } else {
+                            SearchPanelSessionState.pushImage(shareCopy)
+                            // 预热壳会先于取词面板挂窗，直接 show 会被取词面板盖住；先释放预热壳，
+                            // 让 show 重新建窗（新窗口最后 add，天然在最上层）。
+                            // 不能用 remove+add 抢层：会销毁 Compose 组合并触发 ViewTreeLifecycleOwner 崩溃。
+                            SearchPanelOverlayWindow.releaseWarmShellForPickPanel()
+                            if (!SearchPanelOverlayWindow.show(context)) {
+                                // 面板没起来（无障碍/宿主未就绪）时保留旧行为，别让搜图变成无响应。
+                                SearchPanelSessionState.pushImage(null)
+                                shareCopy.recycle()
+                                FloatBallImageSearchPanel.show(context, bitmap)
+                            } else {
+                                // 搜索面板挂在更低的 WindowToken 上，会被取词面板压住；
+                                // 搜索面板显示成功后把取词面板藏起来，返回时由 onPanelClosed 恢复。
+                                hideForSearchPanel()
+                            }
+                        }
                     },
                     onCopyImage = {
                         // 长按图片 = 复制当前页（翻页时 screenshotHolder 已同步成当前这张）。

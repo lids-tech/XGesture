@@ -64,6 +64,8 @@ class WidgetPopupCardLayout(
     private val hostContext: Context,
     private val deps: OverlayDependencies,
     private var settings: AppSettings,
+    /** 打开时停在哪一页（动作里指定的页 index）；越界按第 0 页处理。 */
+    initialPageIndex: Int = 0,
     private val onDismiss: () -> Unit,
     private val onSavePages: (List<WidgetPanelPage>) -> Unit,
 ) : FrameLayout(context) {
@@ -74,7 +76,14 @@ class WidgetPopupCardLayout(
             .toMutableList()
 
     private var editMode = false
-    private var currentPageIndex = 0
+    private var currentPageIndex = initialPageIndex.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
+    /**
+     * 当前页 id：设置回流（[updatePages]）时按 id 重新定位。
+     * 只按 index 的话，前面删掉一页就会把用户正在看的页顶到别的页上。
+     */
+    private var currentPageId: String? = pages.getOrNull(currentPageIndex)?.id?.toString()
+    /** 应用/快捷方式/动作格子是否显示名称（全局设置，见 WidgetPanelSettings.widgetPanelShowLabels）。 */
+    private var showLabels = settings.widgetPanelShowLabels
 
     private val headerTextView: TextView
     private val recyclerContainer: FrameLayout
@@ -160,6 +169,10 @@ class WidgetPopupCardLayout(
 
         adapter = WidgetPageAdapter()
         recyclerView.adapter = adapter
+        // 动作指定了「打开第 N 页」时，第一帧就定位过去（否则会先画第 0 页再跳）。
+        if (currentPageIndex > 0) {
+            recyclerView.scrollToPosition(currentPageIndex)
+        }
 
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
@@ -168,6 +181,7 @@ class WidgetPopupCardLayout(
                     val pos = lm.findFirstCompletelyVisibleItemPosition()
                     if (pos >= 0 && pos < pages.size) {
                         currentPageIndex = pos
+                        currentPageId = pages[pos].id.toString()
                         updateDots()
                         updateHeader()
                         applyPageMetrics(pages[pos])
@@ -299,7 +313,20 @@ class WidgetPopupCardLayout(
 
     fun updateSettings(newSettings: AppSettings) {
         settings = newSettings
+        val nextShowLabels = newSettings.widgetPanelShowLabels
+        if (showLabels != nextShowLabels) {
+            showLabels = nextShowLabels
+            applyShowLabelsToCanvases()
+        }
         applyCardBackground()
+    }
+
+    /** 全局开关切换后同步已绑定的页（RecyclerView 只复用当前可见的几页）。 */
+    private fun applyShowLabelsToCanvases() {
+        for (i in 0 until recyclerView.childCount) {
+            val scroll = recyclerView.getChildAt(i) as? WidgetPanelNestedScrollView ?: continue
+            (scroll.getChildAt(0) as? WidgetCanvasLayout)?.appLabelsVisible = showLabels
+        }
     }
 
     private fun createFabButton(iconRes: Int, bgColor: Int, onClick: () -> Unit): ImageView {
@@ -409,11 +436,22 @@ class WidgetPopupCardLayout(
             return
         }
         val previousSize = pages.size
+        val previousIndex = currentPageIndex
         pages = next.toMutableList()
-        if (currentPageIndex >= pages.size) {
-            currentPageIndex = (pages.size - 1).coerceAtLeast(0)
+        // 按页 id 重新定位：前面删了一页时，index 会指到别的页上。
+        val relocated = currentPageId
+            ?.let { id -> next.indexOfFirst { it.id.toString() == id } }
+            ?: -1
+        currentPageIndex = if (relocated >= 0) {
+            relocated
+        } else {
+            previousIndex.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
         }
+        currentPageId = pages.getOrNull(currentPageIndex)?.id?.toString()
         notifyPageStructureChanged(previousSize)
+        if (currentPageIndex != previousIndex) {
+            recyclerView.scrollToPosition(currentPageIndex)
+        }
         updateDots()
         updateHeader()
         applyCardBackground()
@@ -548,6 +586,7 @@ class WidgetPopupCardLayout(
                 onDismiss()
             }
             canvas.onAddWidgetRequested = { launchWidgetPicker(position) }
+            canvas.appLabelsVisible = showLabels
             canvas.editMode = editMode
             canvas.bind(page, hostContext)
         }

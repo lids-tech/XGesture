@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.privilege.PrivilegeGateway
 import com.slideindex.app.shell.ShellCommand
+import com.slideindex.app.shell.ShellCommandModeResolver
 import com.slideindex.app.shell.ShellExecutionMode
 import com.slideindex.app.ui.miuix.MiuixSettingsFab
 import com.slideindex.app.util.ShellCommandRunner
@@ -83,7 +84,8 @@ fun ShellCommandPanelOverlaySheet(
 ) {
     val context = LocalContext.current
     val shellTimeoutMessage = stringResource(R.string.shell_panel_execute_timeout)
-    val modeUnavailableMessage = stringResource(R.string.shell_panel_mode_unavailable)
+    val shizukuUnavailableMessage = stringResource(R.string.shell_panel_mode_unavailable_shizuku)
+    val rootUnavailableMessage = stringResource(R.string.shell_panel_mode_unavailable_root)
     val scope = rememberCoroutineScope()
     var commands by remember(initialCommands) { mutableStateOf(initialCommands) }
     var editorTarget by remember { mutableStateOf<ShellCommand?>(null) }
@@ -108,11 +110,11 @@ fun ShellCommandPanelOverlaySheet(
         }
     }
 
-    fun canRun(item: ShellCommand): Boolean = when (item.executionMode) {
-        ShellExecutionMode.ROOT -> rootAvailable == true
-        ShellExecutionMode.SHIZUKU -> shizukuGranted
-        null -> false
-    }
+    fun canRun(item: ShellCommand): Boolean =
+        when (item.executionMode ?: ShellCommandModeResolver.currentDefault()) {
+            ShellExecutionMode.ROOT -> rootAvailable == true
+            ShellExecutionMode.SHIZUKU -> shizukuGranted
+        }
 
     SideEffect {
         registerContinuousDismissHandler?.invoke {
@@ -229,21 +231,29 @@ fun ShellCommandPanelOverlaySheet(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(commands, key = { it.id }) { item ->
+                            val canRunItem = canRun(item)
                             ShellCommandCard(
                                 item = item,
                                 running = runningCommandId == item.id,
-                                enabled = canRun(item) && runningCommandId == null,
+                                enabled = runningCommandId == null,
+                                available = canRunItem,
                                 onEdit = {
                                     editorTarget = item
                                     showEditor = true
                                 },
                                 onRun = {
-                                    if (!canRun(item)) {
+                                    if (!canRunItem) {
                                         resultDialog = ShellPanelResultState(
                                             label = item.label,
                                             command = item.command,
                                             exitCode = -1,
-                                            output = modeUnavailableMessage,
+                                            output = when (
+                                                item.executionMode
+                                                    ?: ShellCommandModeResolver.currentDefault()
+                                            ) {
+                                                ShellExecutionMode.SHIZUKU -> shizukuUnavailableMessage
+                                                ShellExecutionMode.ROOT -> rootUnavailableMessage
+                                            },
                                         )
                                         return@ShellCommandCard
                                     }
@@ -314,11 +324,11 @@ private fun ShellOverlayEnvironmentRow(
     } else {
         stringResource(R.string.shell_panel_shizuku_unavailable)
     }
-    val statusColor = when {
-        checkingRoot -> MaterialTheme.colorScheme.outline
-        rootAvailable == false || !shizukuGranted -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.primary
-    }
+    val statusColor = shellEnvironmentStatus(
+        checking = checkingRoot,
+        rootAvailable = rootAvailable,
+        shizukuGranted = shizukuGranted,
+    ).color()
 
     Row(
         modifier = Modifier

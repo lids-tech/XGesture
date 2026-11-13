@@ -60,16 +60,20 @@ object SystemGestureActions {
         return true
     }
 
-    /** 媒体音量增加一级；同时弹出系统音量面板。 */
+    /**
+     * 音量增加一级：跟随「最相关的流」，与按硬件音量键一致——通话中调通话、放歌时调媒体。
+     *
+     * 原实现写死 `STREAM_MUSIC`，通话中按音量手势只动媒体流（issue #44）。
+     */
     fun volumeUp(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+        audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
     }
 
-    /** 媒体音量减小一级；同时弹出系统音量面板。 */
+    /** 音量减小一级；同样跟随「最相关的流」（issue #44）。 */
     fun volumeDown(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+        audioManager.adjustVolume(AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
     }
 
     fun dispatchMediaKey(context: Context, keyCode: Int): Boolean {
@@ -100,6 +104,23 @@ object SystemGestureActions {
             context.startActivity(intent)
             true
         }.getOrDefault(false)
+    }
+
+    /**
+     * 弹出系统音量条（与音量键同款），但不改变音量。
+     *
+     * `adjustVolume(ADJUST_SAME, FLAG_SHOW_UI)` 的语义是"挑最相关的 stream、只弹 UI"，所以
+     * 通话中弹通话条、放歌时弹媒体条，和按音量键一致。少数 ROM 会把 SAME 当 no-op 连 UI
+     * 一起吞掉——这种情况没有可探测的返回值，只能靠真机反馈；异常路径回落到设置面板。
+     */
+    fun openNativeVolumeHud(context: Context): Boolean {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: return openNativeVolumePanel(context)
+        val shown = runCatching {
+            audioManager.adjustVolume(AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
+            true
+        }.getOrDefault(false)
+        return shown || openNativeVolumePanel(context)
     }
 
     /** 调出系统原生声音调节面板（Settings.Panel.ACTION_VOLUME）。 */

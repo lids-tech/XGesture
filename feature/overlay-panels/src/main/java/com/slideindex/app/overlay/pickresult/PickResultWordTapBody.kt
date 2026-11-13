@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -49,11 +50,13 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalViewConfiguration
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
@@ -68,11 +71,8 @@ import kotlin.math.roundToInt
 /** Shorter than system long-press for quicker word-split feedback. */
 private const val WORD_SPLIT_LONG_PRESS_MS = 280L
 
-/** 与多字词 chip 一致的垂直内边距。 */
-private val WORD_TAP_CHIP_VERTICAL_PADDING = 8.dp
-
 /** 空格 chip 视觉宽度（略宽于真实空格，避免占满词间距）。 */
-private val WORD_WHITESPACE_VISUAL_WIDTH = 12.dp
+private val WORD_WHITESPACE_VISUAL_WIDTH = 14.dp
 private val WORD_WHITESPACE_FULL_WIDTH = 16.dp
 private val WORD_WHITESPACE_TAB_WIDTH = 22.dp
 
@@ -81,6 +81,8 @@ private val WORD_WHITESPACE_HIT_EXPAND = 8.dp
 
 /** FlowRow 分组 token 数，避免单块过大影响测量。 */
 private const val WORD_TAP_ROW_CHUNK_SIZE = 40
+/** 不分词模式一屏内通常有几百个字符；分块太大性能差、太小会每 40 字强制换行。 */
+private const val WORD_TAP_CHIP_FREE_ROW_CHUNK_SIZE = 240
 
 /** 划选时接近上下边缘触发自动滚动的区域。 */
 private val WORD_DRAG_EDGE_ZONE = 36.dp
@@ -105,6 +107,7 @@ private data class WordTapLine(
 private fun buildWordTapLines(
     chipBounds: Array<Rect?>,
     tokenCount: Int,
+    rtl: Boolean,
 ): List<WordTapLine> {
     val lines = mutableListOf<WordTapLine>()
     var lineStart = -1
@@ -125,7 +128,9 @@ private fun buildWordTapLines(
             lineRight = rect.right
         } else {
             val prevRect = chipBounds[lineEnd] ?: continue
-            val isNewLine = rect.left < prevRect.left || rect.top >= prevRect.bottom - 2f
+            // RTL 下词块从右往左排，回卷（换行）表现为 left 变大而不是变小。
+            val wrapped = if (rtl) rect.left > prevRect.left else rect.left < prevRect.left
+            val isNewLine = wrapped || rect.top >= prevRect.bottom - 2f
             if (isNewLine) {
                 lines.add(
                     WordTapLine(
@@ -214,19 +219,23 @@ fun PickResultWordTapBody(
     fillAvailableHeight: Boolean = false,
     hapticEnabled: Boolean = true,
     onScrollableChange: ((Boolean) -> Unit)? = null,
+    chipFree: Boolean = false,
 ) {
     val view = LocalView.current
     val bodyTextSize = textSizeSp.sp
     val delimiterTextSize = (textSizeSp * 13f / 15f).sp
     val bodyLineHeight = (textSizeSp * 20f / 15f).sp
-    val chunks = remember(wordTokens) {
-        wordTokens.chunked(WORD_TAP_ROW_CHUNK_SIZE).mapIndexed { chunkIndex, tokens ->
+    val chunkSize = if (chipFree) WORD_TAP_CHIP_FREE_ROW_CHUNK_SIZE else WORD_TAP_ROW_CHUNK_SIZE
+    val chunks = remember(wordTokens, chunkSize) {
+        wordTokens.chunked(chunkSize).mapIndexed { chunkIndex, tokens ->
             WordTapChunk(
-                startIndex = chunkIndex * WORD_TAP_ROW_CHUNK_SIZE,
+                startIndex = chunkIndex * chunkSize,
                 tokens = tokens,
             )
         }
     }
+    // 内容级 RTL：阿拉伯语/希伯来语要按右到左排词块，否则读者看到的是倒序（issue #54）。
+    val rtlText = remember(wordTokens) { PickResultTextDirection.isRtl(wordTokens) }
     val chipBounds = remember(wordTokens) { arrayOfNulls<Rect>(wordTokens.size) }
     var containerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var gestureCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -300,7 +309,7 @@ fun PickResultWordTapBody(
         }
         if (bestIndex != null || !allowLineProjection) return bestIndex
 
-        val lines = buildWordTapLines(chipBounds, wordTokens.size)
+        val lines = buildWordTapLines(chipBounds, wordTokens.size, rtlText)
         if (lines.isEmpty()) return null
 
         if (pointerInBox.y < lines.first().top) {
@@ -334,11 +343,12 @@ fun PickResultWordTapBody(
             } ?: lines.last()
         }
 
+        // RTL 下行的左右两侧与 token 顺序相反：右边是行首，左边是行尾。
         if (pointerInBox.x >= targetLine.right) {
-            return targetLine.endIndex
+            return if (rtlText) targetLine.startIndex else targetLine.endIndex
         }
         if (pointerInBox.x <= targetLine.left) {
-            return targetLine.startIndex
+            return if (rtlText) targetLine.endIndex else targetLine.startIndex
         }
 
         var closestIndex = targetLine.startIndex
@@ -550,29 +560,34 @@ fun PickResultWordTapBody(
                 .onGloballyPositioned {
                     gestureCoordinates = it
                 },
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(if (chipFree) 0.dp else 4.dp),
         ) {
-            chunks.forEach { chunk ->
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    chunk.tokens.forEachIndexed { localIndex, token ->
-                        val index = chunk.startIndex + localIndex
-                        val nextToken = chunk.tokens.getOrNull(localIndex + 1)
-                        val trailingGap = nextToken != null &&
-                            !PickResultWordTokenizer.isWhitespaceToken(token) &&
-                            !PickResultWordTokenizer.isWhitespaceToken(nextToken)
-                        WordTapTokenChip(
-                            token = token,
-                            selected = index in selectedWordIndices,
-                            bodyTextSize = bodyTextSize,
-                            delimiterTextSize = delimiterTextSize,
-                            bodyLineHeight = bodyLineHeight,
-                            trailingGap = trailingGap,
-                            onPositioned = { coordinates -> recordChipBounds(index, coordinates) },
-                        )
+            CompositionLocalProvider(
+                LocalLayoutDirection provides if (rtlText) LayoutDirection.Rtl else LayoutDirection.Ltr,
+            ) {
+                chunks.forEach { chunk ->
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (chipFree) 0.dp else 4.dp),
+                    ) {
+                        chunk.tokens.forEachIndexed { localIndex, token ->
+                            val index = chunk.startIndex + localIndex
+                            val nextToken = chunk.tokens.getOrNull(localIndex + 1)
+                            val trailingGap = !chipFree && nextToken != null &&
+                                !PickResultWordTokenizer.isWhitespaceToken(token) &&
+                                !PickResultWordTokenizer.isWhitespaceToken(nextToken)
+                            WordTapTokenChip(
+                                token = token,
+                                selected = index in selectedWordIndices,
+                                bodyTextSize = bodyTextSize,
+                                delimiterTextSize = delimiterTextSize,
+                                bodyLineHeight = bodyLineHeight,
+                                trailingGap = trailingGap,
+                                chipFree = chipFree,
+                                onPositioned = { coordinates -> recordChipBounds(index, coordinates) },
+                            )
+                        }
                     }
                 }
             }
@@ -649,6 +664,7 @@ private fun WordTapTokenChip(
     delimiterTextSize: androidx.compose.ui.unit.TextUnit,
     bodyLineHeight: androidx.compose.ui.unit.TextUnit,
     trailingGap: Boolean,
+    chipFree: Boolean,
     onPositioned: (LayoutCoordinates) -> Unit,
 ) {
     val isWhitespace = PickResultWordTokenizer.isWhitespaceToken(token)
@@ -665,11 +681,29 @@ private fun WordTapTokenChip(
             return
         }
 
+        if (chipFree) {
+            // 不分词模式：空白就是真正的空白，不再画固定宽度的“小砖”。
+            val shown = when (token) {
+                " " -> "\u00A0"
+                "\t" -> "\u00A0\u00A0\u00A0\u00A0"
+                else -> token
+            }
+            Text(
+                text = shown,
+                modifier = Modifier.onGloballyPositioned(onPositioned),
+                fontSize = bodyTextSize,
+                lineHeight = bodyLineHeight,
+                color = if (isDark) androidx.compose.ui.graphics.Color(0xFFE8E8ED)
+                else androidx.compose.ui.graphics.Color(0xFF1E2430),
+            )
+            return
+        }
+
         // 普通空格以轻透小字砖呈现
         val whitespaceWidth = when (token) {
             "\u3000" -> WORD_WHITESPACE_FULL_WIDTH
             "\t" -> WORD_WHITESPACE_TAB_WIDTH
-            else -> 14.dp
+            else -> WORD_WHITESPACE_VISUAL_WIDTH
         }
         val density = LocalDensity.current
         val whitespaceContentHeight = with(density) { (bodyLineHeight.toDp() + 8.dp) }
@@ -715,7 +749,36 @@ private fun WordTapTokenChip(
     val display = token.trim().ifEmpty { token }
     val isSingleChar = display.length == 1
     val isDelimiter = PickResultWordTokenizer.isDelimiterToken(display)
-    
+
+    if (chipFree) {
+        // 不分词模式：正常文字排版，选中只铺一层高亮，不加边框/阴影/内边距，也不改字重。
+        val highlight = if (isDark) {
+            primaryColor.copy(alpha = 0.35f)
+        } else {
+            primaryColor.copy(alpha = 0.22f)
+        }
+        Text(
+            text = display,
+            modifier = Modifier
+                .onGloballyPositioned(onPositioned)
+                .then(
+                    if (selected) {
+                        Modifier
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(highlight)
+                    } else {
+                        Modifier
+                    },
+                ),
+            fontSize = if (isDelimiter) delimiterTextSize else bodyTextSize,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+            lineHeight = bodyLineHeight,
+            color = if (isDark) androidx.compose.ui.graphics.Color(0xFFE8E8ED)
+            else androidx.compose.ui.graphics.Color(0xFF1E2430),
+        )
+        return
+    }
+
     val textColor = when {
         selected -> if (isDark) androidx.compose.ui.graphics.Color(0xFFDDD6FE) else androidx.compose.ui.graphics.Color(0xFF5B21B6)
         else -> if (isDark) androidx.compose.ui.graphics.Color(0xFFE8E8ED) else androidx.compose.ui.graphics.Color(0xFF1E2430)
@@ -755,7 +818,7 @@ private fun WordTapTokenChip(
                         )
                         .clip(chipShape)
                         .background(background)
-                        .border(1.dp, borderColor, chipShape)
+                        .border(1.5.dp, borderColor, chipShape)
                 } else {
                     Modifier
                         .clip(chipShape)
@@ -763,12 +826,15 @@ private fun WordTapTokenChip(
                         .border(0.5.dp, borderColor, chipShape)
                 }
             )
+            // 选中态只改绘制（背景 / 描边 / 文字颜色），**不改内边距与字重**：
+            // 一旦 padding 或 fontWeight 随选中变化，chip 会被撑宽 2dp（单字还会矮 2dp），
+            // 行尾 chip 换行、整段文字重排；划选过程中手指下的命中索引也会跟着跳。
             .padding(
-                horizontal = if (selected) (if (isSingleChar) 7.dp else 9.dp) else (if (isSingleChar) 6.dp else 8.dp),
-                vertical = if (selected) (if (isSingleChar) 5.dp else 6.dp) else 6.dp,
+                horizontal = if (isSingleChar) 7.dp else 9.dp,
+                vertical = 6.dp,
             ),
         fontSize = if (isDelimiter) delimiterTextSize else bodyTextSize,
-        fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
         lineHeight = bodyLineHeight,
         color = textColor,
     )

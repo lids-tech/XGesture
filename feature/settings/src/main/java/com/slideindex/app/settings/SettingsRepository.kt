@@ -14,6 +14,7 @@ import com.slideindex.app.message.MessageAction
 import com.slideindex.app.message.MessageAppFilterRule
 import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.overlay.PanelSide
+import com.slideindex.app.overlay.layout.FvIconShape
 import com.slideindex.app.shake.ShakeGestureType
 import com.slideindex.app.shake.ShakeWorkMode
 import com.slideindex.app.shell.ShellCommand
@@ -292,6 +293,15 @@ class SettingsRepository @Inject constructor(
     suspend fun setAccessibilityKeepAliveEnabled(enabled: Boolean) = edge.setAccessibilityKeepAliveEnabled(enabled)
     suspend fun setHapticStrengthLevel(level: Int) = edge.setHapticStrengthLevel(level)
     suspend fun setHapticGestureTriggerEnabled(enabled: Boolean) = edge.setHapticGestureTriggerEnabled(enabled)
+    suspend fun setHapticLongThresholdEnabled(enabled: Boolean) = edge.setHapticLongThresholdEnabled(enabled)
+    suspend fun setHapticShortThresholdEnabled(enabled: Boolean) = edge.setHapticShortThresholdEnabled(enabled)
+    suspend fun setHapticCompoundTurnEnabled(enabled: Boolean) = edge.setHapticCompoundTurnEnabled(enabled)
+    suspend fun setHapticReturnSwipeEnabled(enabled: Boolean) = edge.setHapticReturnSwipeEnabled(enabled)
+    suspend fun setHapticHoverEnabled(enabled: Boolean) = edge.setHapticHoverEnabled(enabled)
+    suspend fun setHapticLongPressEnabled(enabled: Boolean) = edge.setHapticLongPressEnabled(enabled)
+    suspend fun setHapticSlotLetterEnabled(enabled: Boolean) = edge.setHapticSlotLetterEnabled(enabled)
+    suspend fun setHapticSlotAppEnabled(enabled: Boolean) = edge.setHapticSlotAppEnabled(enabled)
+    suspend fun setHapticActionConfirmEnabled(enabled: Boolean) = edge.setHapticActionConfirmEnabled(enabled)
     suspend fun setHapticSlotSelectionEnabled(enabled: Boolean) = edge.setHapticSlotSelectionEnabled(enabled)
     suspend fun setHapticConfirmLaunchEnabled(enabled: Boolean) = edge.setHapticConfirmLaunchEnabled(enabled)
     suspend fun addHiddenApp(packageName: String) = edge.addHiddenApp(packageName)
@@ -583,6 +593,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setWidgetPanelBlurEnabled(enabled: Boolean) = overlay.setWidgetPanelBlurEnabled(enabled)
     suspend fun setWidgetPanelBlurRadiusDp(radiusDp: Int) = overlay.setWidgetPanelBlurRadiusDp(radiusDp)
     suspend fun setWidgetPanelCloseOnClickMode(mode: Int) = overlay.setWidgetPanelCloseOnClickMode(mode)
+    suspend fun setWidgetPanelShowLabels(show: Boolean) = overlay.setWidgetPanelShowLabels(show)
     suspend fun setWidgetPanelWidthFraction(fraction: Float) = overlay.setWidgetPanelWidthFraction(fraction)
     suspend fun setDebugPerformanceMonitorEnabled(enabled: Boolean) = overlay.setDebugPerformanceMonitorEnabled(enabled)
 
@@ -654,6 +665,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallSlideshowUris(uris: List<String>) =
         overlay.setFloatBallSlideshowUris(uris)
 
+    suspend fun setFloatBallSlideshowIntervalSeconds(seconds: Int) =
+        overlay.setFloatBallSlideshowIntervalSeconds(seconds)
+
     suspend fun setFloatBallGifUri(uri: String) =
         overlay.setFloatBallGifUri(uri)
 
@@ -687,6 +701,10 @@ class SettingsRepository @Inject constructor(
     suspend fun setFloatBallPickTextModeLastMode(storageKey: String) =
         overlay.setFloatBallPickTextModeLastMode(storageKey)
 
+    suspend fun setFloatBallPickWordTapGranularity(
+        granularity: PickResultWordTapGranularity,
+    ) = overlay.setFloatBallPickWordTapGranularity(granularity)
+
     suspend fun setFloatBallPickDefaultSearchEngineId(id: String?) =
         overlay.setFloatBallPickDefaultSearchEngineId(id)
 
@@ -701,6 +719,21 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setFloatBallPickImageToolbarPosition(position: PickResultImageToolbarPosition) =
         overlay.setFloatBallPickImageToolbarPosition(position)
+
+    suspend fun setFloatBallPickIconBarEnabled(enabled: Boolean) =
+        overlay.setFloatBallPickIconBarEnabled(enabled)
+
+    suspend fun setFloatBallPickTextBarOrder(order: List<String>) =
+        overlay.setFloatBallPickTextBarOrder(order)
+
+    suspend fun setFloatBallPickTextBarHidden(hidden: Set<String>) =
+        overlay.setFloatBallPickTextBarHidden(hidden)
+
+    suspend fun setFloatBallPickImageBarOrder(order: List<String>) =
+        overlay.setFloatBallPickImageBarOrder(order)
+
+    suspend fun setFloatBallPickImageBarHidden(hidden: Set<String>) =
+        overlay.setFloatBallPickImageBarHidden(hidden)
 
     suspend fun setFloatBallPickHapticEnabled(enabled: Boolean) =
         overlay.setFloatBallPickHapticEnabled(enabled)
@@ -800,6 +833,15 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setClipboardHistoryFloatHandleY(y: Int, landscape: Boolean) =
         overlay.setClipboardHistoryFloatHandleY(y, landscape)
+
+    suspend fun setClipboardHistoryFloatHandleWidthDp(widthDp: Float) =
+        overlay.setClipboardHistoryFloatHandleWidthDp(widthDp)
+
+    suspend fun setClipboardHistoryFloatHandleHeightDp(heightDp: Float) =
+        overlay.setClipboardHistoryFloatHandleHeightDp(heightDp)
+
+    suspend fun setClipboardHistoryFloatHandleAlpha(alpha: Float) =
+        overlay.setClipboardHistoryFloatHandleAlpha(alpha)
 
     suspend fun setClipboardFloatEnabled(enabled: Boolean) =
         overlay.setClipboardFloatEnabled(enabled)
@@ -1065,6 +1107,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setAggregatedImageSearchEngines(configs: List<AggregatedImageSearchEngineConfig>) =
         overlay.setAggregatedImageSearchEngines(configs)
 
+    suspend fun setSearchPanelShowAggregatedImageEntry(enabled: Boolean) =
+        overlay.setSearchPanelShowAggregatedImageEntry(enabled)
+
     suspend fun setOtpCopyToClipboard(enabled: Boolean) = otp.setOtpCopyToClipboard(enabled)
     suspend fun setOtpKeywordsRegex(value: String) = otp.setOtpKeywordsRegex(value)
     suspend fun setOtpUserMatchRules(rules: List<com.slideindex.app.otp.OtpMatchRule>) = otp.setOtpUserMatchRules(rules)
@@ -1166,6 +1211,8 @@ class SettingsRepository @Inject constructor(
     suspend fun setCornerGestureInnerDiameterDp(value: Float) = overlay.setCornerGestureInnerDiameterDp(value)
     suspend fun setCornerGestureRingSpacingDp(value: Float) = overlay.setCornerGestureRingSpacingDp(value)
     suspend fun setCornerGestureBubbleSizeDp(value: Float) = overlay.setCornerGestureBubbleSizeDp(value)
+    suspend fun setCornerGestureSlotIconShape(shape: FvIconShape) =
+        overlay.setCornerGestureSlotIconShape(shape)
     suspend fun setCornerGestureWheelLayerCount(value: Int) =
         overlay.setCornerGestureWheelLayerCount(value)
     suspend fun setCornerGestureCancelOutsideWheel(enabled: Boolean) =
@@ -1272,6 +1319,9 @@ class SettingsRepository @Inject constructor(
         message.setMessageReturnChipEnabled(enabled)
     suspend fun setMessageReturnChipAutoDismissSeconds(seconds: Int) =
         message.setMessageReturnChipAutoDismissSeconds(seconds)
+
+    suspend fun setMessageReturnChipPosition(onRightEdge: Boolean, yFraction: Float) =
+        message.setMessageReturnChipPosition(onRightEdge, yFraction)
     suspend fun setMessageHideInLandscape(enabled: Boolean) = message.setMessageHideInLandscape(enabled)
     suspend fun setMessagePortraitDanmaku(enabled: Boolean) = message.setMessagePortraitDanmaku(enabled)
     suspend fun setMessageLandscapeDanmaku(enabled: Boolean) = message.setMessageLandscapeDanmaku(enabled)
