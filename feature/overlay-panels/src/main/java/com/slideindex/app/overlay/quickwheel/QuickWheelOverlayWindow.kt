@@ -393,6 +393,8 @@ object QuickWheelOverlayWindow {
                                     .clampBackdropDimPercent(editorWheel.backdropDimPercent) / 100f,
                                 // 上游新增：HUD 里 Shell 命令按用户自定义名回查。
                                 shellCommands = settings.shellCommands,
+                                // 上游新增：划过容器 / 按满长按时间的触觉反馈（与圆环启动器同一套）。
+                                hapticSettings = settings,
                                 onExternalHandlers = { move, up ->
                                     externalMoveHandler = move
                                     externalUpHandler = up
