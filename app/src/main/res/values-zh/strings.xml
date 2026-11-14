@@ -632,6 +632,7 @@
     <string name="settings_app_language_label_ja" translatable="false">日本語</string>
     <string name="settings_app_language_label_ar" translatable="false">العربية</string>
     <string name="settings_app_language_label_ru" translatable="false">Русский</string>
+    <string name="settings_app_language_label_es" translatable="false">Español</string>
     <string name="settings_section_interaction_feedback">交互反馈</string>
     <string name="haptic_strength">震动强度</string>
     <string name="haptic_gesture_trigger_title">手势唤起振动</string>
@@ -1633,6 +1634,8 @@
     <string name="gesture_action_toggle_dark_mode">夜间模式</string>
     <string name="gesture_action_toggle_airplane_desc">打开或关闭飞行模式；需要 Shizuku / root，否则跳系统设置页</string>
     <string name="gesture_action_toggle_location_desc">打开或关闭定位；需要 Shizuku / root，否则跳系统设置页</string>
+<string name="gesture_action_toggle_hotspot">热点</string>
+<string name="gesture_action_toggle_hotspot_desc">打开或关闭 Wi-Fi 热点；需要 Shizuku / root，否则跳系统设置页</string>
     <string name="gesture_action_toggle_sync_desc">所有账号的后台自动同步总开关</string>
     <string name="gesture_action_toggle_dark_mode_desc">切换系统深色主题；需要 Shizuku 或修改系统设置权限</string>
     <string name="gesture_action_nfc_unsupported">本机不支持 NFC</string>
@@ -3500,7 +3503,7 @@
     <string name="settings_backup_selected_summary">已选 %1$d/%2$d 个模块</string>
     <string name="settings_backup_select_all">全选</string>
     <string name="settings_backup_select_none">全不选</string>
-    <string name="settings_backup_restore_selected">恢复所选（%1$d）</string>
+    <string name="settings_backup_restore_selected">恢复（%1$d）</string>
     <string name="settings_backup_privacy_badge">隐私</string>
     <string name="settings_backup_has_history">含历史</string>
     <string name="settings_backup_has_files">含文件</string>
@@ -5114,4 +5117,31 @@ adb 模式应返回 uid=2000。
     <string name="shell_panel_result_exit_ok">exit 0（无输出）</string>
     <string name="shell_panel_result_exit_only">exit %1$d（无输出）</string>
     <string name="shell_panel_test_result">测试结果</string>
+
+    <!-- Flow Bar Card in Search Engine Settings -->
+    <string name="flow_bar_title">流转栏</string>
+    <string name="flow_bar_drag_targets_title">拖文字时出现的目标</string>
+    <string name="flow_bar_drag_empty_hint">还没有目标。长按下面任意一个搜索引擎图标，拖到这张卡片上松手即可加入一份（原列表不变）。</string>
+    <string name="flow_bar_remove_target">从流转栏移除</string>
+
+    <!-- Search Engine Manager / Aggregated -->
+    <string name="search_engine_hidden_header">已隐藏</string>
+    <string name="search_engine_hidden_hint">可将上方引擎拖拽到此处隐藏</string>
+    <string name="search_engine_page_header">第 %1$d 页</string>
+    <string name="search_engine_move_page_up">向上移动一页</string>
+    <string name="search_engine_move_page_down">向下移动一页</string>
+    <string name="search_engine_empty_enabled">暂无启用的搜索引擎，可从下方已隐藏池添加或点击右下角 + 新建</string>
+    <string name="search_engine_action_hide">移入已隐藏池</string>
+    <string name="search_engine_action_restore">恢复至面板展示</string>
+
+    <!-- Search engine management -->
+    <string name="search_engine_add_import_description">添加搜索引擎与导入</string>
+    <string name="search_engine_status_visible">当前状态：已启用（展示于面板）</string>
+    <string name="search_engine_status_hidden">当前状态：已隐藏</string>
+    <string name="search_engine_action_hide_summary">不在聚合搜索面板显示，但保留配置</string>
+    <string name="search_engine_action_restore_summary">放回聚合搜索面板最后展示</string>
+    <string name="search_engine_action_edit">编辑配置</string>
+    <string name="search_engine_action_edit_summary">修改搜索 URL、图标或标题</string>
+    <string name="search_engine_action_delete">删除搜索引擎</string>
+    <string name="search_engine_action_delete_summary">永久从本地列表中移除此项</string>
 </resources>

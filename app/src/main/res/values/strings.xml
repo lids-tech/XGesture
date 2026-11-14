@@ -2859,6 +2859,8 @@
     <string name="gesture_action_toggle_dark_mode">Dark mode</string>
     <string name="gesture_action_toggle_airplane_desc">Turn airplane mode on or off; needs Shizuku / root, otherwise opens system settings</string>
     <string name="gesture_action_toggle_location_desc">Turn location on or off; needs Shizuku / root, otherwise opens system settings</string>
+<string name="gesture_action_toggle_hotspot">Hotspot</string>
+<string name="gesture_action_toggle_hotspot_desc">Turn the Wi-Fi hotspot on or off; needs Shizuku / root, otherwise opens system settings</string>
     <string name="gesture_action_toggle_sync_desc">Master switch for background account auto-sync</string>
     <string name="gesture_action_toggle_dark_mode_desc">Switch the system dark theme; needs Shizuku or write-settings permission</string>
     <string name="gesture_action_nfc_unsupported">This device has no NFC</string>
@@ -3473,7 +3475,7 @@
     <string name="settings_backup_selected_summary">%1$d of %2$d modules selected</string>
     <string name="settings_backup_select_all">Select all</string>
     <string name="settings_backup_select_none">Clear</string>
-    <string name="settings_backup_restore_selected">Restore selected (%1$d)</string>
+    <string name="settings_backup_restore_selected">Restore (%1$d)</string>
     <string name="settings_backup_privacy_badge">Private</string>
     <string name="settings_backup_has_history">Includes history</string>
     <string name="settings_backup_has_files">Includes files</string>
@@ -4701,6 +4703,7 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="settings_app_language_label_ja">日本語</string>
     <string name="settings_app_language_label_ar">العربية</string>
     <string name="settings_app_language_label_ru">Русский</string>
+    <string name="settings_app_language_label_es">Español</string>
     <string name="gesture_action_open_link">Open link</string>
     <string name="gesture_action_open_link_desc">Open a saved external link, deeplink, or intent URI</string>
     <string name="gesture_open_link_url_field">Link</string>
@@ -5103,4 +5106,31 @@ or revoke permanent Root for Shell in APatch.</string>
 <string name="app_carousel_cancel_both_directions">Cancel in both directions</string>
 <string name="float_ball_action_edit">Edit</string>
 <string name="universal_copy_pick">Segment</string>
+
+    <!-- Flow Bar Card in Search Engine Settings -->
+    <string name="flow_bar_title">Flow bar</string>
+    <string name="flow_bar_drag_targets_title">Targets when dragging text</string>
+    <string name="flow_bar_drag_empty_hint">No targets yet. Long-press any search engine icon below and drag it onto this card to add a copy (the original list stays unchanged).</string>
+    <string name="flow_bar_remove_target">Remove from flow bar</string>
+
+    <!-- Search Engine Manager / Aggregated -->
+    <string name="search_engine_hidden_header">Hidden</string>
+    <string name="search_engine_hidden_hint">Drag engines from above here to hide them</string>
+    <string name="search_engine_page_header">Page %1$d</string>
+    <string name="search_engine_move_page_up">Move page up</string>
+    <string name="search_engine_move_page_down">Move page down</string>
+    <string name="search_engine_empty_enabled">No search engines enabled. Add one from the hidden pool below or tap + in the bottom right to create one</string>
+    <string name="search_engine_action_hide">Hide to hidden pool</string>
+    <string name="search_engine_action_restore">Restore to panel</string>
+
+    <!-- Search engine management -->
+    <string name="search_engine_add_import_description">Add or import a search engine</string>
+    <string name="search_engine_status_visible">Status: enabled (shown in panel)</string>
+    <string name="search_engine_status_hidden">Status: hidden</string>
+    <string name="search_engine_action_hide_summary">Hide from the search panel but keep its settings</string>
+    <string name="search_engine_action_restore_summary">Show at the end of the search panel</string>
+    <string name="search_engine_action_edit">Edit settings</string>
+    <string name="search_engine_action_edit_summary">Change the search URL, icon, or title</string>
+    <string name="search_engine_action_delete">Delete search engine</string>
+    <string name="search_engine_action_delete_summary">Permanently remove this item from the local list</string>
 </resources>

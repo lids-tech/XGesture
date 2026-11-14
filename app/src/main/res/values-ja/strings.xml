@@ -1589,6 +1589,8 @@
     <string name="gesture_action_toggle_airplane_desc">機内モードをオン／オフします。Shizuku / root が必要で、ない場合はシステム設定を開きます</string>
     <string name="gesture_action_toggle_location">位置情報</string>
     <string name="gesture_action_toggle_location_desc">位置情報をオン／オフします。Shizuku / root が必要で、ない場合はシステム設定を開きます</string>
+<string name="gesture_action_toggle_hotspot">テザリング</string>
+<string name="gesture_action_toggle_hotspot_desc">Wi-Fi テザリングをオン／オフします。Shizuku / root が必要で、ない場合はシステム設定を開きます</string>
     <string name="gesture_action_toggle_sync">自動同期</string>
     <string name="gesture_action_toggle_sync_desc">すべてのアカウントのバックグラウンド自動同期のマスタースイッチ</string>
     <string name="gesture_action_toggle_dark_mode">ダークモード</string>
@@ -3281,7 +3283,7 @@
     <string name="settings_backup_selected_summary">%1$d/%2$d モジュールを選択中</string>
     <string name="settings_backup_select_all">すべて選択</string>
     <string name="settings_backup_select_none">すべて解除</string>
-    <string name="settings_backup_restore_selected">選択を復元（%1$d）</string>
+    <string name="settings_backup_restore_selected">復元（%1$d）</string>
     <string name="settings_backup_privacy_badge">プライベート</string>
     <string name="settings_backup_has_history">履歴を含む</string>
     <string name="settings_backup_has_files">ファイルを含む</string>
@@ -4630,6 +4632,7 @@
     <string name="settings_app_language_label_ja">日本語</string>
     <string name="settings_app_language_label_ar">العربية</string>
     <string name="settings_app_language_label_ru">Русский</string>
+    <string name="settings_app_language_label_es">Español</string>
     <string name="otp_autofill_reason_paste_fallback">キー注入に失敗したため、Ctrl+V 貼り付けにフォールバックしました</string>
     <string name="otp_autofill_reason_a11y_not_connected">アクセシビリティサービスが接続されておらず、システム注入でもコードを入力できませんでした</string>
     <string name="otp_autofill_reason_no_result">入力結果が返ってきませんでした（オーバーレイプロセスが起動していない、またはリクエストが失われた可能性があります）</string>
@@ -5085,4 +5088,31 @@
     <string name="shell_panel_shizuku_ready">認可済み</string>
     <string name="shell_panel_shizuku_unavailable">未認可</string>
     <string name="shell_panel_test_result">テスト結果</string>
+
+    <!-- Flow Bar Card in Search Engine Settings -->
+    <string name="flow_bar_title">流転バー</string>
+    <string name="flow_bar_drag_targets_title">テキストドラッグ時のターゲット</string>
+    <string name="flow_bar_drag_empty_hint">ターゲットがまだありません。下の検索エンジンアイコンを長押ししてこのカードにドラッグすると追加できます（元のリストは変更されません）。</string>
+    <string name="flow_bar_remove_target">流転バーから削除</string>
+
+    <!-- Search Engine Manager / Aggregated -->
+    <string name="search_engine_hidden_header">非表示</string>
+    <string name="search_engine_hidden_hint">上のエンジンをここにドラッグして非表示にできます</string>
+    <string name="search_engine_page_header">第 %1$d ページ</string>
+    <string name="search_engine_move_page_up">ページを上に移動</string>
+    <string name="search_engine_move_page_down">ページを下に移動</string>
+    <string name="search_engine_empty_enabled">有効な検索エンジンがありません。下の非表示プールから追加するか、右下の + をタップして新規作成してください</string>
+    <string name="search_engine_action_hide">非表示プールに移動</string>
+    <string name="search_engine_action_restore">パネル表示に戻す</string>
+
+    <!-- Search engine management -->
+    <string name="search_engine_add_import_description">検索エンジンの追加とインポート</string>
+    <string name="search_engine_status_visible">状態：有効（パネルに表示）</string>
+    <string name="search_engine_status_hidden">状態：非表示</string>
+    <string name="search_engine_action_hide_summary">設定を残したまま検索パネルから非表示にします</string>
+    <string name="search_engine_action_restore_summary">検索パネルの末尾に表示します</string>
+    <string name="search_engine_action_edit">設定を編集</string>
+    <string name="search_engine_action_edit_summary">検索 URL、アイコン、名前を変更します</string>
+    <string name="search_engine_action_delete">検索エンジンを削除</string>
+    <string name="search_engine_action_delete_summary">この項目をローカルリストから完全に削除します</string>
 </resources>

@@ -618,6 +618,7 @@
     <string name="settings_app_language_label_ja">日本語</string>
     <string name="settings_app_language_label_ar">العربية</string>
     <string name="settings_app_language_label_ru">Русский</string>
+    <string name="settings_app_language_label_es">Español</string>
     <string name="settings_section_interaction_feedback">ردود الفعل التفاعلية</string>
     <string name="haptic_strength">شدة الاهتزاز</string>
     <string name="haptic_gesture_trigger_title">اهتزاز استدعاء الإيماءة</string>
@@ -1577,6 +1578,8 @@
     <string name="gesture_action_toggle_airplane_desc">تشغيل وضع الطيران أو إيقافه؛ يتطلب Shizuku / root، وإلا فستُفتح إعدادات النظام</string>
     <string name="gesture_action_toggle_location">الموقع</string>
     <string name="gesture_action_toggle_location_desc">تشغيل الموقع أو إيقافه؛ يتطلب Shizuku / root، وإلا فستُفتح إعدادات النظام</string>
+<string name="gesture_action_toggle_hotspot">نقطة اتصال</string>
+<string name="gesture_action_toggle_hotspot_desc">تشغيل نقطة اتصال Wi-Fi أو إيقافها؛ يتطلب Shizuku / root، وإلا فستُفتح إعدادات النظام</string>
     <string name="gesture_action_toggle_sync">المزامنة التلقائية</string>
     <string name="gesture_action_toggle_sync_desc">المفتاح الرئيسي للمزامنة التلقائية في الخلفية لجميع الحسابات</string>
     <string name="gesture_action_toggle_dark_mode">الوضع الداكن</string>
@@ -3257,7 +3260,7 @@
     <string name="settings_backup_selected_summary">تم تحديد %1$d من %2$d وحدة</string>
     <string name="settings_backup_select_all">تحديد الكل</string>
     <string name="settings_backup_select_none">إلغاء التحديد</string>
-    <string name="settings_backup_restore_selected">استعادة المحدد (%1$d)</string>
+    <string name="settings_backup_restore_selected">استعادة (%1$d)</string>
     <string name="settings_backup_privacy_badge">خاص</string>
     <string name="settings_backup_has_history">يتضمن سجلاً</string>
     <string name="settings_backup_has_files">يتضمن ملفات</string>
@@ -5089,4 +5092,31 @@
     <string name="shell_panel_environment_summary">Shizuku %1$s · Root %2$s</string>
     <string name="shell_panel_environment_detail_shizuku">Shizuku: %1$s</string>
     <string name="shell_panel_environment_detail_root">Root: %1$s</string>
+
+    <!-- Flow Bar Card in Search Engine Settings -->
+    <string name="flow_bar_title">شريط التدفق</string>
+    <string name="flow_bar_drag_targets_title">الأهداف عند سحب النص</string>
+    <string name="flow_bar_drag_empty_hint">لا توجد أهداف بعد. اضغط مع الاستمرار على أي محرك بحث أدناه واسحبه إلى هذه البطاقة للإضافة (تبقى القائمة الأصلية كما هي).</string>
+    <string name="flow_bar_remove_target">إزالة من شريط التدفق</string>
+
+    <!-- Search Engine Manager / Aggregated -->
+    <string name="search_engine_hidden_header">مخفي</string>
+    <string name="search_engine_hidden_hint">اسحب المحركات من الأعلى إلى هنا لإخفائها</string>
+    <string name="search_engine_page_header">الصفحة %1$d</string>
+    <string name="search_engine_move_page_up">تحريك الصفحة لأعلى</string>
+    <string name="search_engine_move_page_down">تحريك الصفحة لأسفل</string>
+    <string name="search_engine_empty_enabled">لا توجد محركات بحث مفعلة. أضف واحداً من المحركات المخفية أدناه أو انقر على + لإنشاء جديد</string>
+    <string name="search_engine_action_hide">نقل إلى المخفي</string>
+    <string name="search_engine_action_restore">استعادة إلى اللوحة</string>
+
+    <!-- Search engine management -->
+    <string name="search_engine_add_import_description">إضافة محرك بحث أو استيراده</string>
+    <string name="search_engine_status_visible">الحالة: مفعّل (يظهر في اللوحة)</string>
+    <string name="search_engine_status_hidden">الحالة: مخفي</string>
+    <string name="search_engine_action_hide_summary">إخفاؤه من لوحة البحث مع الاحتفاظ بالإعدادات</string>
+    <string name="search_engine_action_restore_summary">إظهاره في نهاية لوحة البحث</string>
+    <string name="search_engine_action_edit">تعديل الإعدادات</string>
+    <string name="search_engine_action_edit_summary">تغيير عنوان URL للبحث أو الأيقونة أو الاسم</string>
+    <string name="search_engine_action_delete">حذف محرك البحث</string>
+    <string name="search_engine_action_delete_summary">إزالة هذا العنصر نهائيًا من القائمة المحلية</string>
 </resources>
