@@ -5055,6 +5055,15 @@
     <string name="share_sheet_toggle_desc">Заменить системное меню отправки на нашу сетку: закрепляйте любимые цели и пропускайте системный интерфейс</string>
     <string name="share_sheet_settings_pin_tip">Совет: закреплённые цели хранятся локально; повторное долгое нажатие открепляет их.</string>
 
+    <string name="quick_wheel_container_color">Container color</string>
+    <string name="quick_wheel_container_color_desc">Container background color; icons and labels turn white on dark colors</string>
+    <string name="quick_wheel_container_alpha">Container opacity</string>
+    <string name="quick_wheel_container_alpha_desc">0% = fully transparent, 100% = solid</string>
+    <string name="quick_wheel_container_shadow">Container shadow</string>
+    <string name="quick_wheel_container_shadow_desc">0 = no shadow; larger feels more floating</string>    <string name="quick_wheel_slot_container_color">Container color</string>
+    <string name="quick_wheel_slot_icon_color">Text/icon color</string>
+    <string name="quick_wheel_slot_color_follow">Follow</string>
+    <string name="quick_wheel_slot_color_custom">Custom color</string>
     <string name="search_engine_icon_following_app">Значок следует за %1$s</string>
     <string name="shortcut_port_requires_root">Этот ярлык требует Root. Переключитесь в режим Root, чтобы запустить его.</string>
     <string name="shake_menu_action_subtitle">Выполнять действия меню по направлениям</string>

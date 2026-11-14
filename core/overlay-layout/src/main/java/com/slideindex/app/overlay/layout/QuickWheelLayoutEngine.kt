@@ -119,6 +119,12 @@ data class QuickWheelStyleSpec(
      *   行 / 列间距都用 [containerGapDp]。
      */
     val columnCount: Int = QuickWheelLayoutEngine.DEFAULT_COLUMN_COUNT,
+    /** 容器背景色（ARGB）。默认纯白，与历史外观一致。 */
+    val containerColorArgb: Long = QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB,
+    /** 容器背景不透明度（%，0 = 全透明，100 = 不透明）。 */
+    val containerAlphaPercent: Int = QuickWheelLayoutEngine.DEFAULT_CONTAINER_ALPHA_PERCENT,
+    /** 容器阴影高度（dp，0 = 无阴影）。 */
+    val containerShadowDp: Float = QuickWheelLayoutEngine.DEFAULT_CONTAINER_SHADOW_DP,
 )
 
 /** 单个容器的几何位置（屏幕坐标，px）。 */
@@ -230,6 +236,22 @@ object QuickWheelLayoutEngine {
     const val MIN_COLUMN_COUNT = 2
     const val MAX_COLUMN_COUNT = 10
     const val DEFAULT_COLUMN_COUNT = 5
+
+    // ── 容器背景 / 阴影（一级、二级各一套）─────────────────
+    /** 容器背景默认色：纯白（与升级前外观一致）。 */
+    const val DEFAULT_CONTAINER_COLOR_ARGB = 0xFFFFFFFFL
+    const val MIN_CONTAINER_ALPHA_PERCENT = 0
+    const val MAX_CONTAINER_ALPHA_PERCENT = 100
+    const val DEFAULT_CONTAINER_ALPHA_PERCENT = 100
+    const val MIN_CONTAINER_SHADOW_DP = 0f
+    const val MAX_CONTAINER_SHADOW_DP = 24f
+    const val DEFAULT_CONTAINER_SHADOW_DP = 4f
+
+    fun clampContainerAlphaPercent(value: Int): Int =
+        value.coerceIn(MIN_CONTAINER_ALPHA_PERCENT, MAX_CONTAINER_ALPHA_PERCENT)
+
+    fun clampContainerShadowDp(value: Float): Float =
+        value.coerceIn(MIN_CONTAINER_SHADOW_DP, MAX_CONTAINER_SHADOW_DP)
 
     /** 最大环数上限，防止极小半径导致的死循环。 */
     const val MAX_RINGS = 8
@@ -373,6 +395,9 @@ object QuickWheelLayoutEngine {
         offsetXDp = clampOffsetDp(style.offsetXDp),
         offsetYDp = clampOffsetDp(style.offsetYDp),
         columnCount = style.columnCount.coerceIn(MIN_COLUMN_COUNT, MAX_COLUMN_COUNT),
+        containerColorArgb = style.containerColorArgb,
+        containerAlphaPercent = clampContainerAlphaPercent(style.containerAlphaPercent),
+        containerShadowDp = clampContainerShadowDp(style.containerShadowDp),
     )
 
     // ── 扇区（一级轮盘角度范围）────────────────────────────
@@ -1269,6 +1294,40 @@ object QuickWheelLayoutEngine {
         val x = if (maxX >= minX) anchorX.coerceIn(minX, maxX) else screenWidthPx / 2f
         val y = if (maxY >= minY) anchorY.coerceIn(minY, maxY) else screenHeightPx / 2f
         return x to y
+    }
+
+    /**
+     * 真机呼出时轮盘最底部距屏幕底边的安全余量（dp）。
+     *
+     * 0 = 容器底边刚好贴住屏幕最底端；想再留一点空隙就调大（例如 8f）。
+     */
+    const val BOTTOM_SAFE_MARGIN_DP = 4f
+
+    /**
+     * 布局完成后的纵向兜底：只要中心大圆 / 一级 / 二级任一容器的底边越过屏幕底边，
+     * 就把整组容器整体向上平移相同距离，保证轮盘最底端不超出屏幕。
+     */
+    fun clampLayoutToBottom(
+        layout: QuickWheelLayout,
+        screenHeightPx: Float,
+        bottomMarginPx: Float,
+    ): QuickWheelLayout {
+        if (!screenHeightPx.isFinite() || screenHeightPx <= 0f) return layout
+        val limit = screenHeightPx - bottomMarginPx
+        var maxBottom = layout.centerY + layout.centerSizePx / 2f
+        layout.primarySlots.forEach { slot ->
+            maxBottom = maxOf(maxBottom, slot.centerY + slot.sizePx / 2f)
+        }
+        layout.secondarySlots.forEach { slot ->
+            maxBottom = maxOf(maxBottom, slot.centerY + slot.sizePx / 2f)
+        }
+        val shift = (maxBottom - limit).coerceAtLeast(0f)
+        if (shift <= 0.5f) return layout
+        return layout.copy(
+            centerY = layout.centerY - shift,
+            primarySlots = layout.primarySlots.map { it.copy(centerY = it.centerY - shift) },
+            secondarySlots = layout.secondarySlots.map { it.copy(centerY = it.centerY - shift) },
+        )
     }
 
     /**

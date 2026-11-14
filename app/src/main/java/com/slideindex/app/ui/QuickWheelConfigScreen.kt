@@ -5,6 +5,11 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.toArgb
+import com.slideindex.app.ui.animationstyle.AnimationStyleColorPickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -805,6 +811,50 @@ fun QuickWheelConfigScreen(
                         // 背景模糊 / 遮罩也属于外观：放在外观设置最底下，拖动同样会浮出实时预览
                         // （遮罩页内可见；模糊是跨窗口效果，请看「轮盘预览」）。
                         add(
+                            settingsCardScopeItem("container-color") {
+                                QuickWheelColorRow(
+                                    title = stringResource(R.string.quick_wheel_container_color),
+                                    description = stringResource(R.string.quick_wheel_container_color_desc),
+                                    argb = levelStyle.containerColorArgb,
+                                    onPick = { color ->
+                                        updateStyle { it.copy(containerColorArgb = color) }
+                                    },
+                                )
+                            }
+                        )
+                        add(
+                            settingsCardScopeItem("container-alpha") {
+                                QuickWheelSliderRow(
+                                    title = stringResource(R.string.quick_wheel_container_alpha),
+                                    description = stringResource(R.string.quick_wheel_container_alpha_desc),
+                                    value = levelStyle.containerAlphaPercent.toFloat(),
+                                    range = QuickWheelLayoutEngine.MIN_CONTAINER_ALPHA_PERCENT.toFloat()..
+                                        QuickWheelLayoutEngine.MAX_CONTAINER_ALPHA_PERCENT.toFloat(),
+                                    unit = "%",
+                                    onValueChange = { value ->
+                                        updateStyle {
+                                            it.copy(containerAlphaPercent = value.roundToInt())
+                                        }
+                                    },
+                                )
+                            }
+                        )
+                        add(
+                            settingsCardScopeItem("container-shadow") {
+                                QuickWheelSliderRow(
+                                    title = stringResource(R.string.quick_wheel_container_shadow),
+                                    description = stringResource(R.string.quick_wheel_container_shadow_desc),
+                                    value = levelStyle.containerShadowDp,
+                                    range = QuickWheelLayoutEngine.MIN_CONTAINER_SHADOW_DP..
+                                        QuickWheelLayoutEngine.MAX_CONTAINER_SHADOW_DP,
+                                    unit = "dp",
+                                    onValueChange = { value ->
+                                        updateStyle { it.copy(containerShadowDp = value) }
+                                    },
+                                )
+                            }
+                        )
+                        add(
                             settingsCardScopeItem("backdrop-blur") {
                                 QuickWheelSliderRow(
                                     title = stringResource(R.string.quick_wheel_backdrop_blur),
@@ -1225,4 +1275,57 @@ private fun previewBlurSigmaDp(blurDp: Int, density: Float): Float {
     val safeDensity = if (density > 0f) density else 1f
     val radiusPx = (blurDp * safeDensity).coerceIn(1f, OVERLAY_BLUR_MAX_RADIUS_PX)
     return radiusPx / 2f / safeDensity
+}
+// ── 容器颜色 / 不透明度 / 阴影 ──────────────────────────────
+
+/** 容器颜色行：右侧色块 + 点击打开取色盘（与「触钮设计」同一套 Miuix ColorPalette 弹窗）。 */
+@Composable
+private fun QuickWheelColorRow(
+    title: String,
+    description: String,
+    argb: Long,
+    onPick: (Long) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showPicker = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(argb))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(8.dp),
+                ),
+        )
+    }
+    if (showPicker) {
+        AnimationStyleColorPickerDialog(
+            initialColor = argb.toInt(),
+            onDismissRequest = { showPicker = false },
+            onColorPicked = { picked ->
+                onPick(picked.toLong() and 0xFFFFFFFFL)
+                showPicker = false
+            },
+        )
+    }
 }

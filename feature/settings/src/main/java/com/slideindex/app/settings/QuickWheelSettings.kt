@@ -135,6 +135,18 @@ data class QuickWheelSlot(
      * 普通容器（哪怕点击 / 长按都没设动作）不属于这一类，会照常渲染成"全白空图标"。
      */
     val placeholder: Boolean = false,
+    /**
+     * 本容器的自定义背景色（ARGB）。
+     *
+     * `0` = 跟随轮盘样式（默认，外观与升级前一致）；非 0 = 只有这一格用指定颜色。
+     */
+    val containerColorArgb: Long = 0L,
+    /**
+     * 本容器的文字 / 图标颜色（ARGB）。
+     *
+     * `0` = 自动：按容器背景深浅取黑或白（默认）；非 0 = 只有这一格用指定颜色。
+     */
+    val iconTintArgb: Long = 0L,
 ) {
     /**
      * 是否已配置内容。
@@ -380,8 +392,8 @@ data class QuickWheel(
 
         /** 新轮盘预置的导航键容器数量：返回 / 主屏幕 / 多任务。 */
         const val DEFAULT_SLOT_COUNT = 3
-        const val MAX_SLOTS = 48
-        const val MAX_SUB_SLOTS = 24
+        const val MAX_SLOTS = 88
+        const val MAX_SUB_SLOTS = 30
         const val UNTITLED_NAME_PREFIX = "轮盘"
 
         /**
@@ -502,6 +514,14 @@ object QuickWheelCodec {
             // 第 12 段（索引 11）为矩形列数；旧记录没有这段 → 用默认列数（向后兼容）。
             columnCount = parts.getOrNull(11)?.toIntOrNull()
                 ?: QuickWheelLayoutEngine.DEFAULT_COLUMN_COUNT,
+            // 第 13–15 段（索引 12–14）：容器颜色 / 不透明度 / 阴影。
+            // 旧记录没有这几段 → 一律回落到默认值（白 / 100% / 4dp），外观与升级前完全一致。
+            containerColorArgb = parts.getOrNull(12)?.toLongOrNull()
+                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB,
+            containerAlphaPercent = parts.getOrNull(13)?.toIntOrNull()
+                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_ALPHA_PERCENT,
+            containerShadowDp = parts.getOrNull(14)?.toFloatOrNull()
+                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_SHADOW_DP,
         )
     }
 
@@ -752,7 +772,10 @@ object QuickWheelCodec {
 
     /** 编码一套样式，并在末尾追加矩形列数。 */
     private fun encodeStyleWithColumn(style: QuickWheelStyleSpec): String =
-        encodeStyle(style) + STYLE_SEP + style.columnCount
+        encodeStyle(style) + STYLE_SEP + style.columnCount +
+            STYLE_SEP + style.containerColorArgb +
+            STYLE_SEP + style.containerAlphaPercent +
+            STYLE_SEP + style.containerShadowDp
 
     /**
      * 解码"当前形态样式 + 另一形态样式"。
@@ -777,6 +800,16 @@ object QuickWheelCodec {
         }
     }
 
+    /** 只有确实设过色才覆盖；0 / 缺失 = 跟随轮盘样式。 */
+    private fun QuickWheelSlot.withColor(argb: Long?): QuickWheelSlot =
+        if (argb == null || argb == 0L || argb == containerColorArgb) this
+        else copy(containerColorArgb = argb)
+
+    /** 文字 / 图标颜色；0 / 缺失 = 自动（按背景深浅黑/白）。 */
+    private fun QuickWheelSlot.withIconTint(argb: Long?): QuickWheelSlot =
+        if (argb == null || argb == 0L || argb == iconTintArgb) this
+        else copy(iconTintArgb = argb)
+
     fun decode(prefs: Preferences): List<QuickWheel> {
         val rawEntries = prefs[SettingsPreferenceKeys.QUICK_WHEEL_ENTRIES] ?: emptySet()
         if (rawEntries.isEmpty()) return emptyList()
@@ -792,6 +825,20 @@ object QuickWheelCodec {
             records.getOrPut(parsed.first) { mutableListOf() } += parsed.second to parsed.third
         }
 
+        // 单格背景色 / 文字色单独存一份（不进容器记录，避免动 encodeSlot 的段位兼容）。
+        fun readColorMap(key: androidx.datastore.preferences.core.Preferences.Key<Set<String>>): HashMap<String, Long> {
+            val out = HashMap<String, Long>()
+            (prefs[key] ?: emptySet()).forEach { raw ->
+                val parts = raw.split('\u001D')
+                if (parts.size == 3) {
+                    val argb = parts[2].toLongOrNull() ?: return@forEach
+                    if (argb != 0L) out[parts[0] + '\u001D' + parts[1]] = argb
+                }
+            }
+            return out
+        }
+        val slotColors = readColorMap(SettingsPreferenceKeys.QUICK_WHEEL_SLOT_COLORS)
+        val slotIconColors = readColorMap(SettingsPreferenceKeys.QUICK_WHEEL_SLOT_ICON_COLORS)
         return metas.mapIndexed { position, meta ->
             val list = records[meta.id].orEmpty()
             val center = list.firstOrNull { isCenterPath(it.first) }?.second ?: QuickWheelSlot()
@@ -828,13 +875,23 @@ object QuickWheelCodec {
             }
 
             val slots = primary.mapIndexed { index, slot ->
-                val subs = secondary[index]?.sortedBy { it.first }?.map { it.second }.orEmpty()
-                if (subs.isEmpty()) slot else slot.copy(subSlots = subs)
+                val key = meta.id + '\u001D' + primaryPath(index)
+                val colored = slot.withColor(slotColors[key]).withIconTint(slotIconColors[key])
+                val subs = secondary[index]
+                    ?.sortedBy { it.first }
+                    ?.mapIndexed { subIndex, (_, sub) ->
+                        val subKey = meta.id + '\u001D' + secondaryPath(index, subIndex)
+                        sub.withColor(slotColors[subKey]).withIconTint(slotIconColors[subKey])
+                    }
+                    .orEmpty()
+                if (subs.isEmpty()) colored else colored.copy(subSlots = subs)
             }
 
             meta.copy(
                 order = position,
-                centerSlot = center,
+                centerSlot = center
+                    .withColor(slotColors[meta.id + '\u001D' + PATH_CENTER])
+                    .withIconTint(slotIconColors[meta.id + '\u001D' + PATH_CENTER]),
                 slots = slots,
             ).normalized()
         }
@@ -847,6 +904,18 @@ object QuickWheelCodec {
         prefs[SettingsPreferenceKeys.QUICK_WHEEL_ENTRIES] = limited.map(::encodeEntry).toSet()
         prefs[SettingsPreferenceKeys.QUICK_WHEEL_SLOTS] = limited.flatMap { wheel ->
             flatten(wheel).map { (path, slot) -> encodeSlot(wheel.id, path, slot) }
+        }.toSet()
+        prefs[SettingsPreferenceKeys.QUICK_WHEEL_SLOT_COLORS] = limited.flatMap { wheel ->
+            flatten(wheel).mapNotNull { (path, slot) ->
+                if (slot.containerColorArgb == 0L) null
+                else wheel.id + '\u001D' + path + '\u001D' + slot.containerColorArgb
+            }
+        }.toSet()
+        prefs[SettingsPreferenceKeys.QUICK_WHEEL_SLOT_ICON_COLORS] = limited.flatMap { wheel ->
+            flatten(wheel).mapNotNull { (path, slot) ->
+                if (slot.iconTintArgb == 0L) null
+                else wheel.id + '\u001D' + path + '\u001D' + slot.iconTintArgb
+            }
         }.toSet()
     }
 }

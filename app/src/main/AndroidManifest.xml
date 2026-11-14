@@ -140,6 +140,11 @@
         android:theme="@style/Theme.SlideIndex">
 
         <activity
+            android:name=".ui.QuickWheelSlotEditorActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SlideIndex" />
+            
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_violet"

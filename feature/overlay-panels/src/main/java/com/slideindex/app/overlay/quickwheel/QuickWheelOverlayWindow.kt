@@ -8,7 +8,30 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.gesture.QuickWheelAnchorMode
@@ -16,12 +39,12 @@ import com.slideindex.app.gesture.QuickWheelLaunchShape
 import com.slideindex.app.overlay.OverlayBlurGate
 import com.slideindex.app.overlay.OverlayCompose
 import com.slideindex.app.overlay.OverlayComposeOwner
+import com.slideindex.app.overlay.OverlayViewBackHandler
 import com.slideindex.app.overlay.OverlayWindowTypes
+import com.slideindex.app.overlay.panels.PanelRuntimeHooks
 import com.slideindex.app.overlay.layout.QuickWheelAdaptiveScreen
 import com.slideindex.app.overlay.layout.QuickWheelLayoutEngine
 import com.slideindex.app.overlay.layout.QuickWheelShape
-import com.slideindex.app.util.PermissionHelper
-import com.slideindex.app.util.TaskExclusions
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.settings.QuickWheel
 import com.slideindex.app.settings.QuickWheelLaunchMode
@@ -30,6 +53,10 @@ import com.slideindex.app.settings.opensSomething
 import com.slideindex.app.settings.withQuickWheelLaunchMode
 import com.slideindex.app.settings.withoutLaunchWindowMode
 import com.slideindex.app.ui.theme.OverlayAwareModuleTheme
+import com.slideindex.app.util.PermissionHelper
+import com.slideindex.app.util.TaskExclusions
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * 「快捷轮盘」浮层宿主（Compose）。
@@ -41,11 +68,16 @@ import com.slideindex.app.ui.theme.OverlayAwareModuleTheme
 object QuickWheelOverlayWindow {
     private const val TAG = "QuickWheelOverlay"
 
+    /** 截屏类动作执行前的最小延迟：等轮盘窗口移除后系统重绘一帧，避免轮盘被拍进截图。 */
+    private const val SCREEN_CAPTURE_DISMISS_DELAY_MS = 150L
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var composeView: ComposeView? = null
     private var composeOwner: OverlayComposeOwner? = null
     private var windowManager: WindowManager? = null
     private var activeExecutor: com.slideindex.app.overlay.panels.GestureActionRunner? = null
+    /** 返回键 / 返回手势的路由（与侧滑面板同一套：键盘优先、魅族注入兜底、predictive back）。 */
+    private var backHandler: OverlayViewBackHandler? = null
     private var activeSettings: AppSettings = AppSettings()
 
     /** 本应用包名：容器选了"始终小窗"时用于硬排除判定（桌面 / 系统界面 / 自身 → 仍全屏）。 */
@@ -103,12 +135,12 @@ object QuickWheelOverlayWindow {
         Log.i(
             TAG,
             "show wheelId='$wheelId' shape=$shape callerWheels=${settings.launcher.quickWheels.size} " +
-                "snapshotWheels=${latestSettings?.launcher?.quickWheels?.size ?: -1} " +
-                "resolved=${wheel.id.take(8)} slots=${wheel.slots.size} " +
-                "configured=${wheel.primaryActionCount} " +
-                "primaryShape=${wheel.primaryShape} " +
-                "containerSizeDp=${wheel.primaryStyle.containerSizeDp} " +
-                "manualSector=${manualSectorMask ?: "auto"}",
+                    "snapshotWheels=${latestSettings?.launcher?.quickWheels?.size ?: -1} " +
+                    "resolved=${wheel.id.take(8)} slots=${wheel.slots.size} " +
+                    "configured=${wheel.primaryActionCount} " +
+                    "primaryShape=${wheel.primaryShape} " +
+                    "containerSizeDp=${wheel.primaryStyle.containerSizeDp} " +
+                    "manualSector=${manualSectorMask ?: "auto"}",
         )
         return showInternal(
             context = context,
@@ -145,8 +177,6 @@ object QuickWheelOverlayWindow {
             secondaryShape = secondary ?: wheel.secondaryShape,
         ).normalized()
     }
-
-    /** 把呼出形态按级拆解成引擎形态；`null` = 该级跟随轮盘自身配置（`com.slideindex.app.ui`）。 */
 
     /** 配置页「轮盘预览」：直接用草稿轮盘呼出。 */
     fun showPreview(
@@ -271,39 +301,118 @@ object QuickWheelOverlayWindow {
                 marginPx = QuickWheelLayoutEngine.ADAPTIVE_MARGIN_DP * density,
             )
         }
+        // 横向偏移（primaryStyle.offsetXDp）应当是「向内收」的语义：
+        // 从右侧呼出时 -7 = 往左收、远离右边缘；但同一个 -7 从左侧呼出会把轮盘推出左边缘。
+        // 这里按呼出侧把它镜像：左侧呼出等价于 +7。
+        // 引擎内部固定按 +offsetX 平移整组容器，所以镜像后的锚点要先补偿 2*offset。
+        val offsetXPx = wheel.primaryStyle.offsetXDp * density
+        val renderAnchorX = if (anchorX < screenWidthPx / 2f) {
+            anchorX - 2f * offsetXPx
+        } else {
+            anchorX
+        }
 
         activeExecutor = actionExecutor
         activeSettings = settings
         activeSelfPackage = hostContext.packageName
 
         val owner = OverlayComposeOwner()
+        val appContext = hostContext.applicationContext
         val view = OverlayCompose.createComposeView(hostContext, owner).apply {
             setContent {
+                // 编辑态草稿：拖拽 / 增删会不断产生新对象，所以必须放在 State 里。
+                var editorWheel by remember { mutableStateOf(wheel) }
+                var editing by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
+
                 OverlayAwareModuleTheme {
-                    QuickWheelOverlayContent(
-                        wheel = wheel,
-                        anchorX = anchorX,
-                        anchorY = anchorY,
-                        screenWidthPx = screenWidthPx,
-                        onExecuteTap = { slot -> executeSlot(slot, longPress = false, anchorX, anchorY) },
-                        onExecuteLongPress = { slot -> executeSlot(slot, longPress = true, anchorX, anchorY) },
-                        onDismiss = { dismissForSession(mySession) },
-                        externalTracking = externalTracking,
-                        showCenter = showCenter,
-                        adaptive = adaptive,
-                        secondaryAdaptive = secondaryAdaptive,
-                        primarySectorMaskOverride = primarySectorMaskOverride,
-                        // 容器以外区域的黑色遮罩浓度（容器本身不透明，不受影响）。
-                        backdropDimAlpha = QuickWheelLayoutEngine
-                            .clampBackdropDimPercent(wheel.backdropDimPercent) / 100f,
-                        shellCommands = settings.shellCommands,
-                        // 与圆环启动器同一套触觉：划过容器 / 按满长按时间 / 松手执行。
-                        hapticSettings = settings,
-                        onExternalHandlers = { move, up ->
-                            externalMoveHandler = move
-                            externalUpHandler = up
-                        },
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (editing) {
+                            // 编辑层铺一层暗色遮罩：浮层是透明的，不遮的话底下的 App 会和编辑网格糊在一起。
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.35f)),
+                            ) {
+                                // 编辑层实现在 :app（依赖 app 资源与主题），浮层模块通过
+                                // [PanelRuntimeHooks.quickWheelEditorContent] 渲染；未注册时只显示遮罩。
+                                PanelRuntimeHooks.quickWheelEditorContent?.content(
+                                    editorWheel,
+                                    { updated ->
+                                        editorWheel = updated
+                                        scope.launch { persistWheel(appContext, updated) }
+                                    },
+                                    { path ->
+                                        // 配置页同样在 :app，走钩子打开；先收起浮层避免被轮盘压住。
+                                        PanelRuntimeHooks.openQuickWheelSlotEditor
+                                            ?.invoke(appContext, editorWheel.id, path)
+                                        dismissForSession(mySession)
+                                    },
+                                    { editing = false },
+                                )
+                            }
+                        } else {
+                            QuickWheelOverlayContent(
+                                wheel = editorWheel,
+                                anchorX = renderAnchorX,
+                                anchorY = anchorY,
+                                screenWidthPx = screenWidthPx,
+                                screenHeightPx = screenHeightPx,
+                                onExecuteTap = { slot ->
+                                    executeSlot(slot, longPress = false, anchorX, anchorY)
+                                },
+                                onExecuteLongPress = { slot ->
+                                    executeSlot(slot, longPress = true, anchorX, anchorY)
+                                },
+                                onDismiss = { dismissForSession(mySession) },
+                                externalTracking = externalTracking,
+                                showCenter = showCenter,
+                                adaptive = adaptive,
+                                secondaryAdaptive = secondaryAdaptive,
+                                primarySectorMaskOverride = primarySectorMaskOverride,
+                                // 容器以外区域的黑色遮罩浓度（容器本身不透明，不受影响）。
+                                backdropDimAlpha = QuickWheelLayoutEngine
+                                    .clampBackdropDimPercent(editorWheel.backdropDimPercent) / 100f,
+                                // 上游新增：HUD 里 Shell 命令按用户自定义名回查。
+                                shellCommands = settings.shellCommands,
+                                // 上游新增：划过容器 / 按满长按时间的触觉反馈（与圆环启动器同一套）。
+                                hapticSettings = settings,
+                                onExternalHandlers = { move, up ->
+                                    externalMoveHandler = move
+                                    externalUpHandler = up
+                                },
+                            )
+
+                            // 编辑入口：轮盘在右半屏呼出 → 铅笔放左边；在左半屏 → 放右边。
+                            // 垂直方向跟轮盘圆心（anchorY）对齐，避免盖在容器上。
+                            val wheelOnRight = anchorX > screenWidthPx / 2f
+                            Surface(
+                                modifier = Modifier
+                                    .align(
+                                        if (wheelOnRight) {
+                                            Alignment.CenterStart
+                                        } else {
+                                            Alignment.CenterEnd
+                                        },
+                                    )
+                                    .padding(horizontal = 12.dp)
+                                    .offset {
+                                        IntOffset(
+                                            0,
+                                            (anchorY - screenHeightPx / 2f).roundToInt(),
+                                        )
+                                    }
+                                    .size(40.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 3.dp,
+                            ) {
+                                IconButton(onClick = { editing = true }) {
+                                    Icon(Icons.Default.Edit, contentDescription = null)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // 与「圆环启动器」一致：显式声明视图不透明（View 默认即 1f，
@@ -323,7 +432,7 @@ object QuickWheelOverlayWindow {
             QuickWheelLayoutEngine.clampBackdropBlurDp(wheel.backdropBlurDp),
         )
         val blurAvailable = blurDp > 0 &&
-            OverlayBlurGate.isSystemBlurEnabled(wm)
+                OverlayBlurGate.isSystemBlurEnabled(wm)
 
         val params = OverlayWindowTypes.createPresentationParams(hostContext).apply {
             OverlayWindowTypes.applyFullScreen(this)
@@ -339,6 +448,12 @@ object QuickWheelOverlayWindow {
             // 事件流，所以跟手高亮 / 松手确认仍由外部事件（onExternalMove / confirmContinuousRelease）
             // 驱动；同机上的圆环启动器用的就是同一套模型（它持续触发时同样不带 NOT_TOUCHABLE）。
             OverlayWindowTypes.applyPresentationInteractiveFlags(this)
+            // 返回键：FLAG_NOT_FOCUSABLE 的窗口收不到系统返回派发（侧滑面板踩过同一个坑，
+            // 见 OverlaySidePanelHost.ensurePanelBrowsingInput 的注释）。
+            // 放开聚焦才能收到返回；再用 ALT_FOCUSABLE_IM =「可聚焦但不与输入法交互」，
+            // 避免轮盘一呼出就把输入法抢过来。
+            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            flags = flags or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
             type = if (canHostOpaqueOverlay) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -359,9 +474,9 @@ object QuickWheelOverlayWindow {
         Log.i(
             TAG,
             "show params: type=${params.type} opaqueHost=$canHostOpaqueOverlay " +
-                "flags=0x${Integer.toHexString(params.flags)} alpha=${params.alpha} " +
-                "externalTracking=$externalTracking " +
-                "blurDp=$blurDp blurAvailable=$blurAvailable dim=${wheel.backdropDimPercent}",
+                    "flags=0x${Integer.toHexString(params.flags)} alpha=${params.alpha} " +
+                    "externalTracking=$externalTracking " +
+                    "blurDp=$blurDp blurAvailable=$blurAvailable dim=${wheel.backdropDimPercent}",
         )
 
         return runCatching {
@@ -369,6 +484,13 @@ object QuickWheelOverlayWindow {
             composeView = view
             composeOwner = owner
             windowManager = wm
+            backHandler?.detach()
+            backHandler = OverlayViewBackHandler(view) { dismissForSession(mySession) }.also {
+                // requestViewFocus：legacy（注入 KEYCODE_BACK）那条路要靠视图焦点才收得到。
+                it.attach(requestViewFocus = true)
+                // 再补一档更早的拦截：Compose 自己消费了 Key.Back 时，unhandled 回调不会触发。
+                it.attachKeyFallback()
+            }
             true
         }.getOrElse {
             Log.w(TAG, "show: addView 失败", it)
@@ -425,6 +547,8 @@ object QuickWheelOverlayWindow {
         composeView = null
         composeOwner = null
         windowManager = null
+        backHandler?.detach()
+        backHandler = null
         activeExecutor = null
         activeSettings = AppSettings()
         activeSelfPackage = ""
@@ -464,16 +588,30 @@ object QuickWheelOverlayWindow {
                     ?: true,
             )
         }
-        runCatching {
-            executor.run(
-                action,
-                effectiveSettings,
-                longPress,
-                anchorX,
-                anchorY,
-                null,
-            )
-        }.onFailure { Log.w(TAG, "executeSlot 失败", it) }
+        // ⚠️ 先收起轮盘再执行：「全局复制」执行后**立刻**截屏分析，轮盘还没收掉就会被拍进截图，
+        // 界面会出现一排排轮盘容器的空方块（真机反馈）。只针对它加这一步，其它动作行为不变。
+        val needsCleanScreen = action.type == GestureActionType.UNIVERSAL_COPY
+
+        val runAction = {
+            runCatching {
+                executor.run(
+                    action,
+                    effectiveSettings,
+                    longPress,
+                    anchorX,
+                    anchorY,
+                    null,
+                )
+            }.onFailure { Log.w(TAG, "executeSlot 失败", it) }
+        }
+
+        if (needsCleanScreen) {
+            dismiss()
+            // 窗口移除后系统还要重绘一帧；150ms 足够让截图不再包含轮盘。
+            mainHandler.postDelayed({ runAction() }, SCREEN_CAPTURE_DISMISS_DELAY_MS)
+        } else {
+            runAction()
+        }
     }
 
     /** 目标包名（拿不到就返回 null：不参与"桌面 / 系统界面 / 自身"的硬排除判定）。 */
@@ -485,5 +623,26 @@ object QuickWheelOverlayWindow {
         if (wheels.isEmpty()) return null
         if (wheelId.isBlank()) return wheels.firstOrNull()
         return wheels.firstOrNull { it.id == wheelId } ?: wheels.firstOrNull()
+    }
+}
+
+/**
+ * 把编辑后的轮盘写回设置。
+ *
+ * 走仓库既有的类型化写入入口 `SettingsRepository.setQuickWheels`（与设置页「轮盘列表」
+ * 保存用的是同一个方法），再按 id 把这一张轮盘替换进列表。
+ */
+private fun persistWheel(context: Context, wheel: QuickWheel) {
+    // 本模块不持有 SettingsRepository：读写走 :app 注册的钩子（PanelRuntimeHooks）。
+    val read = com.slideindex.app.overlay.panels.PanelRuntimeHooks.readQuickWheels ?: return
+    val write = com.slideindex.app.overlay.panels.PanelRuntimeHooks.updateQuickWheels ?: return
+    kotlinx.coroutines.MainScope().launch {
+        runCatching {
+            val wheels = read().orEmpty()
+            write(wheels.map { if (it.id == wheel.id) wheel else it })
+        }.onFailure {
+            // 顶层函数访问不到对象里的私有 TAG，这里用字面量（与 TAG 的值保持一致）。
+            Log.w("QuickWheelOverlay", "persistWheel 失败", it)
+        }
     }
 }

@@ -737,4 +737,7 @@
     <string name="message_overlay_menu_close">Close</string>
     <string name="message_action_quick_reply_to">Reply to %1$s</string>
     <string name="search_engine_accessibility_required">Enable the XGesture accessibility service to use this feature</string>
-</resources>
+    <string name="quick_wheel_add_placeholder">+ Empty slot</string>
+    <string name="quick_wheel_delete_container">Delete</string>
+    <string name="quick_wheel_hint_canvas">Tap a container to edit · long-press for level 2 · drag to reorder · drop on the trash to delete</string>
+    <string name="quick_wheel_hint_secondary">Long-press a container to drag it onto “Delete”. Tap a sub-ring container to edit it, tap anywhere else to go back.</string></resources>

@@ -39,6 +39,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
@@ -149,7 +152,59 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                 rikka.shizuku.ShizukuProvider.enableMultiProcessSupport(true)
             }
         }
-        // 所有进程共有：崩溃记录 + Hidden API 放行 + 引擎运行时接入。
+
+                // 轮盘原地编辑写回设置：浮层已迁到 :feature:overlay-panels，通过钩子读写。
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.readQuickWheels = {
+            deps.settingsRepository.readSnapshot().launcher.quickWheels
+        }
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.updateQuickWheels = { wheels ->
+            deps.settingsRepository.setQuickWheels(wheels)
+        }
+        // 轮盘原地编辑层 + 容器配置页实现在 :app（依赖 app 的资源与主题），
+        // 通过钩子交给浮层模块（:feature:overlay-panels）调用。
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.quickWheelEditorContent =
+            object : com.slideindex.app.overlay.panels.QuickWheelEditorContent {
+                @androidx.compose.runtime.Composable
+                override fun content(
+                    wheel: com.slideindex.app.settings.QuickWheel,
+                    onChange: (com.slideindex.app.settings.QuickWheel) -> Unit,
+                    onOpenSlot: (String) -> Unit,
+                    onClose: () -> Unit,
+                ) {
+                    com.slideindex.app.ui.QuickWheelEditorOverlay(
+                        wheel = wheel,
+                        onChange = onChange,
+                        onOpenSlot = onOpenSlot,
+                        onClose = onClose,
+                        // 交给编辑层自己居中，避免从边缘呼出时整组网格溢出屏幕。
+                        anchorOverride = null,
+                        // 让出状态栏与系统导航区：**同时**作用于网格排布与药丸条，
+                        // 否则药丸会盖住轮盘容器（拖拽 / 增删都点不到）。
+                        extraTopInsetDp = 32f,
+                        extraBottomInsetDp = 72f,
+                    )
+                }
+            }
+        com.slideindex.app.overlay.panels.PanelRuntimeHooks.openQuickWheelSlotEditor =
+            { context, wheelId, path ->
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(
+                            context,
+                            com.slideindex.app.ui.QuickWheelSlotEditorActivity::class.java,
+                        )
+                            .putExtra(
+                                com.slideindex.app.ui.QuickWheelSlotEditorActivity.EXTRA_WHEEL_ID,
+                                wheelId,
+                            )
+                            .putExtra(
+                                com.slideindex.app.ui.QuickWheelSlotEditorActivity.EXTRA_PATH,
+                                path,
+                            )
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            }
         com.slideindex.app.util.LocalCrashHandler.install(this)
         HiddenApiBootstrap.install()
         NativeEngineRuntime.coordinator = nativeEnginePackCoordinator

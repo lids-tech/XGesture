@@ -5027,6 +5027,15 @@
     <string name="share_sheet_toggle_title">لوحة مشاركة داخلية</string>
     <string name="share_sheet_toggle_desc">استبدال لوحة مشاركة النظام بالشبكة الداخلية: ثبّت الأهداف المفضلة وتجاوز واجهة النظام</string>
     <string name="share_sheet_settings_pin_tip">ملاحظة: تُحفظ الأهداف المثبّتة محليًا، واضغط مطولًا مرة أخرى لإلغاء التثبيت.</string>
+    <string name="quick_wheel_container_color">Container color</string>
+    <string name="quick_wheel_container_color_desc">Container background color; icons and labels turn white on dark colors</string>
+    <string name="quick_wheel_container_alpha">Container opacity</string>
+    <string name="quick_wheel_container_alpha_desc">0% = fully transparent, 100% = solid</string>
+    <string name="quick_wheel_container_shadow">Container shadow</string>
+    <string name="quick_wheel_container_shadow_desc">0 = no shadow; larger feels more floating</string>    <string name="quick_wheel_slot_container_color">Container color</string>
+    <string name="quick_wheel_slot_icon_color">Text/icon color</string>
+    <string name="quick_wheel_slot_color_follow">Follow</string>
+    <string name="quick_wheel_slot_color_custom">Custom color</string>
     <string name="search_engine_icon_following_app">تتبع الأيقونة %1$s</string>
     <string name="shortcut_port_requires_root">يتطلب هذا الاختصار صلاحية Root. بدّل إلى وضع Root لتشغيله.</string>
     <string name="shake_menu_action_subtitle">تنفيذ إجراءات الاتجاه في القائمة</string>

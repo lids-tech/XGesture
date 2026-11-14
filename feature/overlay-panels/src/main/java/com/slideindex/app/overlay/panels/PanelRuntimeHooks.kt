@@ -123,6 +123,20 @@ object PanelRuntimeHooks {
     @Volatile
     var settingsFlow: ((Context) -> kotlinx.coroutines.flow.Flow<AppSettings>?)? = null
 
+    /** 读取最新的轮盘列表（浮层写回时做合并用）。 */
+    var readQuickWheels: (() -> List<com.slideindex.app.settings.QuickWheel>?)? = null
+
+    /** 写回轮盘列表（浮层原地编辑用）。 */
+    var updateQuickWheels: (suspend (List<com.slideindex.app.settings.QuickWheel>) -> Unit)? = null
+
+    /** 轮盘原地编辑层（`:app` 的 QuickWheelEditorOverlay）。 */
+    @Volatile
+    var quickWheelEditorContent: QuickWheelEditorContent? = null
+
+    /** 打开轮盘容器配置页（`:app` 的 QuickWheelSlotEditorActivity）。 */
+    @Volatile
+    var openQuickWheelSlotEditor: ((android.content.Context, String, String) -> Unit)? = null
+
     /** 宿主 overlay 上下文（`:app` 的 overlayHostContext）。 */
     @Volatile
     var overlayHostContext: (() -> Context?)? = null
@@ -649,4 +663,15 @@ fun interface PanelExpandSlotPicker {
 fun interface PanelComposeWrapper {
     @androidx.compose.runtime.Composable
     fun content(inner: @androidx.compose.runtime.Composable () -> Unit)
+}
+
+/** 见 [PanelRuntimeHooks.quickWheelEditorContent]。 */
+fun interface QuickWheelEditorContent {
+    @androidx.compose.runtime.Composable
+    fun content(
+        wheel: com.slideindex.app.settings.QuickWheel,
+        onChange: (com.slideindex.app.settings.QuickWheel) -> Unit,
+        onOpenSlot: (String) -> Unit,
+        onClose: () -> Unit,
+    )
 }

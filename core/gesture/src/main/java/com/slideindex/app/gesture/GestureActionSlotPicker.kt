@@ -42,8 +42,15 @@ fun GestureAction.isEligibleForSlotPicker(kind: SlotPickerKind): Boolean {
     if (this is GestureAction.FloatingPointer) return false
     // 指尖环仅允许绑定侧滑触钮（ActionPickerCatalogPolicy.EdgeGesture），所有槽位点选场景禁止。
     if (this is GestureAction.FingertipRing) return false
-    // 快速启动轮盘同样只允许绑定侧滑触钮，避免轮盘槽位内再嵌轮盘造成递归装配。
-    if (this is GestureAction.QuickWheel) return false
+    // 快捷轮盘动作：放行「点选容器」槽位与悬浮球手势槽位（OverlayTap），
+    // 这样轮盘格子、边角轮盘、悬浮球手势都能直接打开指定轮盘。
+    // 其余槽位（指尖环 / 摇杆环 / 摇杆长按）继续禁止。
+    if (this is GestureAction.QuickWheel &&
+        kind != SlotPickerKind.CornerWheel &&
+        kind != SlotPickerKind.OverlayTap
+    ) {
+        return false
+    }
     // 「晃动菜单」只属于晃动槽位：其它槽位点开它没有可执行的方向语义。
     if (this is GestureAction.OpenShakeMenu && kind != SlotPickerKind.ShakeGesture) return false
 
