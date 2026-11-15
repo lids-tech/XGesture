@@ -4627,6 +4627,9 @@
     <string name="gesture_action_smart_screenshot_desc">範囲/全画面のスクリーンショット編集と画面上へのピン留め（11+）</string>
     <string name="smart_screenshot_saved">スクリーンショットをアルバムに保存しました</string>
     <string name="smart_screenshot_copied">スクリーンショットをクリップボードにコピーしました</string>
+    <string name="smart_screenshot_drag_hint">ドラッグして範囲を選択</string>
+    <string name="smart_screenshot_selection_too_small">選択範囲が小さすぎます。もう一度ドラッグしてください</string>
+    <string name="smart_screenshot_reselect">範囲を再選択</string>
     <string name="settings_app_language_label_zh">简体中文</string>
     <string name="settings_app_language_label_en">English</string>
     <string name="settings_app_language_label_ja">日本語</string>
@@ -4785,6 +4788,8 @@
     <string name="quick_wheel_section_slots">コンテナ</string>
     <string name="quick_wheel_show_labels">テキストラベルを表示</string>
     <string name="quick_wheel_show_labels_desc">アイコンの下に名前を表示します。アイコンとテキストは一緒に中央揃えされます</string>
+    <string name="quick_wheel_transparent_container">コンテナ背景を完全透明に</string>
+    <string name="quick_wheel_transparent_container_desc">オンにするとアプリ・画像アイコンのプレートと切り抜きがなくなります。内蔵アクションとテキストアイコンには常にプレートが付きます</string>
     <string name="quick_wheel_initial_radius">初期半径</string>
     <string name="quick_wheel_initial_radius_desc">呼び出し位置から最初のリングまでの距離</string>
     <string name="quick_wheel_container_gap">コンテナ間隔</string>

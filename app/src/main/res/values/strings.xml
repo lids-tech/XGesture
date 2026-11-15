@@ -4905,6 +4905,8 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="quick_wheel_section_slots">Containers</string>
     <string name="quick_wheel_show_labels">Show text labels</string>
     <string name="quick_wheel_show_labels_desc">Show the name under each icon; icon and text stay centered together</string>
+    <string name="quick_wheel_transparent_container">Transparent container background</string>
+    <string name="quick_wheel_transparent_container_desc">Turn on to remove the plate and clipping behind app icons and images; built-in action and text icons always keep a plate</string>
     <string name="quick_wheel_initial_radius">Initial radius</string>
     <string name="quick_wheel_initial_radius_desc">Distance from the summon point to the first ring</string>
     <string name="quick_wheel_container_gap">Container gap</string>
@@ -5064,6 +5066,9 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="quick_wheel_slot_icon_color">Text/icon color</string>
     <string name="quick_wheel_slot_color_follow">Follow</string>
     <string name="quick_wheel_slot_color_custom">Custom color</string>
+    <string name="smart_screenshot_drag_hint">Drag to select a region</string>
+    <string name="smart_screenshot_selection_too_small">Selection is too small, please drag again</string>
+    <string name="smart_screenshot_reselect">Reselect region</string>
     <string name="shell_panel_execution_mode">Execution mode</string>
     <string name="shell_panel_mode_root">Root</string>
     <string name="shell_panel_mode_shizuku">Shizuku</string>

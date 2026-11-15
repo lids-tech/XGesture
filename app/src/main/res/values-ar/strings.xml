@@ -4523,6 +4523,9 @@
     <string name="gesture_action_smart_screenshot_desc">قص وتحرير لقطة شاشة لمنطقة أو ملء الشاشة، مع تثبيتها على الشاشة (11+)</string>
     <string name="smart_screenshot_saved">تم حفظ لقطة الشاشة في الألبوم</string>
     <string name="smart_screenshot_copied">تم نسخ لقطة الشاشة إلى الحافظة</string>
+    <string name="smart_screenshot_drag_hint">اسحب لتحديد منطقة</string>
+    <string name="smart_screenshot_selection_too_small">التحديد صغير جدًا، يرجى السحب مرة أخرى</string>
+    <string name="smart_screenshot_reselect">إعادة تحديد المنطقة</string>
     <string name="otp_hub_tab_settings">الإعدادات</string>
     <string name="otp_extraction_entry_title">استخراج الرمز</string>
     <string name="otp_extraction_entry_desc">ما يحدث بعد العثور على الرمز: إشعار، Toast، نسخ تلقائي؛ إضافة إلى حجب الرسائل والأمان</string>
@@ -4789,6 +4792,8 @@
     <string name="quick_wheel_section_slots">الحاويات</string>
     <string name="quick_wheel_show_labels">إظهار التسميات النصية</string>
     <string name="quick_wheel_show_labels_desc">إظهار الاسم أسفل كل أيقونة؛ وتبقى الأيقونة والنص متوسّطين معاً</string>
+    <string name="quick_wheel_transparent_container">خلفية شفافة للحاويات</string>
+    <string name="quick_wheel_transparent_container_desc">عند التشغيل تُزال الخلفية والقص حول أيقونات التطبيقات والصور؛ تحتفظ أيقونات الإجراءات والنصوص بالخلفية دائماً</string>
     <string name="quick_wheel_initial_radius">نصف القطر الأولي</string>
     <string name="quick_wheel_initial_radius_desc">المسافة من نقطة الاستدعاء إلى الحلقة الأولى</string>
     <string name="quick_wheel_container_gap">الفاصل بين الحاويات</string>

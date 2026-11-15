@@ -92,6 +92,14 @@ enum class QuickWheelIconSource {
     /** 内置图标库（复用项目自绘 ThinActionIcons）。 */
     ICON_LIBRARY,
 
+    /**
+     * **全局图标库**（Lucide / Remix / Tabler 字体图标）。
+     *
+     * 值 = 字体库 key（`l:` / `r:` / `tb:` 开头，与动作图标覆盖同一套编码），
+     * 渲染交给 `:app` 的 `ActionIconView`，与设置页里给动作选图标完全同源。
+     */
+    FONT_ICON,
+
     /** 已安装应用图标（值 = 包名）。 */
     APP_ICON,
 
@@ -366,7 +374,8 @@ data class QuickWheel(
         )
         return copy(
             name = name.trim(),
-            sectorMask = QuickWheelLayoutEngine.normalizeSectorMask(sectorMask),
+            // 只裁位，不归一化：草稿里保留用户真实点选，扇区环 / 预览各按各的口径（见方法注释）。
+            sectorMask = QuickWheelLayoutEngine.clampSectorMask(sectorMask),
             // 两套形态参数都保存下来……
             primaryCircleStyle = primaryCircle,
             primaryRectStyle = primaryRect,
@@ -496,6 +505,8 @@ object QuickWheelCodec {
 
     private fun decodeStyle(raw: String): QuickWheelStyleSpec {
         val parts = raw.split(STYLE_SEP)
+        // 索引 12 是「上游透明位」还是「本地容器色」，见下方注释。
+        val legacySlot12 = parts.getOrNull(12)?.let { it != "0" && it != "1" } == true
         if (parts.size < 11) return QuickWheelStyleSpec()
         return QuickWheelStyleSpec(
             showLabels = parts[0] == "1",
@@ -514,14 +525,17 @@ object QuickWheelCodec {
             // 第 12 段（索引 11）为矩形列数；旧记录没有这段 → 用默认列数（向后兼容）。
             columnCount = parts.getOrNull(11)?.toIntOrNull()
                 ?: QuickWheelLayoutEngine.DEFAULT_COLUMN_COUNT,
-            // 第 13–15 段（索引 12–14）：容器颜色 / 不透明度 / 阴影。
-            // 旧记录没有这几段 → 一律回落到默认值（白 / 100% / 4dp），外观与升级前完全一致。
-            containerColorArgb = parts.getOrNull(12)?.toLongOrNull()
-                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB,
-            containerAlphaPercent = parts.getOrNull(13)?.toIntOrNull()
-                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_ALPHA_PERCENT,
-            containerShadowDp = parts.getOrNull(14)?.toFloatOrNull()
-                ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_SHADOW_DP,
+            // 第 13 段（索引 12）在上游是「用户图标底色是否全透明」，在本地定制里是容器颜色，
+            // 两者撞在同一位置，按值的形态区分格式：
+            //   "0" / "1"        → 上游格式，容器颜色 / 不透明度 / 阴影顺延到 13/14/15
+            //   其它（ARGB 整数） → 本地旧格式，12/13/14 依次是颜色 / 不透明度 / 阴影
+            transparentUserIcons = !legacySlot12 && parts.getOrNull(12) == "1",
+            containerColorArgb = (if (legacySlot12) parts.getOrNull(12) else parts.getOrNull(13))
+                ?.toLongOrNull() ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB,
+            containerAlphaPercent = (if (legacySlot12) parts.getOrNull(13) else parts.getOrNull(14))
+                ?.toIntOrNull() ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_ALPHA_PERCENT,
+            containerShadowDp = (if (legacySlot12) parts.getOrNull(14) else parts.getOrNull(15))
+                ?.toFloatOrNull() ?: QuickWheelLayoutEngine.DEFAULT_CONTAINER_SHADOW_DP,
         )
     }
 
@@ -557,7 +571,8 @@ object QuickWheelCodec {
         append(FIELD_SEP)
         append(wheel.order)
         append(FIELD_SEP)
-        append(QuickWheelLayoutEngine.normalizeSectorMask(wheel.sectorMask))
+        // 存储用"原样掩码"：归一化只用于渲染，写进编码里会把用户选的三扇区 / 对角两扇区吃掉。
+        append(QuickWheelLayoutEngine.clampSectorMask(wheel.sectorMask))
         append(FIELD_SEP)
         append(QuickWheelLayoutEngine.clampLongPressMs(wheel.longPressMs))
         append(FIELD_SEP)
@@ -627,7 +642,8 @@ object QuickWheelCodec {
             },
             order = parts[5].toIntOrNull() ?: 0,
             sectorMask = if (hasSector) {
-                QuickWheelLayoutEngine.normalizeSectorMask(
+                // 读回来也原样保留（只裁位），形态归一化交给渲染路径。
+                QuickWheelLayoutEngine.clampSectorMask(
                     parts[6].toIntOrNull() ?: QuickWheelLayoutEngine.SECTOR_ALL,
                 )
             } else {
@@ -770,9 +786,10 @@ object QuickWheelCodec {
     /** 一级/二级的"另一形态"样式分隔符（与 [STYLE_SEP] 不同，避免解析冲突）。 */
     private const val STYLE_ALT_SEP = "\u001C"
 
-    /** 编码一套样式，并在末尾追加矩形列数。 */
+    /** 编码一套样式，并在末尾追加矩形列数与「容器底色是否全透明」。 */
     private fun encodeStyleWithColumn(style: QuickWheelStyleSpec): String =
-        encodeStyle(style) + STYLE_SEP + style.columnCount +
+        encodeStyle(style) + STYLE_SEP + style.columnCount + STYLE_SEP +
+            (if (style.transparentUserIcons) "1" else "0") +
             STYLE_SEP + style.containerColorArgb +
             STYLE_SEP + style.containerAlphaPercent +
             STYLE_SEP + style.containerShadowDp
