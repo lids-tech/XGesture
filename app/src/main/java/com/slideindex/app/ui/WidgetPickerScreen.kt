@@ -153,6 +153,10 @@ fun WidgetPickerScreen(
       loading = true
     }
     withContext(Dispatchers.IO) {
+      // 打开选择器强制重查一遍：分组列表有缓存，而「逐包补捞隐藏 provider」只在
+      // 缓存未命中时执行——不清缓存的话，新装的 / 部分ROM上被过滤的小组件永远进不来，
+      // 表现为「面板里能选的小部件一直比桌面少」。
+      WidgetCatalog.invalidate()
       val loadedGroups = WidgetCatalog.loadGroups(context)
       // force：缓存里可能是上一版「按包名去重」的结果（没有分身），必须重新枚举一次。
       val loadedApps = WidgetCatalog.loadInstalledApps(context, force = true)

@@ -99,19 +99,29 @@ object WidgetPopupHost {
    *
    * 宿主视图是会话级缓存：provider 的周期性更新（步数 / 天气 / 日程）到达时间
    * 与面板打开时机无关，复用旧视图就会显示**上一会话**的 RemoteViews。
-   * 传 `null` 给 [AppWidgetManager.updateAppWidget] 会让 provider 重跑一次
-   * onUpdate 并推送最新 RemoteViews（启动器的标准刷新路径），面板开着时
-   * （已 startListening）新数据会被立刻投到视图上。
+   *
+   * ⚠️ 这里不能用 `AppWidgetManager.updateAppWidget(id, null)`——空 RemoteViews 只是
+   * 「清空内容」，不会让 provider 重跑 onUpdate（真机验证过：数值仍旧）。正确做法是
+   * 给 provider 显式发一条 `ACTION_APPWIDGET_UPDATE` 广播，带上要刷新的 id；
+   * provider 的 onUpdate 会重建 RemoteViews 并通过已 startListening 的宿主流回视图。
    */
   fun refreshWidgets(context: Context, pages: List<com.slideindex.app.widget.WidgetPanelPage>) {
-    val manager = appWidgetManager(context)
+    val appContext = context.applicationContext
+    val manager = appWidgetManager(appContext)
     pages.asSequence()
       .flatMap { it.items.asSequence() }
       .mapNotNull { it.appWidgetId.takeIf { id -> id > 0 } }
       .distinct()
       .forEach { id ->
-        runCatching { manager.updateAppWidget(id, null) }
-          .onFailure { Log.w(TAG, "refreshWidgets($id) failed: ${it.message}") }
+        runCatching {
+          val info = manager.getAppWidgetInfo(id)
+          val provider = info?.provider
+          val intent = android.content.Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+            .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(id))
+          if (provider != null) intent.component = provider
+          intent.addFlags(android.content.Intent.FLAG_RECEIVER_FOREGROUND)
+          appContext.sendBroadcast(intent)
+        }.onFailure { Log.w(TAG, "refreshWidgets($id) failed: ${it.message}") }
       }
   }
 

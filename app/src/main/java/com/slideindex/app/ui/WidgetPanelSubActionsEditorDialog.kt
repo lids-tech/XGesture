@@ -55,6 +55,26 @@ fun WidgetPanelSubActionsEditorDialog(
     onDismiss: () -> Unit,
     onSave: (List<String>) -> Unit,
 ) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            WidgetPanelSubActionsEditorContent(item = item, onDismiss = onDismiss, onSave = onSave)
+        }
+    }
+}
+
+/** 编辑器正文；对话框（设置页）与独立 Activity（面板里）共用同一份。 */
+@Composable
+fun WidgetPanelSubActionsEditorContent(
+    item: WidgetPanelItem,
+    onDismiss: () -> Unit,
+    onSave: (List<String>) -> Unit,
+) {
     val viewModel: ExtensionSettingsViewModel = hiltViewModel()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
@@ -79,15 +99,7 @@ fun WidgetPanelSubActionsEditorDialog(
         else -> ""
     }.takeIf { it.isNotBlank() } ?: WidgetPanelSubActions.fallbackLabel(action)
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -174,6 +186,4 @@ fun WidgetPanelSubActionsEditorDialog(
                     }
                 }
             }
-        }
-    }
 }

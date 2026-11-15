@@ -188,6 +188,14 @@ internal class WidgetCanvasTouchHandler(
             }
             layout.subMenuTouchTracking = false
             layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            // ⚠️ 必须先给卡片发 CANCEL 再弹菜单：
+            // 应用 / 快捷方式格子的内容视图是可点的，DOWN 之后它成了触摸目标，
+            // 后续 MOVE/UP 都直接送给它，画布根本收不到 → 菜单不会跟着手指高亮、
+            // 松手也不会结算。CANCEL 之后触摸目标回到画布（onTouchEvent），
+            // 与「长按小组件边框进编辑」那套完全相同的处理。
+            val cancel = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+            layout.deliverTouchToChild(target, cancel)
+            cancel.recycle()
             layout.showSubMenu(target)
             layout.subMenu?.let { state ->
                 state.hovered = layout.subMenuHitAt(layout.subMenuTouchDownX, layout.subMenuTouchDownY)

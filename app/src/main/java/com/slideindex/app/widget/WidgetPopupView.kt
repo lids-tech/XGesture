@@ -586,6 +586,18 @@ class WidgetPopupCardLayout(
                 onDismiss()
             }
             canvas.onAddWidgetRequested = { launchWidgetPicker(position) }
+            // 编辑模式点按「应用 / 动作 / 快捷方式」格子 → 打开二级菜单编辑器。
+            // 编辑器是普通应用窗口，会被 TYPE_APPLICATION_OVERLAY 的面板压住，
+            // 所以先收面板再进（同 onConfigureWidget 的做法）。
+            canvas.onEditSubActions = { tapped ->
+                val intent = com.slideindex.app.ui.WidgetPanelSubActionsEditorActivity.createIntent(
+                    hostContext,
+                    pageId = page.id,
+                    widgetId = tapped.appWidgetId,
+                )
+                runCatching { hostContext.startActivity(intent) }
+                onDismiss()
+            }
             canvas.appLabelsVisible = showLabels
             canvas.editMode = editMode
             canvas.bind(page, hostContext)
