@@ -94,6 +94,27 @@ object WidgetPopupHost {
   fun providerInfo(context: Context, appWidgetId: Int): AppWidgetProviderInfo? =
     runCatching { appWidgetManager(context).getAppWidgetInfo(appWidgetId) }.getOrNull()
 
+  /**
+   * 打开面板时让所有小组件重新拉一次数据。
+   *
+   * 宿主视图是会话级缓存：provider 的周期性更新（步数 / 天气 / 日程）到达时间
+   * 与面板打开时机无关，复用旧视图就会显示**上一会话**的 RemoteViews。
+   * 传 `null` 给 [AppWidgetManager.updateAppWidget] 会让 provider 重跑一次
+   * onUpdate 并推送最新 RemoteViews（启动器的标准刷新路径），面板开着时
+   * （已 startListening）新数据会被立刻投到视图上。
+   */
+  fun refreshWidgets(context: Context, pages: List<com.slideindex.app.widget.WidgetPanelPage>) {
+    val manager = appWidgetManager(context)
+    pages.asSequence()
+      .flatMap { it.items.asSequence() }
+      .mapNotNull { it.appWidgetId.takeIf { id -> id > 0 } }
+      .distinct()
+      .forEach { id ->
+        runCatching { manager.updateAppWidget(id, null) }
+          .onFailure { Log.w(TAG, "refreshWidgets($id) failed: ${it.message}") }
+      }
+  }
+
   fun createView(context: Context, appWidgetId: Int): View? {
     val manager = appWidgetManager(context)
     val info = manager.getAppWidgetInfo(appWidgetId)

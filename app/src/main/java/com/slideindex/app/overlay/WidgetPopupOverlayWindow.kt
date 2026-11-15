@@ -198,6 +198,9 @@ object WidgetPopupOverlayWindow {
     OverlaySceneController.onContentPanelShown()
 
     WidgetPopupHost.startListening(hostContext)
+    // 每次打开都让当前所有页的小组件重新拉一次数据，避免显示上一会话的旧内容
+    // （步数 / 天气这类只在 provider 自己的周期里更新）。
+    WidgetPopupHost.refreshWidgets(hostContext, effectivePages)
     SlideIndexAccessibilityService.refreshTriggerVisuals()
 
     root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {

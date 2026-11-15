@@ -210,6 +210,12 @@ internal class WidgetCanvasTouchHandler(
 
     private fun scheduleBrowseLongPress(child: WidgetCardContainer, x: Float, y: Float) {
         cancelBrowseLongPress()
+        // 只允许「小组件卡」用长按进入编辑（要拖动 / 调跨度）；
+        // 应用 / 动作 / 快捷方式格子不进编辑——真机反馈"长按应用也进编辑了，很容易误触"，
+        // 这类格子要动它们只能长按**空白处**进编辑后再拖。
+        if (child.item.itemType != ITEM_TYPE_WIDGET) {
+            return
+        }
         // 点在小组件自己的可交互内容上时，不抢长按：那会把这次点击取消掉
         // （真机表现为「按住稍久一点就点了没反应」）。空白/边框仍保留长按进编辑。
         if (child.shouldReceiveTouchAtPoint(x - child.left - child.translationX, y - child.top - child.translationY)) {

@@ -134,18 +134,22 @@ fun QuickWheelContainer(
     val isEmptyGap = !slot.isConfigured && slot.placeholder
     // 内置矢量图标（图标库 / 内置动作 / 文字图标 / 名称首字母）**始终**铺底板；
     // 应用图标 / 图库图片这类用户提供的位图由 [QuickWheelStyleSpec.transparentUserIcons] 决定。
-    // 另外：用户在样式里改过容器颜色 / 不透明度时也一律铺底（否则自定义色无处可画）。
-    val userColorized = slot.containerColorArgb != 0L ||
+    // 另外：用户在样式里改过容器颜色时也一律铺底（否则自定义色无处可画）。
+    // ⚠️ 这里**只**判断颜色，不判断不透明度：不透明度决定的是"底色的 alpha"，
+    // 跟"用哪个底色"是两件事。早先把两者混在一起，导致"只改不透明度（颜色仍是默认白）"
+    // 时走到主题底板分支（不透明），不透明度设置整个失效。
+    val customColorized = slot.containerColorArgb != 0L ||
         style.containerColorArgb != QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB
     val plated = !isEmptyGap &&
-        (userColorized || slot.usesBuiltinVectorPlate() || !style.transparentUserIcons)
+        (customColorized || slot.usesBuiltinVectorPlate() || !style.transparentUserIcons)
     val darkPlate = LocalAppDarkTheme.current
-    // 底板色：自定义色（带不透明度）优先，否则用主题底板（不透明）。
-    val containerSurface = when {
-        !plated -> Color.Transparent
-        userColorized -> slotColor.copy(alpha = containerAlpha)
-        else -> if (darkPlate) PlateDark else PlateLight
+    // 底色：自定义色优先，否则主题底板；不透明度对所有底色**始终**生效。
+    val baseSurface = if (customColorized) {
+        slotColor
+    } else {
+        if (darkPlate) PlateDark else PlateLight
     }
+    val containerSurface = if (plated) baseSurface.copy(alpha = containerAlpha) else Color.Transparent
     // 深色底自动转白，避免"调成黑底后图标看不见"。
     val darkSurface = containerSurface.luminance() <= 0.5f
     // 单格「文字 / 图标颜色」：0 = 自动，非 0 = 这一格共用同一个颜色。

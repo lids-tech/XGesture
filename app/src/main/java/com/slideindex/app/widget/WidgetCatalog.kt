@@ -292,6 +292,24 @@ object WidgetCatalog {
           }
         }
       }
+
+      // 3. 逐个已安装应用再问一次。
+      //
+      // 真机反馈「面板里能选的小部件远少于桌面添加上部件时的数量」：部分 ROM
+      // （小米 / 三星等）的 `installedProviders` 只返回"对调用方可见"的那批，
+      // 预装应用的小组件会被漏掉。`getInstalledProvidersForPackage` 按包查询
+      // 走的是另一条过滤路径，逐包并集能把这些捞回来。
+      // 只在缓存未命中时跑一次（约 200 次 binder 调用，IO 线程，可接受）。
+      val pm = context.packageManager
+      val packages = runCatching { pm.getInstalledPackages(0) }.getOrNull()
+      if (packages != null) {
+        for (pkg in packages) {
+          runCatching { absorb(manager.getInstalledProvidersForPackage(pkg.packageName, null)) }
+        }
+      }
+    }
+    if (merged.isNotEmpty()) {
+      android.util.Log.i("WidgetCatalog", "installedProviders=${merged.size}")
     }
     return merged
   }
