@@ -161,6 +161,62 @@ internal class WidgetCanvasTouchHandler(
         layout.browseLongPressConsumed = false
     }
 
+    /** 取消「长按弹二级菜单」的待触发计时（手指一移动就取消，避免误弹）。 */
+    fun cancelSubMenuLongPress() {
+        layout.pendingSubMenuLongPress?.let { layout.removeCallbacks(it) }
+        layout.pendingSubMenuLongPress = null
+        layout.subMenuTouchTracking = false
+    }
+
+    /**
+     * 长按应用 / 动作 / 快捷方式格子 → 弹二级菜单。
+     *
+     * 松手时：指在某一项上 = 执行该动作；指在空处 = 走该格子的默认点击
+     * （应用 = 小窗打开）。没配二级菜单的格子不会走到这里。
+     */
+    private fun scheduleSubMenuLongPress(child: WidgetCardContainer, x: Float, y: Float) {
+        cancelSubMenuLongPress()
+        layout.subMenuTouchChild = child
+        layout.subMenuTouchDownX = x
+        layout.subMenuTouchDownY = y
+        layout.subMenuTouchTracking = true
+        layout.pendingSubMenuLongPress = Runnable {
+            if (!layout.subMenuTouchTracking || layout.editMode) return@Runnable
+            val target = layout.subMenuTouchChild ?: return@Runnable
+            if (layout.findTouchTarget(layout.subMenuTouchDownX, layout.subMenuTouchDownY) !== target) {
+                return@Runnable
+            }
+            layout.subMenuTouchTracking = false
+            layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            layout.showSubMenu(target)
+            layout.subMenu?.let { state ->
+                state.hovered = layout.subMenuHitAt(layout.subMenuTouchDownX, layout.subMenuTouchDownY)
+                layout.invalidate()
+            }
+        }
+        layout.postDelayed(layout.pendingSubMenuLongPress!!, layout.longPressTimeout)
+    }
+
+    /**
+     * 二级菜单松手在空处：应用走小窗，其余保持该格子原有行为。
+     *
+     * 小窗通道不可用（没配悬浮窗权限 / 分身应用）时回落到普通点击。
+     */
+    private fun openCellDefault(child: WidgetCardContainer) {
+        val item = child.item
+        val context = layout.canvasHostContext ?: layout.context
+        if (item.itemType == ITEM_TYPE_APP && item.cloneUserId == 0 && item.packageName.isNotEmpty()) {
+            val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
+            val launchFreeWindow = com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchFreeWindow
+            if (settings != null && launchFreeWindow != null) {
+                com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+                runCatching { launchFreeWindow(context, item.packageName, settings, null) }
+                return
+            }
+        }
+        child.performContentClick()
+    }
+
     fun cancelPendingLongPress() {
         layout.pendingLongPress?.let { layout.removeCallbacks(it) }
         layout.pendingLongPress = null
@@ -252,15 +308,36 @@ internal class WidgetCanvasTouchHandler(
             MotionEvent.ACTION_DOWN -> {
                 // 上一次手势若在别的容器里结束，这个标记可能残留；新手势开始先清账。
                 layout.browseLongPressConsumed = false
+                layout.dismissSubMenu()
                 val child = layout.findTouchTarget(event.x, event.y)
-                if (child != null) {
+                if (child == null) {
+                    cancelBrowseLongPress()
+                    cancelSubMenuLongPress()
+                } else if (child.item.itemType == ITEM_TYPE_WIDGET) {
+                    // 小组件卡：长按边框仍进编辑（要能拖动 / 调跨度）。
+                    cancelSubMenuLongPress()
                     scheduleBrowseLongPress(child, event.x, event.y)
+                } else if (child.item.subActions.isNotEmpty()) {
+                    // 应用 / 动作 / 快捷方式：长按弹二级菜单，不再进编辑。
+                    cancelBrowseLongPress()
+                    scheduleSubMenuLongPress(child, event.x, event.y)
                 } else {
                     cancelBrowseLongPress()
+                    cancelSubMenuLongPress()
                 }
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
+                // 二级菜单开着：只更新"指着哪一项"，并把事件吃掉，
+                // 别再让下面的格子收到移动（否则会触发它们自己的滑动逻辑）。
+                layout.subMenu?.let { state ->
+                    val hit = layout.subMenuHitAt(event.x, event.y)
+                    if (hit != state.hovered) {
+                        state.hovered = hit
+                        layout.invalidate()
+                    }
+                    return true
+                }
                 if (!layout.browseTouchTracking) return false
                 val dx = event.x - layout.browseTouchDownX
                 val dy = event.y - layout.browseTouchDownY
@@ -270,12 +347,31 @@ internal class WidgetCanvasTouchHandler(
                 return false
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val state = layout.subMenu
+                if (state != null) {
+                    val child = layout.subMenuTouchChild
+                    val hit = state.hovered
+                    layout.dismissSubMenu()
+                    cancelSubMenuLongPress()
+                    if (event.actionMasked == MotionEvent.ACTION_UP && child != null) {
+                        val action = state.items.getOrNull(hit)?.action
+                        if (action != null) {
+                            com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+                            com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
+                        } else {
+                            openCellDefault(child)
+                        }
+                    }
+                    layout.subMenuTouchChild = null
+                    return true
+                }
                 if (layout.browseLongPressConsumed) {
                     layout.browseLongPressConsumed = false
                     cancelBrowseLongPress()
                     return true
                 }
                 cancelBrowseLongPress()
+                cancelSubMenuLongPress()
                 return false
             }
         }
@@ -370,9 +466,22 @@ internal class WidgetCanvasTouchHandler(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                // 编辑模式点按「应用 / 动作 / 快捷方式」格子（没拖动也没滚动）
+                // → 打开该格子的二级菜单编辑器；小组件卡不响应。
+                val tapTarget = layout.panelScrollTouchTarget
+                val wasDragPending = layout.pendingDragChild != null
+                val scrolled = layout.panelScrollActive
                 cancelPendingDrag()
                 layout.panelScrollTouchTarget = null
                 stopPanelScroll()
+                if (event.actionMasked == MotionEvent.ACTION_UP &&
+                    !scrolled &&
+                    !wasDragPending &&
+                    tapTarget != null &&
+                    tapTarget.item.itemType != ITEM_TYPE_WIDGET
+                ) {
+                    layout.onEditSubActions?.invoke(tapTarget.item)
+                }
                 return true
             }
         }

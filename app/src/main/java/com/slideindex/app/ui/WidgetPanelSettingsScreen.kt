@@ -27,7 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -499,6 +501,30 @@ private fun WidgetPanelGridEditor(
       }
       val gridScrollState = rememberScrollState()
 
+      // 编辑模式点按「应用 / 动作 / 快捷方式」格子 → 打开该格子的长按二级菜单编辑器。
+      var subActionEditorItem by remember { mutableStateOf<com.slideindex.app.widget.WidgetPanelItem?>(null) }
+      subActionEditorItem?.let { editingItem ->
+        com.slideindex.app.ui.WidgetPanelSubActionsEditorDialog(
+          item = editingItem,
+          onDismiss = { subActionEditorItem = null },
+          onSave = { subActions ->
+            onPagesChange(
+              latestPages.map { page ->
+                page.copy(
+                  items = page.items.map { item ->
+                    if (item.appWidgetId == editingItem.appWidgetId && item.x == editingItem.x && item.y == editingItem.y) {
+                      item.copy(subActions = subActions)
+                    } else {
+                      item
+                    }
+                  },
+                )
+              },
+            )
+          },
+        )
+      }
+
       Box(
         modifier = Modifier
           .width(panelWidthDp)
@@ -540,6 +566,7 @@ private fun WidgetPanelGridEditor(
                   runCatching { ctx.startActivity(intent) }
                 }
                 onAddWidgetRequested = { launchWidgetPicker() }
+                onEditSubActions = { tapped -> subActionEditorItem = tapped }
                 onInteractionActiveChange = onGridInteractionActiveChange
                 appLabelsVisible = showLabels
                 bindIfNeeded(page, ctx)
@@ -560,6 +587,7 @@ private fun WidgetPanelGridEditor(
                 runCatching { view.context.startActivity(intent) }
               }
               view.onAddWidgetRequested = { launchWidgetPicker() }
+              view.onEditSubActions = { tapped -> subActionEditorItem = tapped }
               view.onInteractionActiveChange = onGridInteractionActiveChange
               view.appLabelsVisible = showLabels
               view.bindIfNeeded(page, view.context)

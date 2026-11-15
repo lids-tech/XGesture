@@ -5,6 +5,20 @@ const val ITEM_TYPE_APP = "app"
 const val ITEM_TYPE_SHORTCUT = "shortcut"
 const val ITEM_TYPE_ACTION = "action"
 
+/**
+ * 格子「长按二级菜单」里，单项的**标签**与**动作负载**之间的分隔符。
+ *
+ * 动作负载本身（[com.slideindex.app.launcher.QuickLauncherItemCodec]）只用 \u0002 与 \u001D，
+ * 不会撞上 \u0003 / \u0004，也不需要转义。
+ */
+const val SUB_ACTION_LABEL_SEP = "\u0003"
+
+/** 格子「长按二级菜单」里，多项之间的分隔符。 */
+const val SUB_ACTION_SEP = "\u0004"
+
+/** 单个格子的二级菜单最多几项：再多弹出来就盖满整页了。 */
+const val MAX_SUB_ACTIONS = 8
+
 data class WidgetPanelItem(
     val appWidgetId: Int,
     val x: Int,
@@ -19,6 +33,13 @@ data class WidgetPanelItem(
     val shortcutId: String = "",
     /** 应用分身所属 user（0 = 主实例）。旧数据没有这个字段，解析出来就是 0。 */
     val cloneUserId: Int = 0,
+    /**
+     * 长按该格子弹出的「二级菜单」动作，最多 [MAX_SUB_ACTIONS] 项。
+     *
+     * 每项编码为 `标签\u0003动作负载`（负载 = `QuickLauncherItemCodec.encodeActionPayload`），
+     * 多项用 [SUB_ACTION_SEP] 连接；旧数据没有这一列，解析出来是空表（= 不弹菜单）。
+     */
+    val subActions: List<String> = emptyList(),
 )
 
 data class WidgetPanelPage(
@@ -124,6 +145,7 @@ object WidgetPanelCodec {
             item.intentUri,
             item.shortcutId,
             item.cloneUserId.toString(),
+            item.subActions.joinToString(SUB_ACTION_SEP),
         ).joinToString(FIELD_SEP)
 
     private fun decodeItem(raw: String): WidgetPanelItem? {
@@ -141,8 +163,16 @@ object WidgetPanelCodec {
         val intentUri = parts.getOrNull(9).orEmpty()
         val shortcutId = parts.getOrNull(10).orEmpty()
         val cloneUserId = parts.getOrNull(11)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val subActions = parts.getOrNull(12)
+            .orEmpty()
+            .split(SUB_ACTION_SEP)
+            .filter { it.isNotBlank() }
+            .take(MAX_SUB_ACTIONS)
         return WidgetPanelItem(
-            id, x, y, spanX, spanY, label, itemType, packageName, className, intentUri, shortcutId, cloneUserId,
+            appWidgetId = id, x = x, y = y, spanX = spanX, spanY = spanY, label = label,
+            itemType = itemType, packageName = packageName, className = className,
+            intentUri = intentUri, shortcutId = shortcutId, cloneUserId = cloneUserId,
+            subActions = subActions,
         )
     }
 

@@ -42,6 +42,8 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   var onConfigureWidget: ((Int) -> Unit)? = null
   var onAddWidgetRequested: (() -> Unit)? = null
   var onInteractionActiveChange: ((Boolean) -> Unit)? = null
+  /** 编辑模式点按「应用 / 动作 / 快捷方式」格子 → 打开该格子的二级菜单编辑器。 */
+  var onEditSubActions: ((WidgetPanelItem) -> Unit)? = null
 
   var pageColumnCount: Int = 4
   var pageRowCount: Int = 26
@@ -103,12 +105,142 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   internal var canvasInteractionActive = false
   internal var chromeTouchTarget: WidgetCardContainer? = null
 
+  // ── 长按「二级菜单」────────────────────────────────────────────
+  // 规格：长按应用 / 动作 / 快捷方式格子 → 在该格子周围弹一圈动作；
+  // 不移动直接松手 = 以**小窗**打开该格子；移到某一项松手 = 执行那一项的动作。
+
+  /** 二级菜单状态；null = 未弹出。 */
+  internal var subMenu: SubMenuState? = null
+
+  /** 二级菜单里一项的绘制 / 命中信息（图标提前解析好，绘制时不再查表）。 */
+  internal class SubMenuState(
+    val anchorX: Float,
+    val anchorY: Float,
+    val items: List<WidgetPanelSubAction>,
+    val icons: List<android.graphics.Bitmap?>,
+    val itemRadiusPx: Float,
+    val ringRadiusPx: Float,
+  ) {
+    var hovered: Int = -1
+  }
+
+  /** 第 [index] 项的中心（绘制与命中都用它，保证「画哪儿点哪儿」）。 */
+  internal fun subMenuItemCenter(state: SubMenuState, index: Int): Pair<Float, Float> {
+    val count = state.items.size.coerceAtLeast(1)
+    // 从正上方开始顺时针均分：0 在 12 点方向，和轮盘的二级展开方向一致。
+    val angle = -Math.PI / 2.0 + 2.0 * Math.PI * index / count
+    val cx = state.anchorX + (Math.cos(angle) * state.ringRadiusPx).toFloat()
+    val cy = state.anchorY + (Math.sin(angle) * state.ringRadiusPx).toFloat()
+    return cx to cy
+  }
+
+  /** 命中测试：返回菜单项下标，-1 = 不在任何一项上（= 视为「没移动」）。 */
+  internal fun subMenuHitAt(x: Float, y: Float): Int {
+    val state = subMenu ?: return -1
+    var best = -1
+    var bestDistance = Float.MAX_VALUE
+    for (index in state.items.indices) {
+      val (cx, cy) = subMenuItemCenter(state, index)
+      val dx = x - cx
+      val dy = y - cy
+      val distance = kotlin.math.hypot(dx, dy)
+      // 命中半径略大于绘制半径：手指边缘压到也算选中，少一点"松开没反应"。
+      if (distance <= state.itemRadiusPx * 1.4f && distance < bestDistance) {
+        best = index
+        bestDistance = distance
+      }
+    }
+    return best
+  }
+
+  /** 弹出 / 收起二级菜单。 */
+  internal fun showSubMenu(child: WidgetCardContainer) {
+    val actions = WidgetPanelSubActions.parse(child.item.subActions)
+    if (actions.isEmpty()) {
+      subMenu = null
+      invalidate()
+      return
+    }
+    val dm = resources.displayMetrics
+    val itemRadius = 26f * dm.density
+    val ringRadius = child.width.coerceAtLeast(child.height) / 2f + itemRadius + 10f * dm.density
+    val iconPx = (itemRadius * 1.1f).toInt().coerceAtLeast(1)
+    val anchorX = child.left + child.translationX + child.width / 2f
+    val anchorY = child.top + child.translationY + child.height / 2f
+    subMenu = SubMenuState(
+      anchorX = anchorX,
+      anchorY = anchorY,
+      items = actions,
+      icons = actions.map { WidgetPanelSubActions.icon(context, it.action, iconPx) },
+      itemRadiusPx = itemRadius,
+      ringRadiusPx = ringRadius,
+    )
+    invalidate()
+  }
+
+  internal fun dismissSubMenu() {
+    if (subMenu == null) return
+    subMenu = null
+    invalidate()
+  }
+
+  private val subMenuScrimPaint = Paint().apply { color = 0x88000000.toInt() }
+  private val subMenuItemPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = 0xF2FFFFFF.toInt()
+    style = Paint.Style.FILL
+  }
+  private val subMenuItemHoverPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = 0xFF3478F6.toInt()
+    style = Paint.Style.FILL
+  }
+  private val subMenuLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = 0xFFFFFFFF.toInt()
+    textAlign = Paint.Align.CENTER
+  }
+
+  private fun drawSubMenu(canvas: Canvas) {
+    val state = subMenu ?: return
+    canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), subMenuScrimPaint)
+    val textSize = 12f * resources.displayMetrics.density
+    subMenuLabelPaint.textSize = textSize
+    for (index in state.items.indices) {
+      val (cx, cy) = subMenuItemCenter(state, index)
+      val hovered = state.hovered == index
+      canvas.drawCircle(
+        cx,
+        cy,
+        state.itemRadiusPx,
+        if (hovered) subMenuItemHoverPaint else subMenuItemPaint,
+      )
+      state.icons[index]?.let { icon ->
+        val half = state.itemRadiusPx * 0.55f
+        val dst = android.graphics.RectF(cx - half, cy - half, cx + half, cy + half)
+        canvas.drawBitmap(icon, null, dst, null)
+      }
+      // 只给「当前指着的那一项」画名字：一圈全写会糊成一团。
+      if (hovered) {
+        val label = state.items[index].label
+        if (label.isNotBlank()) {
+          canvas.drawText(label, cx, cy + state.itemRadiusPx + textSize * 1.2f, subMenuLabelPaint)
+        }
+      }
+    }
+  }
+
+
   internal val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
   internal val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
   internal var blankTouchTracking = false
   internal var blankTouchDownX = 0f
   internal var blankTouchDownY = 0f
   internal var pendingLongPress: Runnable? = null
+
+  // 长按二级菜单的待触发状态（与「长按空白进编辑」那套互不干扰）。
+  internal var pendingSubMenuLongPress: Runnable? = null
+  internal var subMenuTouchChild: WidgetCardContainer? = null
+  internal var subMenuTouchDownX = 0f
+  internal var subMenuTouchDownY = 0f
+  internal var subMenuTouchTracking = false
 
   internal var pendingDragChild: WidgetCardContainer? = null
   internal var pendingDragDownX = 0f
@@ -479,6 +611,12 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   @SuppressLint("ClickableViewAccessibility") // Canvas drag/resize surface; not a clickable control
   override fun onTouchEvent(event: MotionEvent): Boolean =
     touchHandler.onTouchEvent(event)
+
+  override fun dispatchDraw(canvas: Canvas) {
+    super.dispatchDraw(canvas)
+    // 二级菜单画在所有格子**之上**（super.dispatchDraw 已经画完子视图）。
+    drawSubMenu(canvas)
+  }
 
   override fun onDraw(canvas: Canvas) {
     super.onDraw(canvas)

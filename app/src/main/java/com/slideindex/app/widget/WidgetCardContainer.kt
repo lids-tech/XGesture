@@ -36,6 +36,19 @@ class WidgetCardContainer(
 
   var item: WidgetPanelItem = initialItem
     private set
+
+  /**
+   * 应用 / 动作 / 快捷方式格子里真正带点击逻辑的那层视图。
+   *
+   * 长按二级菜单松手「不选任何项」时要走一次普通点击（应用 = 小窗打开，其它 = 原行为），
+   * 而点击逻辑挂在内部那层视图上，外部 `performClick()` 打不到，所以留个引用。
+   */
+  private var contentClickView: View? = null
+
+  /** 触发该格子自己的点击行为（与手指点一下等价）。 */
+  fun performContentClick() {
+    (contentClickView ?: this).performClick()
+  }
   var onDelete: (() -> Unit)? = null
   var onResize: ((spanX: Int, spanY: Int) -> Unit)? = null
   var onConfigure: (() -> Unit)? = null
@@ -168,6 +181,7 @@ class WidgetCardContainer(
       addView(appView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
         gravity = Gravity.CENTER
       })
+      contentClickView = appView
       appView.setOnClickListener {
         if (!editModeEnabled) {
           if (item.itemType == ITEM_TYPE_ACTION) {
