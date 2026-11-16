@@ -425,6 +425,9 @@ internal class WidgetCanvasTouchHandler(
     }
 
     private fun maybeStartPanelScroll(event: MotionEvent): Boolean {
+        // 二级菜单开着时**绝不**开始滚动：否则一竖滑面板就滚，滚动又给画布发 CANCEL，
+        // 菜单被收掉（真机反馈「上下滑菜单直接消失」）。
+        if (layout.subMenu != null) return false
         val dx = event.x - layout.panelScrollDownX
         val dy = event.y - layout.panelScrollDownY
         val isOverWidget = layout.panelScrollTouchTarget != null

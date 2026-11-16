@@ -95,20 +95,20 @@ object WidgetPopupHost {
     runCatching { appWidgetManager(context).getAppWidgetInfo(appWidgetId) }.getOrNull()
 
   /**
-   * 打开面板时让所有小组件重新拉一次数据（三条通道一起上）：
+   * 打开面板时让所有小组件重新拉一次数据。
    *
-   * 1. `ACTION_APPWIDGET_UPDATE` 显式广播：让 provider 重跑 `onUpdate` 重建 RemoteViews；
-   * 2. `updateAppWidget(id, null)`：系统侧把「空内容」转成一次 update 派发；
-   * 3. `updateAppWidgetOptions`（翻转一个哨兵 key）：触发 provider 的
-   *    `onAppWidgetOptionsChanged`——天气 / 步数这类只在尺寸变化时重查数据的
-   *    provider，靠前两条是不动的，这一条它们**必定**响应（尺寸没变，不会重排）。
+   * 只用一条通道：给 provider 显式发 `ACTION_APPWIDGET_UPDATE` 广播（带 id），
+   * 让它的 `onUpdate` 重建 RemoteViews，再通过已 startListening 的宿主流回视图。
    *
-   * 宿主视图本来每次打开都是重建的（见 [clearCachedHostViews]），所以数据旧的
-   * 唯一来源就是 provider 自己没推新 RemoteViews——只能从 provider 侧撬。
+   * ⚠️ 别加 `updateAppWidget(id, null)`：传空 RemoteViews 是把内容**清空**而不是
+   * 请求刷新，真机表现是「打开面板组件一片空白 / 数据更旧」。
+   * 也别翻转 options 去骗 `onAppWidgetOptionsChanged`：那个回调本意是尺寸变化，
+   * 部分 provider 会按新尺寸重排，数据没刷新反而排版错乱。
    */
   fun refreshWidgets(context: Context, pages: List<com.slideindex.app.widget.WidgetPanelPage>) {
     val appContext = context.applicationContext
     val manager = appWidgetManager(appContext)
+    var count = 0
     pages.asSequence()
       .flatMap { it.items.asSequence() }
       .mapNotNull { it.appWidgetId.takeIf { id -> id > 0 } }
@@ -122,20 +122,11 @@ object WidgetPopupHost {
           if (provider != null) intent.component = provider
           intent.addFlags(android.content.Intent.FLAG_RECEIVER_FOREGROUND)
           appContext.sendBroadcast(intent)
-          manager.updateAppWidget(id, null)
-          // 哨兵 key 每次翻转，保证 options 内容变化 → 系统必然派发 optionsChanged。
-          val options = manager.getAppWidgetOptions(id) ?: android.os.Bundle()
-          if (options.getBoolean(REFRESH_SENTINEL_KEY)) {
-            options.remove(REFRESH_SENTINEL_KEY)
-          } else {
-            options.putBoolean(REFRESH_SENTINEL_KEY, true)
-          }
-          manager.updateAppWidgetOptions(id, options)
+          count++
         }.onFailure { Log.w(TAG, "refreshWidgets($id) failed: ${it.message}") }
       }
+    if (count > 0) Log.i(TAG, "refreshWidgets: 已请求刷新 $count 个小组件")
   }
-
-  private const val REFRESH_SENTINEL_KEY = "xg.widget.refresh.sentinel"
 
   fun createView(context: Context, appWidgetId: Int): View? {
     val manager = appWidgetManager(context)

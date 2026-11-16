@@ -175,12 +175,18 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       itemRadiusPx = itemRadius,
       ringRadiusPx = ringRadius,
     )
+    // 菜单开着时禁止**所有父容器**拦截手势：面板外侧是「左右滑动切页」的 ViewPager、
+    // 内侧是竖向滚动的 RecyclerView，不禁止的话手指一划就被它们抢走
+    // （真机反馈「左右滑切成切页、上下滑菜单消失」）。
+    requestDisallowInterceptAllParents(true)
     invalidate()
   }
 
   internal fun dismissSubMenu() {
     if (subMenu == null) return
     subMenu = null
+    // 菜单收起 → 把手势还给父容器（切页 / 滚动）。
+    requestDisallowInterceptAllParents(false)
     invalidate()
   }
 
