@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -127,7 +128,8 @@ fun WidgetPanelSubActionsEditorContent(
 
     when (val current = page) {
         SubActionPage.List -> {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            // safeDrawingPadding：Activity 开了 edge-to-edge，不加这个顶部会被状态栏压住。
+            Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -183,6 +185,29 @@ fun WidgetPanelSubActionsEditorContent(
                         StepperRow("上下偏移(dp)", config.offsetYDp, -240..240, step = 8) {
                             config = config.copy(offsetYDp = it)
                         }
+                        StepperRow(
+                            "格子间距(dp)",
+                            config.itemGapDp,
+                            WidgetPanelSubMenuConfig.MIN_ITEM_GAP_DP..WidgetPanelSubMenuConfig.MAX_ITEM_GAP_DP,
+                        ) { config = config.copy(itemGapDp = it) }
+                        StepperRow(
+                            "图标大小(%)",
+                            config.iconSizePercent,
+                            WidgetPanelSubMenuConfig.MIN_ICON_PERCENT..WidgetPanelSubMenuConfig.MAX_ICON_PERCENT,
+                            step = 5,
+                        ) { config = config.copy(iconSizePercent = it) }
+                        StepperRow(
+                            "文字大小(%)",
+                            config.labelSizePercent,
+                            WidgetPanelSubMenuConfig.MIN_LABEL_PERCENT..WidgetPanelSubMenuConfig.MAX_LABEL_PERCENT,
+                            step = 5,
+                        ) { config = config.copy(labelSizePercent = it) }
+                        StepperRow(
+                            "背景不透明度(%)",
+                            config.backgroundAlphaPercent,
+                            0..100,
+                            step = 5,
+                        ) { config = config.copy(backgroundAlphaPercent = it) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("显示名称", modifier = Modifier.weight(1f))
                             Switch(

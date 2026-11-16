@@ -258,61 +258,27 @@ internal class WidgetCanvasTouchHandler(
         layout.postDelayed(runnable, layout.longPressTimeout)
     }
 
-    /** 能在小窗里开就用小窗，否则按普通方式执行。 */
+    /**
+     * 「停在某一项上长按 → 松手以小窗打开」。
+     *
+     * ⚠️ 全部交给 `gestureActionRunner.run(action, ..., longPressArmed = true)`：
+     * 执行器里 `shouldLaunchFullscreen(longPressArmed)` → `launchShortcutInFreeWindow`
+     * 这条链对**应用和快捷方式**都做过各家 ROM 的适配（这正是长按呼出轮盘的"长按=小窗"
+     * 行为本身），自己再拼 ActivityOptions 只会在部分机型上失效。
+     */
     private fun openSubActionInFreeWindow(action: com.slideindex.app.gesture.GestureAction) {
         val context = layout.canvasHostContext ?: layout.context
         val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
-
-        // 应用：走统一的小窗通道（内含各家 ROM 的特殊处理）。
-        val launchApp = action as? com.slideindex.app.gesture.GestureAction.LaunchApp
-        if (launchApp != null && launchApp.cloneUserId == 0 && launchApp.packageName.isNotEmpty()) {
-            val launchFreeWindow = com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchFreeWindow
-            if (settings != null && launchFreeWindow != null) {
-                // 先起窗再收面板：先收面板会让这次启动变成后台启动，部分 ROM 直接拦掉。
-                val launched = runCatching {
-                    launchFreeWindow(context, launchApp.packageName, settings, null)
-                    true
-                }.getOrDefault(false)
-                if (launched) {
-                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-                    return
-                }
-            }
+        val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
+            ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
+        // 先收面板再执行：执行器拉起 Activity 时需要前台窗口上下文。
+        com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+        if (settings != null && runner != null) {
+            runCatching { runner.run(action, settings, true, null, null, null) }
+                .onFailure { android.util.Log.e("WidgetPanelSubActions", "free-window run failed", it) }
+        } else {
+            runSubAction(action)
         }
-
-        // 快捷方式：LauncherApps.startShortcut 的第四个参数就是 ActivityOptions，
-        // 用同一套 launch bounds 打开即为小窗（快捷方式没有 package 级入口可用）。
-        val shortcut = action as? com.slideindex.app.gesture.GestureAction.LaunchShortcut
-        if (shortcut != null && settings != null) {
-            val bundle = runCatching {
-                com.slideindex.app.util.FreeWindowLauncher.launchOptionsBundle(context, settings)
-            }.getOrNull()
-            // payloadKey 是自描述编码（包名/短 id/标签都在里面），必须走官方解码，
-            // 不能自己按 '/' 切 —— 标签里本身就可能有斜杠。
-            val decoded = runCatching {
-                com.slideindex.app.gesture.GestureShortcutPayload.decode(shortcut.payloadKey)
-            }.getOrNull()
-            if (bundle != null && decoded is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Dynamic) {
-                val launched = runCatching {
-                    val launcherApps = context.getSystemService(android.content.pm.LauncherApps::class.java)
-                    launcherApps?.startShortcut(
-                        decoded.packageName,
-                        decoded.shortcutId,
-                        null,
-                        bundle,
-                        android.os.Process.myUserHandle(),
-                    )
-                    true
-                }.getOrDefault(false)
-                if (launched) {
-                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-                    return
-                }
-            }
-        }
-
-        // 没有窗口概念的动作（开关类等）：保持普通执行。
-        runSubAction(action)
     }
 
     private fun openCellDefault(child: WidgetCardContainer) {

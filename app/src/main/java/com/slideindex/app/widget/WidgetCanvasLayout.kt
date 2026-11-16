@@ -119,13 +119,19 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val items: List<WidgetPanelSubAction>,
     val icons: List<android.graphics.Bitmap?>,
     val itemRadiusPx: Float,
-    /** 网格步长（项直径 + 间隙）。 */
+    /** 网格步长（项直径 + 间距）。 */
     val stepPx: Float,
     val columns: Int,
     val rows: Int,
     val offsetXPx: Float,
     val offsetYPx: Float,
     val showLabels: Boolean,
+    /** 图标绘制半径（按 iconSizePercent 折算过）。 */
+    val iconRadiusPx: Float,
+    /** 名称文字大小（px，按 labelSizePercent 折算过）。 */
+    val labelTextSizePx: Float,
+    /** 格子背景 alpha（0..255，按 backgroundAlphaPercent 折算过）。 */
+    val backgroundAlpha: Int,
   ) {
     var hovered: Int = -1
     /**
@@ -203,9 +209,11 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     }
     val config = child.item.subMenu.normalized()
     val dm = resources.displayMetrics
-    val itemRadius = 22f * dm.density
-    val gap = 8f * dm.density
-    val iconPx = (itemRadius * 1.15f).toInt().coerceAtLeast(1)
+    // 格子直径固定 44dp；间距 / 图标占比 / 文字大小 / 背景不透明度全部来自配置
+    // （口径与快捷轮盘的容器间距、图标大小、名称大小一致）。
+    val itemDiameter = 44f * dm.density
+    val itemRadius = itemDiameter / 2f
+    val iconPx = (itemDiameter * config.iconSizePercent / 100f).toInt().coerceAtLeast(1)
     val anchorX = child.left + child.translationX + child.width / 2f
     val anchorY = child.top + child.translationY + child.height / 2f
     subMenu = SubMenuState(
@@ -214,12 +222,15 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       items = actions,
       icons = actions.map { WidgetPanelSubActions.icon(context, it, iconPx) },
       itemRadiusPx = itemRadius,
-      stepPx = itemRadius * 2f + gap,
+      stepPx = itemDiameter + config.itemGapDp * dm.density,
       columns = config.columns,
       rows = config.rows,
       offsetXPx = config.offsetXDp * dm.density,
       offsetYPx = config.offsetYDp * dm.density,
       showLabels = config.showLabels,
+      iconRadiusPx = iconPx / 2f,
+      labelTextSizePx = 11f * config.labelSizePercent / 100f * dm.density,
+      backgroundAlpha = (255 * config.backgroundAlphaPercent / 100f).toInt().coerceIn(0, 255),
     )
     // 菜单开着时禁止**所有父容器**拦截手势：面板外侧是「左右滑动切页」的 ViewPager、
     // 内侧是竖向滚动的 RecyclerView，不禁止的话手指一划就被它们抢走
@@ -267,8 +278,12 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   private fun drawSubMenu(canvas: Canvas) {
     val state = subMenu ?: return
     canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), subMenuScrimPaint)
-    val textSize = 11f * resources.displayMetrics.density
+    val textSize = state.labelTextSizePx
     subMenuLabelPaint.textSize = textSize
+    // 背景不透明度：只改格子底色的 alpha，图标 / 文字保持清晰。
+    subMenuItemPaint.alpha = state.backgroundAlpha
+    subMenuItemHoverPaint.alpha = if (state.backgroundAlpha < 255) 235 else 255
+    subMenuItemArmedPaint.alpha = if (state.backgroundAlpha < 255) 235 else 255
     for (index in state.items.indices) {
       val (cx, cy) = subMenuItemCenter(state, index)
       val hovered = state.hovered == index
@@ -284,7 +299,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         },
       )
       state.icons[index]?.let { icon ->
-        val half = state.itemRadiusPx * 0.58f
+        val half = state.iconRadiusPx
         val dst = android.graphics.RectF(cx - half, cy - half, cx + half, cy + half)
         canvas.drawBitmap(icon, null, dst, null)
       }

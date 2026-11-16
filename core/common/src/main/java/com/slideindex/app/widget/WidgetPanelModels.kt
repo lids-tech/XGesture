@@ -42,12 +42,24 @@ data class WidgetPanelSubMenuConfig(
     val offsetXDp: Int = 0,
     val offsetYDp: Int = 0,
     val showLabels: Boolean = true,
+    /** 相邻格子之间的净间距（dp），口径与轮盘的「容器间距」一致。 */
+    val itemGapDp: Int = 8,
+    /** 图标占格子直径的百分比。 */
+    val iconSizePercent: Int = 55,
+    /** 名称文字大小百分比（100 = 基准 11sp）。 */
+    val labelSizePercent: Int = 100,
+    /** 格子背景不透明度（0 = 全透明，100 = 不透明）。 */
+    val backgroundAlphaPercent: Int = 100,
 ) {
     fun normalized(): WidgetPanelSubMenuConfig = copy(
         columns = columns.coerceIn(MIN_COLUMNS, MAX_COLUMNS),
         rows = rows.coerceIn(MIN_ROWS, MAX_ROWS),
         offsetXDp = offsetXDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
         offsetYDp = offsetYDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
+        itemGapDp = itemGapDp.coerceIn(MIN_ITEM_GAP_DP, MAX_ITEM_GAP_DP),
+        iconSizePercent = iconSizePercent.coerceIn(MIN_ICON_PERCENT, MAX_ICON_PERCENT),
+        labelSizePercent = labelSizePercent.coerceIn(MIN_LABEL_PERCENT, MAX_LABEL_PERCENT),
+        backgroundAlphaPercent = backgroundAlphaPercent.coerceIn(0, 100),
     )
 
     companion object {
@@ -57,17 +69,29 @@ data class WidgetPanelSubMenuConfig(
         const val MAX_ROWS = 6
         const val MIN_OFFSET_DP = -240
         const val MAX_OFFSET_DP = 240
+        const val MIN_ITEM_GAP_DP = 0
+        const val MAX_ITEM_GAP_DP = 24
+        const val MIN_ICON_PERCENT = 20
+        const val MAX_ICON_PERCENT = 90
+        const val MIN_LABEL_PERCENT = 60
+        const val MAX_LABEL_PERCENT = 160
 
         fun decode(raw: String?): WidgetPanelSubMenuConfig {
             if (raw.isNullOrBlank()) return WidgetPanelSubMenuConfig()
             val parts = raw.split(SUB_MENU_CONFIG_SEP)
             if (parts.size < 5) return WidgetPanelSubMenuConfig()
+            val base = WidgetPanelSubMenuConfig()
             return WidgetPanelSubMenuConfig(
-                columns = parts[0].toIntOrNull() ?: 3,
-                rows = parts[1].toIntOrNull() ?: 2,
-                offsetXDp = parts[2].toIntOrNull() ?: 0,
-                offsetYDp = parts[3].toIntOrNull() ?: 0,
+                columns = parts[0].toIntOrNull() ?: base.columns,
+                rows = parts[1].toIntOrNull() ?: base.rows,
+                offsetXDp = parts[2].toIntOrNull() ?: base.offsetXDp,
+                offsetYDp = parts[3].toIntOrNull() ?: base.offsetYDp,
                 showLabels = parts[4] != "0",
+                // 下面四段是后加的：旧记录没有 → 用默认值（向后兼容）。
+                itemGapDp = parts.getOrNull(5)?.toIntOrNull() ?: base.itemGapDp,
+                iconSizePercent = parts.getOrNull(6)?.toIntOrNull() ?: base.iconSizePercent,
+                labelSizePercent = parts.getOrNull(7)?.toIntOrNull() ?: base.labelSizePercent,
+                backgroundAlphaPercent = parts.getOrNull(8)?.toIntOrNull() ?: base.backgroundAlphaPercent,
             ).normalized()
         }
     }
@@ -78,6 +102,10 @@ data class WidgetPanelSubMenuConfig(
         offsetXDp,
         offsetYDp,
         if (showLabels) "1" else "0",
+        itemGapDp,
+        iconSizePercent,
+        labelSizePercent,
+        backgroundAlphaPercent,
     ).joinToString(SUB_MENU_CONFIG_SEP)
 }
 
