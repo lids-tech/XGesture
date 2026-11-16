@@ -122,7 +122,19 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val ringRadiusPx: Float,
   ) {
     var hovered: Int = -1
+    /**
+     * 长按结算标记：手指在某一项上停满长按时间后，该动作**已按小窗执行**，
+     * 松手时不能再执行一次（否则小窗 + 普通启动双开）。
+     */
+    var longPressConsumed: Boolean = false
   }
+
+  /** 「在某一项上长按」的计时器：停满长按时间 → 该项以小窗打开。 */
+  internal var subMenuLongPressRunnable: Runnable? = null
+  internal var subMenuLongPressIndex: Int = -1
+
+  /** 本次手势里「长按某一项」已经结算过：松手时不要再执行一次。 */
+  internal var subMenuLongPressFired: Boolean = false
 
   /** 第 [index] 项的中心（绘制与命中都用它，保证「画哪儿点哪儿」）。 */
   internal fun subMenuItemCenter(state: SubMenuState, index: Int): Pair<Float, Float> {
@@ -184,10 +196,18 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
 
   internal fun dismissSubMenu() {
     if (subMenu == null) return
+    cancelSubMenuLongPress()
     subMenu = null
     // 菜单收起 → 把手势还给父容器（切页 / 滚动）。
     requestDisallowInterceptAllParents(false)
     invalidate()
+  }
+
+  /** 取消「指着某一项长按 = 小窗」的计时。 */
+  internal fun cancelSubMenuLongPress() {
+    subMenuLongPressRunnable?.let { removeCallbacks(it) }
+    subMenuLongPressRunnable = null
+    subMenuLongPressIndex = -1
   }
 
   private val subMenuScrimPaint = Paint().apply { color = 0x88000000.toInt() }

@@ -232,6 +232,54 @@ internal class WidgetCanvasTouchHandler(
         }
     }
 
+    /**
+     * 「停在某一项上长按 → 该项以小窗打开」。
+     *
+     * 只有「启动应用」能开小窗；快捷方式 / 其它动作没有窗口概念，长按时
+     * 退回普通执行（和短视频一样先给一次触觉反馈，避免以为没识别）。
+     */
+    private fun scheduleSubMenuItemLongPress(
+        state: WidgetCanvasLayout.SubMenuState,
+        index: Int,
+    ) {
+        layout.cancelSubMenuLongPress()
+        layout.subMenuLongPressIndex = index
+        val runnable = Runnable {
+            if (layout.subMenu !== state) return@Runnable
+            if (state.hovered != index) return@Runnable
+            val item = state.items.getOrNull(index) ?: return@Runnable
+            state.longPressConsumed = true
+            layout.subMenuLongPressFired = true
+            layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            openSubActionInFreeWindow(item.action)
+            layout.dismissSubMenu()
+        }
+        layout.subMenuLongPressRunnable = runnable
+        layout.postDelayed(runnable, layout.longPressTimeout)
+    }
+
+    /** 能在小窗里开就用小窗，否则按普通方式执行。 */
+    private fun openSubActionInFreeWindow(action: com.slideindex.app.gesture.GestureAction) {
+        val context = layout.canvasHostContext ?: layout.context
+        val launchApp = action as? com.slideindex.app.gesture.GestureAction.LaunchApp
+        if (launchApp != null && launchApp.cloneUserId == 0 && launchApp.packageName.isNotEmpty()) {
+            val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
+            val launchFreeWindow = com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchFreeWindow
+            if (settings != null && launchFreeWindow != null) {
+                // 先起窗再收面板：先收面板会让这次启动变成后台启动，部分 ROM 直接拦掉。
+                val launched = runCatching {
+                    launchFreeWindow(context, launchApp.packageName, settings, null)
+                    true
+                }.getOrDefault(false)
+                if (launched) {
+                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+                    return
+                }
+            }
+        }
+        runSubAction(action)
+    }
+
     private fun openCellDefault(child: WidgetCardContainer) {
         val item = child.item
         val context = layout.canvasHostContext ?: layout.context
@@ -345,6 +393,7 @@ internal class WidgetCanvasTouchHandler(
             MotionEvent.ACTION_DOWN -> {
                 // 上一次手势若在别的容器里结束，这个标记可能残留；新手势开始先清账。
                 layout.browseLongPressConsumed = false
+                layout.subMenuLongPressFired = false
                 layout.dismissSubMenu()
                 val child = layout.findTouchTarget(event.x, event.y)
                 if (child == null) {
@@ -373,6 +422,14 @@ internal class WidgetCanvasTouchHandler(
                         state.hovered = hit
                         layout.invalidate()
                     }
+                    // 「停在某一项上不动 → 该项以小窗打开」，移动离开就取消计时。
+                    if (hit >= 0 && !state.longPressConsumed) {
+                        if (layout.subMenuLongPressIndex != hit) {
+                            scheduleSubMenuItemLongPress(state, hit)
+                        }
+                    } else {
+                        layout.cancelSubMenuLongPress()
+                    }
                     return true
                 }
                 if (!layout.browseTouchTracking) return false
@@ -388,9 +445,11 @@ internal class WidgetCanvasTouchHandler(
                 if (state != null) {
                     val child = layout.subMenuTouchChild
                     val hit = state.hovered
+                    val longPressFired = layout.subMenuLongPressFired
                     layout.dismissSubMenu()
                     cancelSubMenuLongPress()
-                    if (event.actionMasked == MotionEvent.ACTION_UP && child != null) {
+                    layout.subMenuLongPressFired = false
+                    if (event.actionMasked == MotionEvent.ACTION_UP && child != null && !longPressFired) {
                         val action = state.items.getOrNull(hit)?.action
                         if (action != null) {
                             runSubAction(action)
