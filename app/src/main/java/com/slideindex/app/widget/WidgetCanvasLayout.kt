@@ -130,8 +130,18 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val iconRadiusPx: Float,
     /** 名称文字大小（px，按 labelSizePercent 折算过）。 */
     val labelTextSizePx: Float,
-    /** 格子背景 alpha（0..255，按 backgroundAlphaPercent 折算过）。 */
+    /** 容器背景 alpha（0..255，按 backgroundAlphaPercent 折算过）。 */
     val backgroundAlpha: Int,
+    /** 容器圆角（px）。 */
+    val cornerRadiusPx: Float,
+    /** 菜单级默认容器色；每格还有自己的覆盖色。 */
+    val defaultContainerColor: Int,
+    /** 菜单级默认文字 / 图标色；每格还有自己的覆盖色。 */
+    val defaultLabelColor: Int,
+    /** 每格的容器色（0 = 跟随默认）。 */
+    val containerColors: List<Int>,
+    /** 每格的文字 / 图标色（0 = 跟随默认）。 */
+    val iconTints: List<Int>,
   ) {
     var hovered: Int = -1
     /**
@@ -209,18 +219,25 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     }
     val config = child.item.subMenu.normalized()
     val dm = resources.displayMetrics
-    // 格子直径固定 44dp；间距 / 图标占比 / 文字大小 / 背景不透明度全部来自配置
-    // （口径与快捷轮盘的容器间距、图标大小、名称大小一致）。
-    val itemDiameter = 44f * dm.density
+    // 容器尺寸 / 圆角 / 间距 / 图标占比 / 文字大小 / 背景不透明度全部来自配置，
+    // 口径与快捷轮盘的容器外观参数一致。
+    val itemDiameter = config.containerSizeDp * dm.density
     val itemRadius = itemDiameter / 2f
     val iconPx = (itemDiameter * config.iconSizePercent / 100f).toInt().coerceAtLeast(1)
     val anchorX = child.left + child.translationX + child.width / 2f
     val anchorY = child.top + child.translationY + child.height / 2f
+    // 每格颜色：0 = 跟随菜单级设置。
+    val containerColors = actions.map { it.containerColorArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 }
+    val iconTints = actions.map { it.iconTintArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 }
     subMenu = SubMenuState(
       anchorX = anchorX,
       anchorY = anchorY,
       items = actions,
-      icons = actions.map { WidgetPanelSubActions.icon(context, it, iconPx) },
+      icons = actions.mapIndexed { index, item ->
+        // 文字 / 图标色跟着「该格自己的覆盖色 → 菜单级默认」走，这样图标和文字颜色一致。
+        val tint = iconTints[index].takeIf { it != 0 } ?: config.labelColorArgb.toInt()
+        WidgetPanelSubActions.icon(context, item, iconPx, tint)
+      },
       itemRadiusPx = itemRadius,
       stepPx = itemDiameter + config.itemGapDp * dm.density,
       columns = config.columns,
@@ -231,6 +248,11 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       iconRadiusPx = iconPx / 2f,
       labelTextSizePx = 11f * config.labelSizePercent / 100f * dm.density,
       backgroundAlpha = (255 * config.backgroundAlphaPercent / 100f).toInt().coerceIn(0, 255),
+      cornerRadiusPx = config.containerCornerDp * dm.density,
+      defaultContainerColor = config.containerColorArgb.toInt(),
+      defaultLabelColor = config.labelColorArgb.toInt(),
+      containerColors = containerColors,
+      iconTints = iconTints,
     )
     // 菜单开着时禁止**所有父容器**拦截手势：面板外侧是「左右滑动切页」的 ViewPager、
     // 内侧是竖向滚动的 RecyclerView，不禁止的话手指一划就被它们抢走
@@ -280,24 +302,25 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), subMenuScrimPaint)
     val textSize = state.labelTextSizePx
     subMenuLabelPaint.textSize = textSize
-    // 背景不透明度：只改格子底色的 alpha，图标 / 文字保持清晰。
-    subMenuItemPaint.alpha = state.backgroundAlpha
-    subMenuItemHoverPaint.alpha = if (state.backgroundAlpha < 255) 235 else 255
-    subMenuItemArmedPaint.alpha = if (state.backgroundAlpha < 255) 235 else 255
     for (index in state.items.indices) {
       val (cx, cy) = subMenuItemCenter(state, index)
       val hovered = state.hovered == index
       val armed = hovered && state.longPressConsumed
-      canvas.drawCircle(
-        cx,
-        cy,
-        state.itemRadiusPx,
-        when {
-          armed -> subMenuItemArmedPaint
-          hovered -> subMenuItemHoverPaint
-          else -> subMenuItemPaint
-        },
-      )
+      val tint = state.iconTints.getOrNull(index).takeIf { it != null && it != 0 }
+        ?: state.defaultLabelColor
+      // 容器色：每格自己的 → 菜单级默认；选中 / 上膛时换成对应强调色但保留 alpha。
+      val baseColor = state.containerColors.getOrNull(index).takeIf { it != null && it != 0 }
+        ?: state.defaultContainerColor
+      val bgColor = when {
+        armed -> 0xFF2E9E5B.toInt()
+        hovered -> 0xFF3478F6.toInt()
+        else -> baseColor
+      }
+      subMenuItemPaint.color = bgColor
+      subMenuItemPaint.alpha = state.backgroundAlpha
+      val r = state.itemRadiusPx
+      val rect = android.graphics.RectF(cx - r, cy - r, cx + r, cy + r)
+      canvas.drawRoundRect(rect, state.cornerRadiusPx, state.cornerRadiusPx, subMenuItemPaint)
       state.icons[index]?.let { icon ->
         val half = state.iconRadiusPx
         val dst = android.graphics.RectF(cx - half, cy - half, cx + half, cy + half)
@@ -308,6 +331,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       if (state.showLabels || hovered) {
         val label = WidgetPanelSubActions.displayName(context, state.items[index])
         if (label.isNotBlank()) {
+          subMenuLabelPaint.color = tint
           canvas.drawText(label, cx, cy + state.itemRadiusPx + textSize * 1.15f, subMenuLabelPaint)
         }
       }

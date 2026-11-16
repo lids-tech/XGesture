@@ -1237,7 +1237,7 @@ internal fun QuickWheelSwitchRow(
  * 与「快速启动器」等页面的拉动横条外观一致。
  */
 @Composable
-private fun QuickWheelSliderRow(
+internal fun QuickWheelSliderRow(
     title: String,
     description: String,
     value: Float,
@@ -1260,7 +1260,7 @@ private fun QuickWheelSliderRow(
 
 /** 整数滑条（步进离散），用于「矩形列数」这类小范围整数参数。 */
 @Composable
-private fun QuickWheelIntRow(
+internal fun QuickWheelIntRow(
     title: String,
     description: String,
     value: Int,
@@ -1299,7 +1299,7 @@ private fun QuickWheelPercentRow(
 }
 
 /** 1 个单位一档（精度优先）：档位数 = 区间长度 − 1。 */
-private fun quickWheelSliderSteps(range: ClosedFloatingPointRange<Float>): Int =
+internal fun quickWheelSliderSteps(range: ClosedFloatingPointRange<Float>): Int =
     ((range.endInclusive - range.start).roundToInt() - 1).coerceAtLeast(0)
 
 /** 浮层跨窗口模糊半径（px）上限，与 QuickWheelOverlayWindow 的 coerceIn(1, 80) 保持一致。 */
@@ -1325,7 +1325,7 @@ private fun previewBlurSigmaDp(blurDp: Int, density: Float): Float {
 
 /** 容器颜色行：右侧色块 + 点击打开取色盘（与「触钮设计」同一套 Miuix ColorPalette 弹窗）。 */
 @Composable
-private fun QuickWheelColorRow(
+internal fun QuickWheelColorRow(
     title: String,
     description: String,
     argb: Long,

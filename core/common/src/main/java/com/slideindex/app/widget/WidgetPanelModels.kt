@@ -42,13 +42,21 @@ data class WidgetPanelSubMenuConfig(
     val offsetXDp: Int = 0,
     val offsetYDp: Int = 0,
     val showLabels: Boolean = true,
-    /** 相邻格子之间的净间距（dp），口径与轮盘的「容器间距」一致。 */
+    /** 相邻容器之间的净间距（dp），口径与轮盘的「容器间距」一致。 */
     val itemGapDp: Int = 8,
-    /** 图标占格子直径的百分比。 */
+    /** 容器尺寸（dp，正方形边长）；圆形时即直径。 */
+    val containerSizeDp: Int = 44,
+    /** 容器圆角（dp）：等于容器尺寸一半时是圆形。 */
+    val containerCornerDp: Int = 22,
+    /** 容器背景色（ARGB）。 */
+    val containerColorArgb: Long = DEFAULT_CONTAINER_COLOR_ARGB,
+    /** 名称文字颜色（ARGB）。 */
+    val labelColorArgb: Long = DEFAULT_LABEL_COLOR_ARGB,
+    /** 图标占容器尺寸的百分比。 */
     val iconSizePercent: Int = 55,
     /** 名称文字大小百分比（100 = 基准 11sp）。 */
     val labelSizePercent: Int = 100,
-    /** 格子背景不透明度（0 = 全透明，100 = 不透明）。 */
+    /** 容器背景不透明度（0 = 全透明，100 = 不透明）。 */
     val backgroundAlphaPercent: Int = 100,
 ) {
     fun normalized(): WidgetPanelSubMenuConfig = copy(
@@ -57,6 +65,8 @@ data class WidgetPanelSubMenuConfig(
         offsetXDp = offsetXDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
         offsetYDp = offsetYDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
         itemGapDp = itemGapDp.coerceIn(MIN_ITEM_GAP_DP, MAX_ITEM_GAP_DP),
+        containerSizeDp = containerSizeDp.coerceIn(MIN_CONTAINER_SIZE_DP, MAX_CONTAINER_SIZE_DP),
+        containerCornerDp = containerCornerDp.coerceIn(0, containerSizeDp.coerceIn(MIN_CONTAINER_SIZE_DP, MAX_CONTAINER_SIZE_DP) / 2),
         iconSizePercent = iconSizePercent.coerceIn(MIN_ICON_PERCENT, MAX_ICON_PERCENT),
         labelSizePercent = labelSizePercent.coerceIn(MIN_LABEL_PERCENT, MAX_LABEL_PERCENT),
         backgroundAlphaPercent = backgroundAlphaPercent.coerceIn(0, 100),
@@ -71,10 +81,18 @@ data class WidgetPanelSubMenuConfig(
         const val MAX_OFFSET_DP = 240
         const val MIN_ITEM_GAP_DP = 0
         const val MAX_ITEM_GAP_DP = 24
+        const val MIN_CONTAINER_SIZE_DP = 24
+        const val MAX_CONTAINER_SIZE_DP = 72
         const val MIN_ICON_PERCENT = 20
         const val MAX_ICON_PERCENT = 90
         const val MIN_LABEL_PERCENT = 60
         const val MAX_LABEL_PERCENT = 160
+
+        /** 默认容器底色：纯白（与按钮观感一致）。 */
+        const val DEFAULT_CONTAINER_COLOR_ARGB = 0xFFFFFFFFL
+
+        /** 默认文字颜色：白色（菜单底下是半透明黑遮罩）。 */
+        const val DEFAULT_LABEL_COLOR_ARGB = 0xFFFFFFFFL
 
         fun decode(raw: String?): WidgetPanelSubMenuConfig {
             if (raw.isNullOrBlank()) return WidgetPanelSubMenuConfig()
@@ -87,11 +105,15 @@ data class WidgetPanelSubMenuConfig(
                 offsetXDp = parts[2].toIntOrNull() ?: base.offsetXDp,
                 offsetYDp = parts[3].toIntOrNull() ?: base.offsetYDp,
                 showLabels = parts[4] != "0",
-                // 下面四段是后加的：旧记录没有 → 用默认值（向后兼容）。
+                // 下面几段都是后加的：旧记录没有 → 用默认值（向后兼容）。
                 itemGapDp = parts.getOrNull(5)?.toIntOrNull() ?: base.itemGapDp,
                 iconSizePercent = parts.getOrNull(6)?.toIntOrNull() ?: base.iconSizePercent,
                 labelSizePercent = parts.getOrNull(7)?.toIntOrNull() ?: base.labelSizePercent,
                 backgroundAlphaPercent = parts.getOrNull(8)?.toIntOrNull() ?: base.backgroundAlphaPercent,
+                containerSizeDp = parts.getOrNull(9)?.toIntOrNull() ?: base.containerSizeDp,
+                containerCornerDp = parts.getOrNull(10)?.toIntOrNull() ?: base.containerCornerDp,
+                containerColorArgb = parts.getOrNull(11)?.toLongOrNull() ?: base.containerColorArgb,
+                labelColorArgb = parts.getOrNull(12)?.toLongOrNull() ?: base.labelColorArgb,
             ).normalized()
         }
     }
@@ -106,6 +128,10 @@ data class WidgetPanelSubMenuConfig(
         iconSizePercent,
         labelSizePercent,
         backgroundAlphaPercent,
+        containerSizeDp,
+        containerCornerDp,
+        containerColorArgb,
+        labelColorArgb,
     ).joinToString(SUB_MENU_CONFIG_SEP)
 }
 

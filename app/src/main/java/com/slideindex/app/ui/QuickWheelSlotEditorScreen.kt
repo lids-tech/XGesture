@@ -1140,7 +1140,7 @@ private fun copyIntoGalleryDir(context: Context, uri: Uri): String? = runCatchin
  * 取色盘与轮盘配置页、「触钮设计」同一套（Miuix ColorPalette + HEX）。
  */
 @Composable
-private fun QuickWheelSlotColorRow(
+internal fun QuickWheelSlotColorRow(
     title: String,
     argb: Long,
     onPick: (Long) -> Unit,

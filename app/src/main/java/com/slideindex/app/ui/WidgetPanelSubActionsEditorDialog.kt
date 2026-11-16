@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -170,44 +171,100 @@ fun WidgetPanelSubActionsEditorContent(
                         }
                     }
 
-                    // ── 布局：行列 / 偏移 / 显示名称 ──
+                    // ── 布局与容器外观：全部复用快捷轮盘的滑条 / 颜色行 ──
                     item(key = "layout") {
-                        Text("布局", style = MaterialTheme.typography.titleSmall)
-                        StepperRow("列数", config.columns, WidgetPanelSubMenuConfig.MIN_COLUMNS..WidgetPanelSubMenuConfig.MAX_COLUMNS) {
-                            config = config.copy(columns = it)
+                        Text("布局", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                        QuickWheelIntRow(
+                            title = "列数",
+                            description = "网格每行放几个",
+                            value = config.columns,
+                            range = WidgetPanelSubMenuConfig.MIN_COLUMNS..WidgetPanelSubMenuConfig.MAX_COLUMNS,
+                        ) { config = config.copy(columns = it) }
+                        QuickWheelIntRow(
+                            title = "行数",
+                            description = "网格放几行（不足时整块垂直居中）",
+                            value = config.rows,
+                            range = WidgetPanelSubMenuConfig.MIN_ROWS..WidgetPanelSubMenuConfig.MAX_ROWS,
+                        ) { config = config.copy(rows = it) }
+                        QuickWheelSliderRow(
+                            title = "左右偏移",
+                            description = "整块网格相对格子的水平位移",
+                            value = config.offsetXDp.toFloat(),
+                            range = -240f..240f,
+                            unit = "dp",
+                        ) { config = config.copy(offsetXDp = it.roundToInt()) }
+                        QuickWheelSliderRow(
+                            title = "上下偏移",
+                            description = "整块网格相对格子的垂直位移",
+                            value = config.offsetYDp.toFloat(),
+                            range = -240f..240f,
+                            unit = "dp",
+                        ) { config = config.copy(offsetYDp = it.roundToInt()) }
+
+                        Text("容器外观", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                        QuickWheelSliderRow(
+                            title = "容器间距",
+                            description = "相邻容器之间的净间距",
+                            value = config.itemGapDp.toFloat(),
+                            range = WidgetPanelSubMenuConfig.MIN_ITEM_GAP_DP.toFloat()..
+                                WidgetPanelSubMenuConfig.MAX_ITEM_GAP_DP.toFloat(),
+                            unit = "dp",
+                        ) { config = config.copy(itemGapDp = it.roundToInt()) }
+                        QuickWheelSliderRow(
+                            title = "容器尺寸",
+                            description = "容器正方形边长",
+                            value = config.containerSizeDp.toFloat(),
+                            range = WidgetPanelSubMenuConfig.MIN_CONTAINER_SIZE_DP.toFloat()..
+                                WidgetPanelSubMenuConfig.MAX_CONTAINER_SIZE_DP.toFloat(),
+                            unit = "dp",
+                        ) {
+                            val size = it.roundToInt()
+                            config = config.copy(
+                                containerSizeDp = size,
+                                // 圆角不能超过半边长（超过就是圆形，没必要存更大值）。
+                                containerCornerDp = config.containerCornerDp.coerceAtMost(size / 2),
+                            )
                         }
-                        StepperRow("行数", config.rows, WidgetPanelSubMenuConfig.MIN_ROWS..WidgetPanelSubMenuConfig.MAX_ROWS) {
-                            config = config.copy(rows = it)
-                        }
-                        StepperRow("左右偏移(dp)", config.offsetXDp, -240..240, step = 8) {
-                            config = config.copy(offsetXDp = it)
-                        }
-                        StepperRow("上下偏移(dp)", config.offsetYDp, -240..240, step = 8) {
-                            config = config.copy(offsetYDp = it)
-                        }
-                        StepperRow(
-                            "格子间距(dp)",
-                            config.itemGapDp,
-                            WidgetPanelSubMenuConfig.MIN_ITEM_GAP_DP..WidgetPanelSubMenuConfig.MAX_ITEM_GAP_DP,
-                        ) { config = config.copy(itemGapDp = it) }
-                        StepperRow(
-                            "图标大小(%)",
-                            config.iconSizePercent,
-                            WidgetPanelSubMenuConfig.MIN_ICON_PERCENT..WidgetPanelSubMenuConfig.MAX_ICON_PERCENT,
-                            step = 5,
-                        ) { config = config.copy(iconSizePercent = it) }
-                        StepperRow(
-                            "文字大小(%)",
-                            config.labelSizePercent,
-                            WidgetPanelSubMenuConfig.MIN_LABEL_PERCENT..WidgetPanelSubMenuConfig.MAX_LABEL_PERCENT,
-                            step = 5,
-                        ) { config = config.copy(labelSizePercent = it) }
-                        StepperRow(
-                            "背景不透明度(%)",
-                            config.backgroundAlphaPercent,
-                            0..100,
-                            step = 5,
-                        ) { config = config.copy(backgroundAlphaPercent = it) }
+                        QuickWheelSliderRow(
+                            title = "容器圆角",
+                            description = "0 = 直角，等于半边长时是圆形",
+                            value = config.containerCornerDp.toFloat(),
+                            range = 0f..(config.containerSizeDp / 2).toFloat().coerceAtLeast(1f),
+                            unit = "dp",
+                        ) { config = config.copy(containerCornerDp = it.roundToInt()) }
+                        QuickWheelSliderRow(
+                            title = "图标大小",
+                            description = "图标占容器尺寸的百分比",
+                            value = config.iconSizePercent.toFloat(),
+                            range = WidgetPanelSubMenuConfig.MIN_ICON_PERCENT.toFloat()..
+                                WidgetPanelSubMenuConfig.MAX_ICON_PERCENT.toFloat(),
+                            unit = "%",
+                        ) { config = config.copy(iconSizePercent = it.roundToInt()) }
+                        QuickWheelSliderRow(
+                            title = "文字大小",
+                            description = "名称文字大小（100% = 基准）",
+                            value = config.labelSizePercent.toFloat(),
+                            range = WidgetPanelSubMenuConfig.MIN_LABEL_PERCENT.toFloat()..
+                                WidgetPanelSubMenuConfig.MAX_LABEL_PERCENT.toFloat(),
+                            unit = "%",
+                        ) { config = config.copy(labelSizePercent = it.roundToInt()) }
+                        QuickWheelSliderRow(
+                            title = "背景不透明度",
+                            description = "0% = 容器完全透明，100% = 不透明",
+                            value = config.backgroundAlphaPercent.toFloat(),
+                            range = 0f..100f,
+                            unit = "%",
+                        ) { config = config.copy(backgroundAlphaPercent = it.roundToInt()) }
+                        QuickWheelColorRow(
+                            title = "容器颜色",
+                            description = "所有菜单项的默认底色",
+                            argb = config.containerColorArgb,
+                        ) { config = config.copy(containerColorArgb = it) }
+                        QuickWheelColorRow(
+                            title = "文字颜色",
+                            description = "所有菜单项的默认文字 / 图标颜色",
+                            argb = config.labelColorArgb,
+                        ) { config = config.copy(labelColorArgb = it) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("显示名称", modifier = Modifier.weight(1f))
                             Switch(
@@ -235,48 +292,50 @@ fun WidgetPanelSubActionsEditorContent(
                                 }
                             }
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ActionIconPickerHost(
-                                    action = parsed.action,
-                                    iconKey = parsed.iconKey.takeIf { it.isNotBlank() },
-                                    sizeDp = 40,
-                                    storageKey = "widget-panel-sub:${item.appWidgetId}:$index",
-                                    onIconChange = { key ->
-                                        replace(
-                                            index,
-                                            WidgetPanelSubActions.encode(
-                                                parsed.action,
-                                                parsed.customName,
-                                                key.orEmpty(),
-                                            ),
-                                        )
-                                    },
-                                    onReset = {
-                                        replace(
-                                            index,
-                                            WidgetPanelSubActions.encode(parsed.action, parsed.customName, ""),
-                                        )
-                                    },
-                                )
-                                OutlinedTextField(
-                                    value = parsed.customName,
-                                    onValueChange = { name ->
-                                        replace(
-                                            index,
-                                            WidgetPanelSubActions.encode(parsed.action, name, parsed.iconKey),
-                                        )
-                                    },
-                                    placeholder = {
-                                        Text(WidgetPanelSubActions.displayName(context, parsed.copy(customName = "")))
-                                    },
-                                    singleLine = true,
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                )
-                                IconButton(
-                                    onClick = {
-                                        drafts = drafts.filterIndexed { i, _ -> i != index }
-                                    },
-                                ) { Icon(Icons.Default.Delete, null) }
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ActionIconPickerHost(
+                                        action = parsed.action,
+                                        iconKey = parsed.iconKey.takeIf { it.isNotBlank() },
+                                        sizeDp = 40,
+                                        storageKey = "widget-panel-sub:${item.appWidgetId}:$index",
+                                        onIconChange = { key ->
+                                            replace(index, parsed.copy(iconKey = key.orEmpty()).encode())
+                                        },
+                                        onReset = { replace(index, parsed.copy(iconKey = "").encode()) },
+                                    )
+                                    OutlinedTextField(
+                                        value = parsed.customName,
+                                        onValueChange = { name ->
+                                            replace(index, parsed.copy(customName = name).encode())
+                                        },
+                                        placeholder = {
+                                            Text(WidgetPanelSubActions.displayName(context, parsed.copy(customName = "")))
+                                        },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                    )
+                                    // 排序：上下移（与列表里改顺序等价）。
+                                    IconButton(
+                                        onClick = { moveItem(drafts, index, -1)?.let { drafts = it } },
+                                        enabled = index > 0,
+                                    ) { Text("↑") }
+                                    IconButton(
+                                        onClick = { moveItem(drafts, index, +1)?.let { drafts = it } },
+                                        enabled = index < drafts.lastIndex,
+                                    ) { Text("↓") }
+                                    IconButton(
+                                        onClick = { drafts = drafts.filterIndexed { i, _ -> i != index } },
+                                    ) { Icon(Icons.Default.Delete, null) }
+                                }
+                                QuickWheelSlotColorRow(
+                                    title = "容器颜色",
+                                    argb = parsed.containerColorArgb,
+                                ) { replace(index, parsed.copy(containerColorArgb = it).encode()) }
+                                QuickWheelSlotColorRow(
+                                    title = "文字 / 图标颜色",
+                                    argb = parsed.iconTintArgb,
+                                ) { replace(index, parsed.copy(iconTintArgb = it).encode()) }
                             }
                         }
                     }
@@ -348,30 +407,6 @@ fun WidgetPanelSubActionsEditorContent(
     }
 }
 
-/** 「- 值 +」步进行；[step] 为每次增减量（偏移用 8dp）。 */
-@Composable
-private fun StepperRow(
-    label: String,
-    value: Int,
-    range: IntRange,
-    step: Int = 1,
-    onChange: (Int) -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { onChange((value - step).coerceIn(range.first, range.last)) }) {
-            Text("−")
-        }
-        Text(
-            text = value.toString(),
-            modifier = Modifier.padding(horizontal = 12.dp),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        OutlinedButton(onClick = { onChange((value + step).coerceIn(range.first, range.last)) }) {
-            Text("+")
-        }
-    }
-}
 
 /** 把面板格子还原成一个"代表动作"，只用于图标选择页展示与默认图标解析。 */
 private fun WidgetPanelItem.toGestureAction(): GestureAction {
@@ -405,3 +440,23 @@ private fun WidgetPanelItem.shortcutRepresentativeAction(): GestureAction {
             )
     }
 }
+
+/** 列表内上移 / 下移；越界返回 null。 */
+private fun moveItem(list: List<String>, index: Int, delta: Int): List<String>? {
+    val target = index + delta
+    if (target !in list.indices) return null
+    val mutable = list.toMutableList()
+    val moved = mutable.removeAt(index)
+    mutable.add(target, moved)
+    return mutable
+}
+
+/** 用当前字段重新编码这一项（改名称 / 改图标 / 改颜色都走它）。 */
+private fun WidgetPanelSubAction.encode(): String =
+    WidgetPanelSubActions.encode(
+        action = action,
+        customName = customName,
+        iconKey = iconKey,
+        containerColorArgb = containerColorArgb,
+        iconTintArgb = iconTintArgb,
+    )

@@ -20,6 +20,10 @@ data class WidgetPanelSubAction(
     val customName: String = "",
     /** 自定义图标 key；空 = 用该动作自己的图标（应用图标 / 快捷方式图标 / 类型图标）。 */
     val iconKey: String = "",
+    /** 该格单独的容器颜色（ARGB）；0 = 跟随菜单的统一设置。 */
+    val containerColorArgb: Long = 0L,
+    /** 该格单独的文字 / 图标颜色（ARGB）；0 = 跟随菜单的统一设置。 */
+    val iconTintArgb: Long = 0L,
 )
 
 object WidgetPanelSubActions {
@@ -39,10 +43,14 @@ object WidgetPanelSubActions {
                 val payload: String
                 val name: String
                 val iconKey: String
+                val containerColorArgb: Long
+                val iconTintArgb: Long
                 if (fields.size >= 1 && entry.contains(SUB_ACTION_FIELD_SEP)) {
                     payload = fields.getOrElse(0) { "" }
                     name = fields.getOrElse(1) { "" }
                     iconKey = fields.getOrElse(2) { "" }
+                    containerColorArgb = fields.getOrNull(3)?.toLongOrNull() ?: 0L
+                    iconTintArgb = fields.getOrNull(4)?.toLongOrNull() ?: 0L
                 } else {
                     // 早期格式：名称\u0003负载
                     val sep = entry.indexOf(SUB_ACTION_LABEL_SEP)
@@ -54,10 +62,18 @@ object WidgetPanelSubActions {
                         payload = entry
                     }
                     iconKey = ""
+                    containerColorArgb = 0L
+                    iconTintArgb = 0L
                 }
                 val action = QuickLauncherItemCodec.parseActionPayload(payload)
                     ?: return@mapNotNull null
-                WidgetPanelSubAction(action = action, customName = name, iconKey = iconKey)
+                WidgetPanelSubAction(
+                    action = action,
+                    customName = name,
+                    iconKey = iconKey,
+                    containerColorArgb = containerColorArgb,
+                    iconTintArgb = iconTintArgb,
+                )
             }
             .toList()
 
@@ -69,12 +85,19 @@ object WidgetPanelSubActions {
                 ?: fallbackLabel(item.action)
         }
 
-    fun encode(action: GestureAction, customName: String, iconKey: String): String =
-        listOf(
-            QuickLauncherItemCodec.encodeActionPayload(action),
-            customName,
-            iconKey,
-        ).joinToString(SUB_ACTION_FIELD_SEP)
+    fun encode(
+        action: GestureAction,
+        customName: String,
+        iconKey: String,
+        containerColorArgb: Long = 0L,
+        iconTintArgb: Long = 0L,
+    ): String = listOf(
+        QuickLauncherItemCodec.encodeActionPayload(action),
+        customName,
+        iconKey,
+        containerColorArgb.toString(),
+        iconTintArgb.toString(),
+    ).joinToString(SUB_ACTION_FIELD_SEP)
 
     /** 没存名称时的兜底名（配置时一般都会有正规文案）。 */
     fun fallbackLabel(action: GestureAction): String = when (action) {
@@ -90,14 +113,19 @@ object WidgetPanelSubActions {
      * - 有自定义图标 key → 与「给动作设置图标」同一渲染通道（字体图标 / 文字 / 图片）；
      * - 否则 → 边角轮盘的解析器（应用图标 / 快捷方式图标 / 宏目标 / 类型图标）。
      */
-    fun icon(context: Context, item: WidgetPanelSubAction, sizePx: Int): Bitmap? {
+    fun icon(
+        context: Context,
+        item: WidgetPanelSubAction,
+        sizePx: Int,
+        tintArgb: Int = DEFAULT_ICON_TINT_ARGB,
+    ): Bitmap? {
         if (item.iconKey.isNotBlank()) {
             runCatching {
                 ActionIconBitmap.loadByKey(
                     context = context,
                     key = item.iconKey,
                     sizePx = sizePx,
-                    tintArgb = 0xFF333333.toInt(),
+                    tintArgb = tintArgb,
                     withPlate = false,
                     action = item.action,
                 )
@@ -108,9 +136,12 @@ object WidgetPanelSubActions {
                 context = context,
                 action = item.action,
                 sizePx = sizePx,
-                tintArgb = 0xFF333333.toInt(),
+                tintArgb = tintArgb,
                 plateFallback = false,
             )
         }.getOrNull()
     }
+
+    /** 默认图标着色：深灰（白底容器上清晰）。 */
+    const val DEFAULT_ICON_TINT_ARGB: Int = 0xFF333333.toInt()
 }
