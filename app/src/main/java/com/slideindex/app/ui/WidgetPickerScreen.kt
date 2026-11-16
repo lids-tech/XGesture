@@ -89,6 +89,7 @@ import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.picker.appPickerGridItems
 import com.slideindex.app.util.AppShortcutLoader
 import com.slideindex.app.util.PinyinHelper
+import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.widget.InstalledAppEntry
 import com.slideindex.app.widget.ShortcutEntry
 import com.slideindex.app.widget.WidgetAppGroup
@@ -106,6 +107,7 @@ sealed interface WidgetPickerSubScreen {
   data class WidgetAppDetail(val group: WidgetAppGroup) : WidgetPickerSubScreen
   data object MyShortcuts : WidgetPickerSubScreen
   data object PresetShortcuts : WidgetPickerSubScreen
+  data object ActionPick : WidgetPickerSubScreen
   data object PickApp : WidgetPickerSubScreen
   data class PickActivity(val packageName: String) : WidgetPickerSubScreen
 }
@@ -121,6 +123,8 @@ fun WidgetPickerScreen(
   onToggleShortcut: ((ShortcutEntry, Boolean) -> Unit)? = null,
   onAppSelected: ((InstalledAppEntry) -> Unit)? = null,
   onShortcutSelected: ((ShortcutEntry) -> Unit)? = null,
+  /** 选中一个「动作」→ 由调用方把它加成面板格子。 */
+  onActionSelected: ((GestureAction) -> Unit)? = null,
   launchCreateShortcut: ((AppShortcutLoader.CreateShortcutHost) -> Unit)? = null,
   enableBackHandler: Boolean = true,
   overlayMode: Boolean = false,
@@ -252,6 +256,25 @@ fun WidgetPickerScreen(
           onWidgetSelected = onWidgetSelected,
           enableBackHandler = enableBackHandler,
           overlayMode = overlayMode,
+        )
+      }
+      WidgetPickerSubScreen.ActionPick -> {
+        // 自包含的动作选择器（与音量面板同一个），动作 / 应用 / 快捷方式三页 +
+        // 命令 / 宏 / 轮盘等参数页都在它内部处理，这里只负责把「选了哪个动作」回传。
+        com.slideindex.app.overlay.volumepanel.ExpandPanelSlotPicker(
+          allApps = allApps,
+          activityShortcuts = activityShortcuts,
+          current = null,
+          wheels = appSettings.launcher.quickWheels,
+          panels = appSettings.quickLauncherPanels,
+          widgetPanelPages = com.slideindex.app.widget.WidgetPanelDefaults.effectivePages(appSettings.widgetPanelPages),
+          onSelect = { action ->
+            onActionSelected?.invoke(action)
+            subScreen = WidgetPickerSubScreen.Main
+          },
+          onCancel = { subScreen = WidgetPickerSubScreen.Main },
+          onClearSlot = null,
+          imeBottom = 0.dp,
         )
       }
       WidgetPickerSubScreen.MyShortcuts -> {
@@ -434,9 +457,18 @@ fun WidgetPickerScreen(
               stringResource(R.string.widget_picker_title),
               stringResource(R.string.widget_tab_apps),
               stringResource(R.string.widget_tab_shortcuts),
+              stringResource(R.string.action_picker_tab_actions),
             ),
             selectedTabIndex = selectedTab,
-            onTabSelected = { selectedTab = it },
+            onTabSelected = { index ->
+              if (index == 3) {
+                // 「动作」不是一个列表页，直接进自包含的动作选择器；回来停在小部件页。
+                selectedTab = 0
+                subScreen = WidgetPickerSubScreen.ActionPick
+              } else {
+                selectedTab = index
+              }
+            },
           )
         },
       )

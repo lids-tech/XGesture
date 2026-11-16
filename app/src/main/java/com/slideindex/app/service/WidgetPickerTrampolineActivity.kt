@@ -60,6 +60,14 @@ class WidgetPickerTrampolineActivity : ComponentActivity() {
               WidgetPickerTrampoline.deliverShortcutSuccess(sc.packageName, sc.shortcutId, sc.label, sc.intentUri)
               finish()
             },
+            onActionSelected = { action ->
+              delivered = true
+              WidgetPickerTrampoline.deliverActionSuccess(
+                com.slideindex.app.launcher.QuickLauncherItemCodec.encodeActionPayload(action),
+                com.slideindex.app.ui.gesturepicker.gestureActionLabelText(this, action),
+              )
+              finish()
+            },
             enableBackHandler = true
           )
         }

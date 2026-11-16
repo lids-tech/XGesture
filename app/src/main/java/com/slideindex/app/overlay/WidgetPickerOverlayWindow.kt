@@ -408,6 +408,13 @@ fun WidgetPickerOverlayRoot(
           onShortcutSelected = { sc ->
             WidgetPickerTrampoline.toggleShortcut(sc.packageName, sc.shortcutId, sc.label, sc.intentUri)
           },
+          onActionSelected = { action ->
+            // 动作只做「新增」：addActionToPage 会找一个空格位放进去，无需勾选态。
+            WidgetPickerTrampoline.deliverActionSuccess(
+              com.slideindex.app.launcher.QuickLauncherItemCodec.encodeActionPayload(action),
+              com.slideindex.app.ui.gesturepicker.gestureActionLabelText(context, action),
+            )
+          },
           launchCreateShortcut = { createHost ->
             val hostContext = SlideIndexAccessibilityService.overlayHostContext() ?: context.applicationContext
             if (hostContext != null) {
