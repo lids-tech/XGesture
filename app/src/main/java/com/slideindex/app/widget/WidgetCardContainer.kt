@@ -217,7 +217,18 @@ class WidgetCardContainer(
             val action = com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
             if (action != null) {
               com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-              com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
+              // ⚠️ 必须走和快捷轮盘/浮球同一个执行器：
+              // 直接调 AccessibilityService.perform 时，「快捷轮盘 / 快捷启动器 / 小组件面板」
+              // 这类需要浮层宿主与锚点的动作收不到上下文，表现就是"点了没反应"。
+              val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks
+                .settingsSnapshot?.invoke(context)
+              val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
+                ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
+              if (settings != null && runner != null) {
+                runCatching { runner.run(action, settings, false, null, null, null) }
+              } else {
+                com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
+              }
             }
           } else if (item.itemType == ITEM_TYPE_SHORTCUT) {
             com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()

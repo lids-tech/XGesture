@@ -85,12 +85,14 @@ fun GestureActionPickerScreen(
     includePointerGestureActions: Boolean = false,
     includeCornerInnerZoneActions: Boolean = false,
     pinNoneAtTop: Boolean = true,
+    /** 只显示「动作」一页：不画页签行、selectedTab 锁定动作页（面板添加动作时用）。 */
+    onlyActionsTab: Boolean = false,
     catalogPolicy: ActionPickerCatalogPolicy,
     /** 不进候选列表的动作类型；「晃动菜单」编辑页用它挡掉再套一层菜单造成的递归。 */
     excludeActionTypes: Set<GestureActionType> = emptySet(),
 ) {
     // 打开时先落在「当前已绑定动作」所属的那一页，而不是永远从第 0 页开始。
-    var selectedTab by remember { mutableIntStateOf(current.pickerTab().ordinal) }
+    var selectedTab by remember { mutableIntStateOf(if (onlyActionsTab) 0 else current.pickerTab().ordinal) }
     var searchQuery by remember { mutableStateOf("") }
     var searchExpanded by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
@@ -300,15 +302,17 @@ fun GestureActionPickerScreen(
                     focusRequester = searchFocusRequester,
                     hintResId = searchHintResId,
                     tabContent = {
-                        AppPickerTabRow(
-                            tabs = listOf(
-                                stringResource(R.string.action_picker_tab_actions),
-                                stringResource(R.string.action_picker_tab_apps),
-                                stringResource(R.string.action_picker_tab_shortcuts)
-                            ),
-                            selectedTabIndex = selectedTab,
-                            onTabSelected = { selectedTab = it }
-                        )
+                        if (!onlyActionsTab) {
+                            AppPickerTabRow(
+                                tabs = listOf(
+                                    stringResource(R.string.action_picker_tab_actions),
+                                    stringResource(R.string.action_picker_tab_apps),
+                                    stringResource(R.string.action_picker_tab_shortcuts)
+                                ),
+                                selectedTabIndex = selectedTab,
+                                onTabSelected = { selectedTab = it }
+                            )
+                        }
                     }
                 )
             }

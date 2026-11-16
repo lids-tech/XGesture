@@ -108,6 +108,8 @@ sealed interface WidgetPickerSubScreen {
   data object MyShortcuts : WidgetPickerSubScreen
   data object PresetShortcuts : WidgetPickerSubScreen
   data object ActionPick : WidgetPickerSubScreen
+  data object ShellCommand : WidgetPickerSubScreen
+  data object SimulateKeyEvent : WidgetPickerSubScreen
   data object PickApp : WidgetPickerSubScreen
   data class PickActivity(val packageName: String) : WidgetPickerSubScreen
 }
@@ -146,6 +148,9 @@ fun WidgetPickerScreen(
   var searchExpanded by remember { mutableStateOf(false) }
   val searchFocusRequester = remember { FocusRequester() }
   var subScreen by remember { mutableStateOf<WidgetPickerSubScreen>(WidgetPickerSubScreen.Main) }
+  // 「动作」页里带参数的动作：命令 / 模拟按键要各自的配置页。
+  var shellInitialCommand by remember { mutableStateOf("") }
+  var keyEventInitial by remember { mutableStateOf(GestureAction.SimulateKeyEvent()) }
 
   val settingsRepository = com.slideindex.app.ui.compose.rememberSettingsRepository()
   val appSettings by settingsRepository.settings.collectAsStateWithLifecycle(initialValue = com.slideindex.app.settings.AppSettings())
@@ -259,22 +264,55 @@ fun WidgetPickerScreen(
         )
       }
       WidgetPickerSubScreen.ActionPick -> {
-        // 自包含的动作选择器（与音量面板同一个），动作 / 应用 / 快捷方式三页 +
-        // 命令 / 宏 / 轮盘等参数页都在它内部处理，这里只负责把「选了哪个动作」回传。
-        com.slideindex.app.overlay.volumepanel.ExpandPanelSlotPicker(
-          allApps = allApps,
-          activityShortcuts = activityShortcuts,
-          current = null,
-          wheels = appSettings.launcher.quickWheels,
-          panels = appSettings.quickLauncherPanels,
-          widgetPanelPages = com.slideindex.app.widget.WidgetPanelDefaults.effectivePages(appSettings.widgetPanelPages),
+        // 直接复用快捷轮盘容器编辑用的动作选择页，但**只显示「动作」一页**：
+        // 应用 / 快捷方式已经有独立页签，这里再列一遍是重复。
+        // 该页自带分类（导航与系统 / 开关与调节 / 截屏与识别 / 面板与启动 / 指针与高级 / 其他）、
+        // 搜索、以及带参数动作的配置弹窗（打开链接 / 快捷轮盘 / 快捷启动器 / 小组件面板）。
+        GestureActionPickerScreen(
+          trigger = com.slideindex.app.gesture.GestureTriggerType.SHORT_SWIPE_IN,
+          current = GestureAction.None,
+          catalogPolicy = com.slideindex.app.gesture.ActionPickerCatalogPolicy.Slot(
+            com.slideindex.app.gesture.SlotPickerKind.OverlayTap,
+          ),
+          onlyActionsTab = true,
+          onDismiss = { subScreen = WidgetPickerSubScreen.Main },
           onSelect = { action ->
             onActionSelected?.invoke(action)
             subScreen = WidgetPickerSubScreen.Main
           },
-          onCancel = { subScreen = WidgetPickerSubScreen.Main },
-          onClearSlot = null,
-          imeBottom = 0.dp,
+          onOpenMyShortcuts = {},
+          onOpenPresetShortcuts = {},
+          onOpenPickApp = {},
+          onOpenExecuteShellCommand = { command ->
+            shellInitialCommand = command
+            subScreen = WidgetPickerSubScreen.ShellCommand
+          },
+          onOpenSimulateKeyEvent = { event ->
+            keyEventInitial = event
+            subScreen = WidgetPickerSubScreen.SimulateKeyEvent
+          },
+        )
+      }
+      WidgetPickerSubScreen.ShellCommand -> {
+        GestureExecuteShellCommandScreen(
+          initialCommand = shellInitialCommand,
+          shellCommands = appSettings.shellCommands,
+          overlayMode = overlayMode,
+          onBack = { subScreen = WidgetPickerSubScreen.ActionPick },
+          onConfirm = { command ->
+            onActionSelected?.invoke(GestureAction.ExecuteShellCommand(command))
+            subScreen = WidgetPickerSubScreen.Main
+          },
+        )
+      }
+      WidgetPickerSubScreen.SimulateKeyEvent -> {
+        GestureSimulateKeyEventScreen(
+          initialAction = keyEventInitial,
+          onBack = { subScreen = WidgetPickerSubScreen.ActionPick },
+          onConfirm = { action ->
+            onActionSelected?.invoke(action)
+            subScreen = WidgetPickerSubScreen.Main
+          },
         )
       }
       WidgetPickerSubScreen.MyShortcuts -> {
