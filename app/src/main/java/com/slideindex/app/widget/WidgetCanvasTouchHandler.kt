@@ -217,9 +217,16 @@ internal class WidgetCanvasTouchHandler(
             val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
             val launchFreeWindow = com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchFreeWindow
             if (settings != null && launchFreeWindow != null) {
-                com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-                runCatching { launchFreeWindow(context, item.packageName, settings, null) }
-                return
+                // ⚠️ 先起小窗再收面板：先收面板会让这次启动变成"无可见窗口"的后台启动，
+                // 部分 ROM 直接拦掉（表现就是"长按松手什么也没发生"）。
+                val launched = runCatching {
+                    launchFreeWindow(context, item.packageName, settings, null)
+                    true
+                }.getOrDefault(false)
+                if (launched) {
+                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+                    return
+                }
             }
         }
         child.performContentClick()

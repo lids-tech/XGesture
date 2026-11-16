@@ -352,6 +352,16 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         onItemRemoved?.invoke(widgetId)
       }
       onConfigure = { onConfigureWidget?.invoke(item.appWidgetId) }
+      // 编辑模式下「应用 / 动作 / 快捷方式」格子左上角的「⋯」按钮 → 二级菜单配置。
+      // 走 chrome 按钮这条成熟通道（与小部件卡的「配置」按钮同一套命中逻辑），
+      // 不再依赖画布的点击判定——那条路在 RecyclerView + 卡片点击视图下不可靠。
+      val canvas = this@WidgetCanvasLayout
+      onEditSubActions = {
+        val target = this
+        if (target.item.itemType != ITEM_TYPE_WIDGET) {
+          canvas.onEditSubActions?.invoke(target.item)
+        }
+      }
       onResize = { spanX, spanY ->
         commitItemChange(this.item.copy(spanX = spanX, spanY = spanY))
       }

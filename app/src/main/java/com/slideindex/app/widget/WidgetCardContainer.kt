@@ -52,6 +52,13 @@ class WidgetCardContainer(
   var onDelete: (() -> Unit)? = null
   var onResize: ((spanX: Int, spanY: Int) -> Unit)? = null
   var onConfigure: (() -> Unit)? = null
+
+  /**
+   * 编辑模式下点「⋯」→ 配置该格子的长按二级菜单。
+   *
+   * 只对应用 / 动作 / 快捷方式生效（小组件卡没有二级菜单）。
+   */
+  var onEditSubActions: (() -> Unit)? = null
   var onInteractionActiveChange: ((Boolean) -> Unit)? = null
 
   private val scalableFrame: ScalableFrameLayout
@@ -59,6 +66,8 @@ class WidgetCardContainer(
   private val deleteButton: View
   private val resizeHandle: ResizeHandleView
   private val configureButton: View
+  /** 编辑模式下的「⋯」：配置该格子的长按二级菜单（仅应用 / 动作 / 快捷方式可见）。 */
+  private val subActionsButton: android.widget.TextView
   private var editModeEnabled = false
   private var previewSpanX = item.spanX
   private var previewSpanY = item.spanY
@@ -318,6 +327,28 @@ class WidgetCardContainer(
       },
     )
 
+    // 「⋯」二级菜单配置按钮：应用 / 动作 / 快捷方式格子在编辑模式下的入口。
+    // 与删除按钮对称放右上（应用格子顶部右侧原本只有删除），避免和小部件卡的配置键冲突。
+    subActionsButton = android.widget.TextView(context).apply {
+      text = "⋯"
+      setTextColor(Color.WHITE)
+      gravity = Gravity.CENTER
+      setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
+      background = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(0xCC3478F6.toInt())
+      }
+      setOnClickListener { onEditSubActions?.invoke() }
+    }
+    addView(
+      subActionsButton,
+      LayoutParams(chromeBtnSize, chromeBtnSize).apply {
+        gravity = Gravity.TOP or Gravity.END
+        topMargin = chromeMargin
+        marginEnd = chromeMargin + chromeBtnSize + chromeMargin
+      },
+    )
+
     setEditMode(false)
   }
 
@@ -435,6 +466,9 @@ class WidgetCardContainer(
     if (item.itemType == ITEM_TYPE_APP || item.itemType == ITEM_TYPE_SHORTCUT) {
       resizeHandle.visibility = GONE
       configureButton.visibility = GONE
+    } else if (item.itemType == ITEM_TYPE_ACTION) {
+      resizeHandle.visibility = GONE
+      configureButton.visibility = GONE
     } else {
       resizeHandle.visibility = if (enabled) VISIBLE else GONE
       scalableFrame.setWidgetTouchEnabled(true)
@@ -444,6 +478,9 @@ class WidgetCardContainer(
       val hasConfigure = info?.configure != null
       configureButton.visibility = if (enabled && hasConfigure) VISIBLE else GONE
     }
+    // 二级菜单入口：只有应用 / 动作 / 快捷方式有（小组件卡没有二级菜单）。
+    subActionsButton.visibility =
+      if (enabled && item.itemType != ITEM_TYPE_WIDGET) VISIBLE else GONE
     invalidate()
   }
 
@@ -502,6 +539,7 @@ class WidgetCardContainer(
     if (deleteButton.isVisible && isPointInView(deleteButton, localX, localY)) return true
     if (resizeHandle.isVisible && isPointInView(resizeHandle, localX, localY)) return true
     if (configureButton.isVisible && isPointInView(configureButton, localX, localY)) return true
+    if (subActionsButton.isVisible && isPointInView(subActionsButton, localX, localY)) return true
     return false
   }
 
