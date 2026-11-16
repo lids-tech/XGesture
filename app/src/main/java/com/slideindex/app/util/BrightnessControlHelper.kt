@@ -16,6 +16,11 @@ object BrightnessControlHelper {
 
     const val UI_NIGHT_MODE_KEY = "ui_night_mode"
 
+    /** 自动亮度偏移提交：单线程后台，绝不阻塞拖动或手势线程。 */
+    private val autoAdjExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "brightness-adj-commit").apply { isDaemon = true }
+    }
+
 
 
     private const val UI_NIGHT_MODE_AUTO = 0
@@ -93,6 +98,8 @@ object BrightnessControlHelper {
      * 或同步器写一半的中间态；拿它当读数会让面板停在错误的位置。
      */
     private fun readManualBrightnessFraction(appContext: Context): Float {
+        // 只读 int：实测这台机器上 float 不影响屏幕，adj 会被自动亮度重算；
+        // 拿它们当读数只会让面板和屏幕对不上。
         val level = Settings.System.getInt(
             appContext.contentResolver,
             Settings.System.SCREEN_BRIGHTNESS,
@@ -110,25 +117,17 @@ object BrightnessControlHelper {
     }
 
     /**
-     * 量程上限：三个来源**取最大**，不再"取第一个能读到的"。
+     * 量程上限：`config_screenBrightnessSettingMaximum` 与 `PowerManager.BRIGHTNESS_ON` 取较大者。
      *
-     * 1. framework 配置 `config_screenBrightnessSettingMaximum`；
-     * 2. `PowerManager.BRIGHTNESS_ON`（@hide，反射）——AOSP 里是常量 255，小米等厂商会改写成
-     *    真实量程（1023/2047/4095/8192），所以两边都不能单独信；
-     * 3. 运行期观察到的最大读数。
-     *
-     * 为什么取最大：量程**估小**是致命的——写入值被压到真实量程的一小截（8191 的机器上只发
-     * 1..255，等于把屏幕按黑）；估大的代价只是滑条顶部一段用不满。旧实现"优先 BRIGHTNESS_ON，
-     * 读不到才看 config"，在 BRIGHTNESS_ON 没被厂商改写的机器上会把 config 变成死代码。
-     *
-     * 不再按当前亮度倒猜：那段逻辑四档里只有一档碰巧成立，会把量程算错一个数量级。
+     * **不再把"运行期观测到的最大读数"并进量程**：那个值会被我们自己的写入反向污染。
+     * 用户日志（OPPO CPH2797）实测：config=255、BRIGHTNESS_ON=255、系统回读把 782/787 夹到 255，
+     * 但 observedMax=787 把量程抬高到 787，结果滑条 33% 就到顶。观测值只留在诊断里打印，不参与计算。
      */
     @SuppressLint("DiscouragedApi")
     private fun brightnessMax(context: Context): Int {
-        var resolved = BRIGHTNESS_ON_VALUE
-        configuredMax(context).takeIf { it > 0 }?.let { resolved = maxOf(resolved, it) }
+        var resolved = configuredMax(context)
         brightnessOnValue().takeIf { it > 0 }?.let { resolved = maxOf(resolved, it) }
-        if (observedMaxLevel > resolved) resolved = observedMaxLevel
+        if (resolved <= 0) resolved = BRIGHTNESS_ON_VALUE
         return resolved
     }
 
@@ -207,14 +206,63 @@ object BrightnessControlHelper {
         if (!hasAccess(context)) return false
         val appContext = context.applicationContext
         val clamped = fraction.coerceIn(0f, 1f)
-        val adj = if (readAutoBrightnessEnabled(appContext)) fractionToAdj(clamped) else null
-        return writeManualBrightnessFraction(
+        // 拖动中只走 Settings（1.50 口径）：不碰 shell、不写 adj。
+        // 真机日志（OPPO / ColorOS 16）显示：拖动中每 100ms 走一次 shell 会触发厂商亮度
+        // 控制器重算，把 screen_brightness 改回它自己的值 —— 就是"调上去又弹回来"。
+        val synced = writeManualBrightnessFraction(
             context = appContext,
             clamped = clamped,
-            adj = adj,
-            includeShell = includeShell,
+            includeShell = includeShell && !duringGesture,
             logSuccess = !duringGesture,
         )
+        // 松手时如果自动亮度开着，写一次"用户偏移"（adj）。这是 AOSP 自动亮度唯一的
+        // 用户覆盖通道，也是 1.50 与后续版本的关键差别：只在提交时写一次，不是每帧写。
+        if (commitAutoAdj && readAutoBrightnessEnabled(appContext)) {
+            scheduleAutoBrightnessAdjCommit(appContext, clamped)
+        }
+        return synced
+    }
+
+    /**
+     * 松手提交"自动亮度用户偏移"。
+     *
+     * 优先 shell（ColorOS 只认 shell 身份），失败再退回 Settings；不阻塞调用线程，
+     * 也不切换系统亮度模式（保持 1.50 的行为）。
+     */
+    private fun scheduleAutoBrightnessAdjCommit(context: Context, fraction: Float) {
+        val adj = (fraction.coerceIn(0f, 1f) * 2f - 1f)
+        autoAdjExecutor.execute {
+            var via = "none"
+            if (TaskManagerUtil.hasPermission()) {
+                val ok = runCatching {
+                    TaskManagerUtil.runShellCommandLine(
+                        command = "settings put system $SCREEN_AUTO_BRIGHTNESS_ADJ $adj",
+                        useRoot = PrivilegeGateway.isRootMode(),
+                    ).success
+                }.getOrDefault(false)
+                if (ok) via = "shell"
+            }
+            if (via == "none" &&
+                (PermissionHelper.canWriteSettings(context) ||
+                    SecureSettingsHelper.hasWriteSecureSettings(context))
+            ) {
+                val ok = runCatching {
+                    Settings.System.putFloat(
+                        context.contentResolver,
+                        SCREEN_AUTO_BRIGHTNESS_ADJ,
+                        adj,
+                    )
+                }.getOrDefault(false)
+                if (ok) via = "settings"
+            }
+            Log.d(TAG, "auto brightness adj committed adj=$adj via=$via")
+            runCatching {
+                com.slideindex.app.diagnostic.BrightnessTrace.record(
+                    context,
+                    "ADJ fraction=$fraction adj=$adj via=$via",
+                )
+            }
+        }
     }
 
     fun applyBrightnessFraction(context: Context, fraction: Float): Boolean =
@@ -223,7 +271,6 @@ object BrightnessControlHelper {
     private fun writeManualBrightnessFraction(
         context: Context,
         clamped: Float,
-        adj: Float? = null,
         includeShell: Boolean = true,
         logSuccess: Boolean = true,
     ): Boolean {
@@ -235,24 +282,16 @@ object BrightnessControlHelper {
         } else {
             (min + (max - min) * clamped).roundToInt().coerceIn(min, max)
         }
-        val targetFloat = clamped.coerceIn(0f, 1f)
-        val targetAdj = adj?.coerceIn(-1f, 1f)
-
         var intOk = false
-        var floatOk = false
         var shellOk = false
         val canWriteSettings = PermissionHelper.canWriteSettings(appContext) ||
             SecureSettingsHelper.hasWriteSecureSettings(appContext)
 
-        // ① 快路：Settings。每次调用都写（1~3ms），Settings 有效的 ROM 靠它跟手。
-        //
-        // **int 与 float 一起写，顺序固定 int → float**：
-        // - `screen_brightness`(int)：系统设置页、部分 ROM 的自动亮度只认它；
-        // - `screen_brightness_float`(0–1)：Android 12+ DisplayManager 直接吃的那个值。
-        //   只写 int 时屏幕亮不亮，取决于 ROM 让不让 BrightnessSynchronizer 换算 ——
-        //   ColorOS / HyperOS 上经常不让，表现就是「调一下、闪一下、立刻弹回原亮度」。
-        // 两个 key 的量纲必须一致（float = (int - min) / (max - min)）：量程取对之后，
-        // 同步器换算出来的和我们写的是同一个值，不会自己覆盖自己。
+        // 结论（2026-11-15 用户日志 + 1.50 对照）：
+        // - **不写** `screen_brightness_float`：只要它变化，ColorOS 就会按自己的换算把
+        //   `screen_brightness` 重算写回（实测 0.73 → 12），表现为"调上去又退回去"；
+        //   而且 App 身份写 float 在 ColorOS 上本来就失败（用户日志里 floatOk 601 次全 false）。
+        // - 只写 int；shell 只在 int 写失败时兜底，且只写 int。拖动中调用方不会传 includeShell。
         if (canWriteSettings) {
             intOk = runCatching {
                 Settings.System.putInt(
@@ -261,59 +300,43 @@ object BrightnessControlHelper {
                     targetIntLevel,
                 )
             }.getOrDefault(false)
-            floatOk = runCatching {
-                Settings.System.putFloat(
-                    appContext.contentResolver,
-                    SCREEN_BRIGHTNESS_FLOAT,
-                    targetFloat,
-                )
-            }.getOrDefault(false)
-            if (targetAdj != null) {
-                runCatching {
-                    Settings.System.putFloat(
-                        appContext.contentResolver,
-                        SCREEN_AUTO_BRIGHTNESS_ADJ,
-                        targetAdj,
-                    )
-                }
-            }
-        }
-        val settingsOk = intOk || floatOk
-
-        // ② 兼容路：shell（身份不同，ColorOS 只认它）。按调用方节流下发，或用 Settings 写不动时兜底。
-        //    写同一组 key：少写一个就少一条能进屏幕的路。
-        if (includeShell || !settingsOk) {
-            if (TaskManagerUtil.hasPermission()) {
-                val command = buildString {
-                    append("settings put system screen_brightness ").append(targetIntLevel)
-                    append(" && settings put system ").append(SCREEN_BRIGHTNESS_FLOAT)
-                        .append(' ').append(targetFloat)
-                    if (targetAdj != null) {
-                        append(" && settings put system ")
-                        append(SCREEN_AUTO_BRIGHTNESS_ADJ).append(' ').append(targetAdj)
-                    }
-                }
-                shellOk = TaskManagerUtil.runShellCommandLine(
-                    command = command,
-                    useRoot = PrivilegeGateway.isRootMode(),
-                ).success
-            }
         }
 
-        val synced = settingsOk || shellOk
+        // ② 兼容路：只在 Settings 写失败时兜底（没有 WRITE_SETTINGS 但装了 Shizuku 的机器）。
+        if (!intOk && includeShell && TaskManagerUtil.hasPermission()) {
+            shellOk = TaskManagerUtil.runShellCommandLine(
+                command = "settings put system screen_brightness $targetIntLevel",
+                useRoot = PrivilegeGateway.isRootMode(),
+            ).success
+        }
+
+        val synced = intOk || shellOk
         val path = when {
-            settingsOk && shellOk -> "settings+shell"
-            settingsOk -> "settings"
+            intOk && shellOk -> "settings+shell"
+            intOk -> "settings"
             shellOk -> "shell"
             else -> "none"
         }
         lastWritePath = path
+        // 亮度诊断追踪：写完落一条记录，并自动采样 2.5 秒的屏幕实际亮度。
+        runCatching {
+            com.slideindex.app.diagnostic.BrightnessTrace.ensureObserving(appContext)
+            com.slideindex.app.diagnostic.BrightnessTrace.recordWrite(
+                context = appContext,
+                fraction = clamped,
+                targetInt = targetIntLevel,
+                range = "$min..$max",
+                path = path,
+                intOk = intOk,
+                shellOk = shellOk,
+            )
+        }
         if (synced && logSuccess) {
             Log.d(
                 TAG,
-                "brightness int=$targetIntLevel float=$targetFloat (fraction=$clamped, " +
-                    "range=$min..$max, adj=$targetAdj, path=$path, intOk=$intOk, " +
-                    "floatOk=$floatOk, shellOk=$shellOk, includeShell=$includeShell)",
+                "brightness int=$targetIntLevel (fraction=$clamped, " +
+                    "range=$min..$max, path=$path, intOk=$intOk, " +
+                    "shellOk=$shellOk, includeShell=$includeShell)",
             )
         }
         return synced
@@ -338,6 +361,8 @@ object BrightnessControlHelper {
             Settings.System.getFloat(appContext.contentResolver, SCREEN_BRIGHTNESS_FLOAT)
         }.getOrNull()
         return "range=$min..$max level=$level float=$floatLevel " +
+            "configMax=${configuredMax(appContext)} configMin=${brightnessMin(appContext)} " +
+            "brightnessOn=${brightnessOnValue()} observedMax=$observedMaxLevel " +
             "auto=${readAutoBrightnessEnabled(appContext)} " +
             "canWriteSettings=${PermissionHelper.canWriteSettings(appContext)} " +
             "shizuku=${TaskManagerUtil.hasPermission()}"

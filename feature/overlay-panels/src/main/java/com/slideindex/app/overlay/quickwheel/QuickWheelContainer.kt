@@ -132,16 +132,21 @@ fun QuickWheelContainer(
 
     // placeholder：用户主动留出的空位（预览 / 配置显示"空白阴影"，运行时由 PlacedContainer 跳过）。
     val isEmptyGap = !slot.isConfigured && slot.placeholder
-    // 内置矢量图标（图标库 / 内置动作 / 文字图标 / 名称首字母）**始终**铺底板；
-    // 应用图标 / 图库图片这类用户提供的位图由 [QuickWheelStyleSpec.transparentUserIcons] 决定。
-    // 另外：用户在样式里改过容器颜色时也一律铺底（否则自定义色无处可画）。
-    // ⚠️ 这里**只**判断颜色，不判断不透明度：不透明度决定的是"底色的 alpha"，
-    // 跟"用哪个底色"是两件事。早先把两者混在一起，导致"只改不透明度（颜色仍是默认白）"
-    // 时走到主题底板分支（不透明），不透明度设置整个失效。
+    // 底板（容器底色）判定：融合上游的「三个透明开关」与本地的「自定义容器色」。
+    // - 用户改过容器颜色 → 一定铺底（否则自定义色无处可画）；
+    // - 总开关 [QuickWheelStyleSpec.transparentUserIcons] 关闭 → 一律铺底（历史行为）；
+    // - 总开关打开 → 位图图标一定透明；文字图标看 transparentTextIcons，
+    //   其它内置矢量看 transparentBuiltinIcons（两个子开关默认关闭）。
+    // ⚠️ 这里**只**判断颜色，不判断不透明度：不透明度决定的是"底色的 alpha"。
     val customColorized = slot.containerColorArgb != 0L ||
         style.containerColorArgb != QuickWheelLayoutEngine.DEFAULT_CONTAINER_COLOR_ARGB
-    val plated = !isEmptyGap &&
-        (customColorized || slot.usesBuiltinVectorPlate() || !style.transparentUserIcons)
+    val plated = !isEmptyGap && when {
+        customColorized -> true
+        !style.transparentUserIcons -> true
+        slot.iconSource == QuickWheelIconSource.TEXT -> !style.transparentTextIcons
+        slot.usesBuiltinVectorPlate() -> !style.transparentBuiltinIcons
+        else -> false
+    }
     val darkPlate = LocalAppDarkTheme.current
     // 底色：自定义色优先，否则主题底板；不透明度对所有底色**始终**生效。
     val baseSurface = if (customColorized) {
@@ -251,12 +256,13 @@ fun QuickWheelContainer(
 }
 
 /**
- * 该容器的图标是不是**内置绘制**（矢量 / 文字）—— 这类容器**始终铺底板**，不受"底色全透明"开关影响。
+ * 该容器的图标是不是**内置绘制**（矢量 / 文字）。
  *
- * - 铺（不受开关影响）：内置图标库的矢量、内置动作的矢量图标（返回 / 主页 / 截图……）、
- *   文字图标、名称首字母 —— 都是我们自己画的细线 / 字符，没有底板在壁纸上会读不清；
- * - 受开关控制：应用图标、图库图片 —— 用户提供的位图，拟物类图标包是异形 + 透明边角，
- *   铺方形底板会从轮廓外露出底色。
+ * - 默认**铺底板**（细线 / 字符没有底板在壁纸上读不清）；
+ * - 「容器底色全透明」总开关打开后，可按来源分别放开：文字图标看 `transparentTextIcons`，
+ *   其它内置矢量看 `transparentBuiltinIcons`（见 `QuickWheelContainer` 里的 `plated`）；
+ * - 应用图标 / 图库图片是用户提供的位图，拟物类图标包是异形 + 透明边角，
+ *   总开关一开就透明，与这里无关。
  *
  * ⚠️ 只看「图标来源 + 动作类型」，**不去解析位图**（解析要读磁盘、也可能失败退回矢量）。
  * 因此「打开应用 / 快捷方式 / 宏」即使位图没取到、退回矢量，也按"用户选的是应用图标"处理。
@@ -392,9 +398,10 @@ fun QuickWheelSlotIcon(
                 }
 
             // 文字图标：把用户输入的文字直接当图标绘制（内置类，走 builtin 尺寸）。
+            // 用户给文字选了颜色就用它（不再按底板反色）；null = 自动，沿用容器 tint。
             slot.iconSource == QuickWheelIconSource.TEXT && slot.iconValue.isNotBlank() -> Text(
                 text = slot.iconValue,
-                color = tint,
+                color = slot.textColorArgb?.let { Color(it) } ?: tint,
                 fontSize = (builtinDp.value * 0.62f).sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
