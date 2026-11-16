@@ -450,6 +450,8 @@ internal class WidgetCanvasTouchHandler(
                 layout.panelScrollLastY = event.y
                 layout.panelScrollActive = false
                 layout.panelScrollTouchTarget = layout.findTouchTarget(event.x, event.y)
+                layout.editTapDownX = event.x
+                layout.editTapDownY = event.y
                 val child = layout.panelScrollTouchTarget
                 if (child != null) {
                     val localX = event.x - child.left - child.translationX
@@ -476,15 +478,20 @@ internal class WidgetCanvasTouchHandler(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 // 编辑模式点按「应用 / 动作 / 快捷方式」格子（没拖动也没滚动）
                 // → 打开该格子的二级菜单编辑器；小组件卡不响应。
+                // ⚠️ 判定必须用「按下点与抬起点的距离」：DOWN 时一定会先登记
+                // 「拖拽待命」（长按后进入拖动），到 UP 时它还没被取消——
+                // 若用「待命是否存在」判断，任何一次正常点击都会被误判成拖拽。
                 val tapTarget = layout.panelScrollTouchTarget
-                val wasDragPending = layout.pendingDragChild != null
+                val tapDx = event.x - layout.editTapDownX
+                val tapDy = event.y - layout.editTapDownY
+                val isTap = tapDx * tapDx + tapDy * tapDy <= layout.touchSlop * layout.touchSlop
                 val scrolled = layout.panelScrollActive
                 cancelPendingDrag()
                 layout.panelScrollTouchTarget = null
                 stopPanelScroll()
                 if (event.actionMasked == MotionEvent.ACTION_UP &&
                     !scrolled &&
-                    !wasDragPending &&
+                    isTap &&
                     tapTarget != null &&
                     tapTarget.item.itemType != ITEM_TYPE_WIDGET
                 ) {

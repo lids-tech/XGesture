@@ -246,6 +246,9 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   internal var pendingDragDownX = 0f
   internal var pendingDragDownY = 0f
   internal var pendingDragLongPress: Runnable? = null
+  // 编辑模式「点按」判定：按下点与抬起点的距离 ≤ touchSlop 才算点按（不是拖拽/滚动）。
+  internal var editTapDownX = 0f
+  internal var editTapDownY = 0f
   internal var browseTouchChild: WidgetCardContainer? = null
   internal var browseTouchDownX = 0f
   internal var browseTouchDownY = 0f

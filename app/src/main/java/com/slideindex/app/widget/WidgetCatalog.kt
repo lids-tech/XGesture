@@ -309,7 +309,15 @@ object WidgetCatalog {
       }
     }
     if (merged.isNotEmpty()) {
-      android.util.Log.i("WidgetCatalog", "installedProviders=${merged.size}")
+      // 排查「桌面能加、面板里没有」时用：`adb logcat -s WidgetCatalog`
+      // 会把拿到的 provider 全列出来，和桌面逐条对比就能确认到底是谁没被系统报出来。
+      val labels = merged.mapNotNull { info ->
+        runCatching {
+          val pkg = info.provider?.packageName ?: return@runCatching null
+          "$pkg/${info.loadLabel(context.packageManager)}"
+        }.getOrNull()
+      }
+      android.util.Log.i("WidgetCatalog", "installedProviders=${merged.size}: $labels")
     }
     return merged
   }

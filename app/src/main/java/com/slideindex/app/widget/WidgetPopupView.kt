@@ -590,12 +590,30 @@ class WidgetPopupCardLayout(
             // 编辑器是普通应用窗口，会被 TYPE_APPLICATION_OVERLAY 的面板压住，
             // 所以先收面板再进（同 onConfigureWidget 的做法）。
             canvas.onEditSubActions = { tapped ->
+                android.util.Log.i(
+                    "WidgetPanelSubActions",
+                    "tap item: type=${tapped.itemType} id=${tapped.appWidgetId} " +
+                        "label=${tapped.label} page=${page.id}",
+                )
                 val intent = com.slideindex.app.ui.WidgetPanelSubActionsEditorActivity.createIntent(
                     hostContext,
                     pageId = page.id,
                     widgetId = tapped.appWidgetId,
                 )
-                runCatching { hostContext.startActivity(intent) }
+                val started = runCatching { hostContext.startActivity(intent) }
+                    .onFailure {
+                        android.util.Log.e("WidgetPanelSubActions", "startActivity failed", it)
+                    }
+                    .isSuccess
+                if (!started) {
+                    runCatching {
+                        android.widget.Toast.makeText(
+                            hostContext,
+                            "无法打开二级菜单配置页",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
                 onDismiss()
             }
             canvas.appLabelsVisible = showLabels
