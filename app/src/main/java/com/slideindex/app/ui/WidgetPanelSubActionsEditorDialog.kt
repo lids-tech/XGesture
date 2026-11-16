@@ -6,48 +6,55 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.slideindex.app.gesture.ActionPickerCatalogPolicy
 import com.slideindex.app.gesture.GestureAction
-import com.slideindex.app.overlay.volumepanel.ExpandPanelSlotPicker
+import com.slideindex.app.gesture.GestureTriggerType
+import com.slideindex.app.gesture.SlotPickerKind
 import com.slideindex.app.ui.viewmodel.ExtensionSettingsViewModel
+import com.slideindex.app.ui.picker.ActivityShortcutPickActivityScreen
+import com.slideindex.app.ui.picker.ActivityShortcutPickAppScreen
+import com.slideindex.app.ui.picker.MyShortcutsFolderScreen
+import com.slideindex.app.ui.picker.PresetShortcutsFolderScreen
 import com.slideindex.app.widget.MAX_SUB_ACTIONS
 import com.slideindex.app.widget.WidgetPanelItem
 import com.slideindex.app.widget.WidgetPanelSubActions
 
 /**
- * 「格子的长按二级菜单」编辑器。
+ * 格子「长按二级菜单」配置页。
  *
- * 列出该格子已配置的动作（可删），「添加动作」进入与音量面板同款的选择器
- * （[ExpandPanelSlotPicker]，自带应用 / 快捷方式 / 动作 / 轮盘页数据源）。
- * 没配任何动作的格子长按不弹菜单（松手 = 小窗打开 / 原点击行为）。
+ * 交互与**快捷轮盘的容器编辑完全一致**：列表里是已加的动作（图标 + 名称 + 删除），
+ * 「添加」进入 `GestureActionPickerScreen`（动作 / 应用程序 / 快捷方式三页，
+ * 快捷方式页带「我的直达 / 预设快捷方式库 / 创建快捷方式」），
+ * 二级页（我的快捷方式 / 预设 / 选应用 / 选 Activity / 执行命令 / 模拟按键）也和各处一致。
  */
 @Composable
 fun WidgetPanelSubActionsEditorDialog(
@@ -59,16 +66,23 @@ fun WidgetPanelSubActionsEditorDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             WidgetPanelSubActionsEditorContent(item = item, onDismiss = onDismiss, onSave = onSave)
         }
     }
 }
 
-/** 编辑器正文；对话框（设置页）与独立 Activity（面板里）共用同一份。 */
+private sealed interface SubActionPage {
+    data object List : SubActionPage
+    data object ActionPick : SubActionPage
+    data object MyShortcuts : SubActionPage
+    data object PresetShortcuts : SubActionPage
+    data object PickApp : SubActionPage
+    data class PickActivity(val packageName: String) : SubActionPage
+    data class ShellCommand(val initialCommand: String) : SubActionPage
+    data class SimulateKeyEvent(val action: GestureAction.SimulateKeyEvent) : SubActionPage
+}
+
 @Composable
 fun WidgetPanelSubActionsEditorContent(
     item: WidgetPanelItem,
@@ -77,193 +91,146 @@ fun WidgetPanelSubActionsEditorContent(
 ) {
     val viewModel: ExtensionSettingsViewModel = hiltViewModel()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var drafts by remember(item) { mutableStateOf(item.subActions) }
-    var picking by remember { mutableStateOf(false) }
-    var shortcutPicking by remember { mutableStateOf(false) }
-    var myShortcuts by remember { mutableStateOf(false) }
-    var presetShortcuts by remember { mutableStateOf(false) }
-    var allApps by remember { mutableStateOf(listOf<com.slideindex.app.data.AppInfo>()) }
-    var appsLoaded by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf<SubActionPage>(SubActionPage.List) }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val appRepository = com.slideindex.app.ui.compose.rememberAppRepository()
-    LaunchedEffect(Unit) {
-        allApps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            com.slideindex.app.overlay.CloneAppsIndex.enrich(appRepository.loadApps(force = true))
-        }
-        appsLoaded = true
+    fun addAction(action: GestureAction) {
+        if (drafts.size >= MAX_SUB_ACTIONS) return
+        drafts = drafts + WidgetPanelSubActions.encode(
+            WidgetPanelSubActions.displayName(context, action),
+            action,
+        )
+        page = SubActionPage.List
     }
 
-    fun labelFor(action: GestureAction): String = when (action) {
-        is GestureAction.LaunchApp ->
-            allApps.firstOrNull { it.packageName == action.packageName }?.label.orEmpty()
-        is GestureAction.LaunchShortcut -> action.label
-        is GestureAction.OpenLink -> action.label
-        else -> ""
-    }.takeIf { it.isNotBlank() } ?: WidgetPanelSubActions.fallbackLabel(action)
-
-    Box(modifier = Modifier.fillMaxSize()) {
-                Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text("二级菜单", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "长按“${item.label.ifBlank { item.packageName }}”时弹出的动作",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Row {
-                            TextButton(onClick = { onSave(drafts); onDismiss() }) { Text("保存") }
-                            IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
-                        }
-                    }
-                    if (drafts.isEmpty()) {
+    when (val current = page) {
+        SubActionPage.List -> {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("二级菜单", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            "还没配置动作：长按该格子将不弹菜单，松手直接按原方式打开。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 16.dp),
+                            "长按「${item.label.ifBlank { item.packageName }}」时弹出",
+                            style = MaterialTheme.typography.bodySmall,
                         )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f).padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            items(drafts.size) { index ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = WidgetPanelSubActions.parse(listOf(drafts[index]))
-                                            .firstOrNull()?.label ?: "(无效动作)",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            drafts = drafts.filterIndexed { i, _ -> i != index }
+                    }
+                    Row {
+                        TextButton(onClick = { onSave(drafts); onDismiss() }) { Text("保存") }
+                        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+                    }
+                }
+
+                if (drafts.isEmpty()) {
+                    Text(
+                        "还没有动作。长按该格子不会弹菜单，松手按原方式打开。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 20.dp),
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        itemsIndexed(drafts) { index, entry ->
+                            val parsed = WidgetPanelSubActions.parse(listOf(entry), context).firstOrNull()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (parsed != null) {
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            android.widget.ImageView(ctx).apply {
+                                                val size = (32 * ctx.resources.displayMetrics.density).toInt()
+                                                WidgetPanelSubActions
+                                                    .icon(ctx, parsed.action, size)
+                                                    ?.let { setImageBitmap(it) }
+                                            }
                                         },
-                                    ) { Icon(Icons.Default.Delete, null) }
+                                        modifier = Modifier.padding(end = 12.dp),
+                                    )
                                 }
-                            }
-                        }
-                    }
-                    Row(modifier = Modifier.padding(top = 8.dp)) {
-                        OutlinedButton(
-                            onClick = { picking = true },
-                            enabled = drafts.size < MAX_SUB_ACTIONS && appsLoaded,
-                            modifier = Modifier.heightIn(min = 40.dp),
-                        ) {
-                            Icon(Icons.Default.Add, null)
-                            Text("添加动作")
-                        }
-                        OutlinedButton(
-                            onClick = { shortcutPicking = true },
-                            enabled = drafts.size < MAX_SUB_ACTIONS,
-                            modifier = Modifier.padding(start = 8.dp).heightIn(min = 40.dp),
-                        ) {
-                            Icon(Icons.Default.Add, null)
-                            Text("添加快捷方式")
-                        }
-                    }
-                }
-
-                if (picking) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                ExpandPanelSlotPicker(
-                                    allApps = allApps,
-                                    activityShortcuts = settings.activityShortcuts,
-                                    current = null,
-                                    wheels = settings.launcher.quickWheels,
-                                    panels = settings.quickLauncherPanels,
-                                    widgetPanelPages = com.slideindex.app.widget.WidgetPanelDefaults.effectivePages(settings.widgetPanelPages),
-                                    onSelect = { action ->
-                                        picking = false
-                                        if (drafts.size < MAX_SUB_ACTIONS) {
-                                            drafts = drafts +
-                                                WidgetPanelSubActions.encode(WidgetPanelSubActions.displayName(context, action), action)
-                                        }
-                                    },
-                                    onCancel = { picking = false },
-                                    onClearSlot = null,
-                                    imeBottom = 0.dp,
+                                Text(
+                                    text = parsed?.label ?: "(无效动作)",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f),
                                 )
+                                IconButton(
+                                    onClick = { drafts = drafts.filterIndexed { i, _ -> i != index } },
+                                ) { Icon(Icons.Default.Delete, null) }
                             }
                         }
                     }
                 }
 
-                // 快捷方式：直接用边角轮盘二级菜单那个选择页 —— 它带「创建快捷方式」一节
-                // （SystemShortcutCatalogPicker），普通动作选择器里没有。
-                if (shortcutPicking) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                com.slideindex.app.ui.CornerSlotSubMenuShortcutPickScreen(
-                                    appSettings = settings,
-                                    existingPayloadKeys = drafts.mapNotNull { entry ->
-                                        WidgetPanelSubActions.parse(listOf(entry))
-                                            .firstOrNull()
-                                            ?.action
-                                            ?.let { it as? GestureAction.LaunchShortcut }
-                                            ?.payloadKey
-                                    }.toSet(),
-                                    onBack = { shortcutPicking = false },
-                                    onAddShortcut = { shortcut ->
-                                        shortcutPicking = false
-                                        if (drafts.size < MAX_SUB_ACTIONS) {
-                                            drafts = drafts + WidgetPanelSubActions.encode(
-                                                WidgetPanelSubActions.displayName(context, shortcut),
-                                                shortcut,
-                                            )
-                                        }
-                                    },
-                                    onOpenMyShortcuts = { shortcutPicking = false; myShortcuts = true },
-                                    onOpenPresetShortcuts = { shortcutPicking = false; presetShortcuts = true },
-                                    onBrowseActivityShortcut = { shortcutPicking = false; myShortcuts = true },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (myShortcuts) {
-                    com.slideindex.app.ui.picker.MyShortcutsFolderScreen(
-                        activityShortcuts = settings.activityShortcuts,
-                        onBack = { myShortcuts = false; shortcutPicking = true },
-                        onBrowseNewShortcut = { myShortcuts = false; shortcutPicking = true },
-                        onSelectRadio = { action ->
-                            myShortcuts = false
-                            if (drafts.size < MAX_SUB_ACTIONS) {
-                                drafts = drafts + WidgetPanelSubActions.encode(
-                                    WidgetPanelSubActions.displayName(context, action),
-                                    action,
-                                )
-                            }
-                        },
-                    )
-                }
-
-                if (presetShortcuts) {
-                    com.slideindex.app.ui.picker.PresetShortcutsFolderScreen(
-                        onBack = { presetShortcuts = false; shortcutPicking = true },
-                        onSelectRadio = { action ->
-                            presetShortcuts = false
-                            if (drafts.size < MAX_SUB_ACTIONS) {
-                                drafts = drafts + WidgetPanelSubActions.encode(
-                                    WidgetPanelSubActions.displayName(context, action),
-                                    action,
-                                )
-                            }
-                        },
-                    )
+                Button(
+                    onClick = { page = SubActionPage.ActionPick },
+                    enabled = drafts.size < MAX_SUB_ACTIONS,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp),
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Text("添加动作")
                 }
             }
+        }
+
+        SubActionPage.ActionPick -> GestureActionPickerScreen(
+            trigger = GestureTriggerType.SHORT_SWIPE_IN,
+            current = GestureAction.None,
+            catalogPolicy = ActionPickerCatalogPolicy.Slot(SlotPickerKind.OverlayTap),
+            onDismiss = { page = SubActionPage.List },
+            onSelect = { action -> addAction(action) },
+            onOpenMyShortcuts = { page = SubActionPage.MyShortcuts },
+            onOpenPresetShortcuts = { page = SubActionPage.PresetShortcuts },
+            onOpenPickApp = { page = SubActionPage.PickApp },
+            onOpenExecuteShellCommand = { command -> page = SubActionPage.ShellCommand(command) },
+            onOpenSimulateKeyEvent = { event -> page = SubActionPage.SimulateKeyEvent(event) },
+        )
+
+        SubActionPage.MyShortcuts -> MyShortcutsFolderScreen(
+            activityShortcuts = settings.activityShortcuts,
+            onBack = { page = SubActionPage.ActionPick },
+            onBrowseNewShortcut = { page = SubActionPage.PickApp },
+            onSelectRadio = { action -> addAction(action) },
+        )
+
+        SubActionPage.PresetShortcuts -> PresetShortcutsFolderScreen(
+            onBack = { page = SubActionPage.ActionPick },
+            onSelectRadio = { action -> addAction(action) },
+        )
+
+        SubActionPage.PickApp -> ActivityShortcutPickAppScreen(
+            onBack = { page = SubActionPage.ActionPick },
+            onSelectApp = { app -> page = SubActionPage.PickActivity(app.packageName) },
+        )
+
+        is SubActionPage.PickActivity -> ActivityShortcutPickActivityScreen(
+            packageName = current.packageName,
+            onBack = { page = SubActionPage.PickApp },
+            onSelectActivity = { activity ->
+                val component = "${activity.packageName}/${activity.className}"
+                addAction(GestureAction.LaunchShortcut.component(component, activity.label))
+            },
+        )
+
+        is SubActionPage.ShellCommand -> GestureExecuteShellCommandScreen(
+            initialCommand = current.initialCommand,
+            shellCommands = settings.shellCommands,
+            overlayMode = true,
+            onBack = { page = SubActionPage.ActionPick },
+            onConfirm = { command -> addAction(GestureAction.ExecuteShellCommand(command)) },
+        )
+
+        is SubActionPage.SimulateKeyEvent -> GestureSimulateKeyEventScreen(
+            initialAction = current.action,
+            onBack = { page = SubActionPage.ActionPick },
+            onConfirm = { action -> addAction(action) },
+        )
+    }
 }
