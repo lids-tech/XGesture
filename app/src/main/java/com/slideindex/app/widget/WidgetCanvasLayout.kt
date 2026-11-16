@@ -170,6 +170,17 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   /** 本次手势里「长按某一项」已经结算过：松手时不要再执行一次。 */
   internal var subMenuLongPressFired: Boolean = false
 
+  // ── 没配二级菜单的格子：长按 = 直接按"小窗"打开 ──────────────────
+  // 需求：长按弹菜单是"配置过菜单"的格子才有的；没配过的格子长按照旧行为
+  // 直接以小窗打开（应用）/ 按原方式执行（动作、快捷方式），不能什么都不发生。
+
+  /** 已触发长按、等待松手结算的格子（null = 没有）。 */
+  internal var noMenuArmedChild: WidgetCardContainer? = null
+  internal var noMenuTouchDownX = 0f
+  internal var noMenuTouchDownY = 0f
+  internal var noMenuTracking = false
+  internal var noMenuPendingRunnable: Runnable? = null
+
   /**
    * 第 [index] 项的中心（绘制与命中都用它，保证「画哪儿点哪儿」）。
    *

@@ -169,6 +169,36 @@ internal class WidgetCanvasTouchHandler(
     }
 
     /**
+     * 没配二级菜单的格子：长按 = 「上膛」（震动提示），松手以小窗打开 /
+     * 按原方式执行。手指移出 touchSlop 就取消，避免拖着拖着突然上膛。
+     */
+    private fun scheduleNoMenuLongPress(child: WidgetCardContainer, x: Float, y: Float) {
+        cancelNoMenuLongPress()
+        layout.noMenuArmedChild = null
+        layout.noMenuTracking = true
+        layout.noMenuTouchDownX = x
+        layout.noMenuTouchDownY = y
+        val runnable = Runnable {
+            if (!layout.noMenuTracking || layout.editMode) return@Runnable
+            if (layout.findTouchTarget(layout.noMenuTouchDownX, layout.noMenuTouchDownY) !== child) {
+                return@Runnable
+            }
+            layout.noMenuTracking = false
+            layout.noMenuArmedChild = child
+            layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        }
+        layout.noMenuPendingRunnable = runnable
+        layout.postDelayed(runnable, layout.longPressTimeout)
+    }
+
+    fun cancelNoMenuLongPress() {
+        layout.noMenuPendingRunnable?.let { layout.removeCallbacks(it) }
+        layout.noMenuPendingRunnable = null
+        layout.noMenuTracking = false
+        layout.noMenuArmedChild = null
+    }
+
+    /**
      * 长按应用 / 动作 / 快捷方式格子 → 弹二级菜单。
      *
      * 松手时：指在某一项上 = 执行该动作；指在空处 = 走该格子的默认点击
@@ -407,10 +437,13 @@ internal class WidgetCanvasTouchHandler(
                 } else if (child.item.subActions.isNotEmpty()) {
                     // 应用 / 动作 / 快捷方式：长按弹二级菜单，不再进编辑。
                     cancelBrowseLongPress()
+                    cancelNoMenuLongPress()
                     scheduleSubMenuLongPress(child, event.x, event.y)
                 } else {
+                    // 没配二级菜单：长按 = 小窗打开（应用）/ 按原方式执行。
                     cancelBrowseLongPress()
                     cancelSubMenuLongPress()
+                    scheduleNoMenuLongPress(child, event.x, event.y)
                 }
                 return false
             }
@@ -440,6 +473,14 @@ internal class WidgetCanvasTouchHandler(
                         layout.cancelSubMenuLongPress()
                     }
                     return true
+                }
+                // 没配菜单的长按：手指一移动就取消"上膛"，避免误触发。
+                if (layout.noMenuTracking) {
+                    val dx = event.x - layout.noMenuTouchDownX
+                    val dy = event.y - layout.noMenuTouchDownY
+                    if (dx * dx + dy * dy > layout.touchSlop * layout.touchSlop) {
+                        cancelNoMenuLongPress()
+                    }
                 }
                 if (!layout.browseTouchTracking) return false
                 val dx = event.x - layout.browseTouchDownX
@@ -476,6 +517,13 @@ internal class WidgetCanvasTouchHandler(
                 if (layout.browseLongPressConsumed) {
                     layout.browseLongPressConsumed = false
                     cancelBrowseLongPress()
+                    return true
+                }
+                // 没配菜单的格子：长按已"上膛" → 松手按原方式打开（应用 = 小窗）。
+                val armed = layout.noMenuArmedChild
+                cancelNoMenuLongPress()
+                if (event.actionMasked == MotionEvent.ACTION_UP && armed != null) {
+                    openCellDefault(armed)
                     return true
                 }
                 cancelBrowseLongPress()
