@@ -119,7 +119,13 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val items: List<WidgetPanelSubAction>,
     val icons: List<android.graphics.Bitmap?>,
     val itemRadiusPx: Float,
-    val ringRadiusPx: Float,
+    /** 网格步长（项直径 + 间隙）。 */
+    val stepPx: Float,
+    val columns: Int,
+    val rows: Int,
+    val offsetXPx: Float,
+    val offsetYPx: Float,
+    val showLabels: Boolean,
   ) {
     var hovered: Int = -1
     /**
@@ -127,6 +133,18 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
      * 松手时不能再执行一次（否则小窗 + 普通启动双开）。
      */
     var longPressConsumed: Boolean = false
+
+    /**
+     * 菜单弹出后手指是否移动过（超过 touchSlop）。
+     *
+     * 用来区分两种「松手在空白处」：
+     * - 没移动 → 视为"只是长按了这个格子"，按原方式打开（应用 = 小窗）；
+     * - 移动过 → 用户是在找菜单项没找到，**只收菜单，什么都不执行**。
+     */
+    var moved: Boolean = false
+
+    /** 实际占用的行数（项目可能少于配置行数）。 */
+    val usedRows: Int get() = ((items.size + columns - 1) / columns).coerceAtLeast(1)
   }
 
   /** 「在某一项上长按」的计时器：停满长按时间 → 该项以小窗打开。 */
@@ -136,13 +154,23 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   /** 本次手势里「长按某一项」已经结算过：松手时不要再执行一次。 */
   internal var subMenuLongPressFired: Boolean = false
 
-  /** 第 [index] 项的中心（绘制与命中都用它，保证「画哪儿点哪儿」）。 */
+  /**
+   * 第 [index] 项的中心（绘制与命中都用它，保证「画哪儿点哪儿」）。
+   *
+   * 布局 = **行列网格**（按配置的行列数、可整体偏移），不再是一圈环绕：
+   * 项目按行优先排列，整块以格子中心为基准居中；配置行数大于实际行数时，
+   * 按配置行数的高度居中，这样"少放几个也不会跳位置"。
+   */
   internal fun subMenuItemCenter(state: SubMenuState, index: Int): Pair<Float, Float> {
-    val count = state.items.size.coerceAtLeast(1)
-    // 从正上方开始顺时针均分：0 在 12 点方向，和轮盘的二级展开方向一致。
-    val angle = -Math.PI / 2.0 + 2.0 * Math.PI * index / count
-    val cx = state.anchorX + (Math.cos(angle) * state.ringRadiusPx).toFloat()
-    val cy = state.anchorY + (Math.sin(angle) * state.ringRadiusPx).toFloat()
+    val row = index / state.columns
+    val column = index % state.columns
+    val layoutRows = state.rows.coerceAtLeast(state.usedRows)
+    val gridWidth = state.columns * state.stepPx
+    val gridHeight = layoutRows * state.stepPx
+    val left = state.anchorX - gridWidth / 2f + state.offsetXPx
+    val top = state.anchorY - gridHeight / 2f + state.offsetYPx
+    val cx = left + state.stepPx / 2f + column * state.stepPx
+    val cy = top + state.stepPx / 2f + row * state.stepPx
     return cx to cy
   }
 
@@ -167,25 +195,31 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
 
   /** 弹出 / 收起二级菜单。 */
   internal fun showSubMenu(child: WidgetCardContainer) {
-    val actions = WidgetPanelSubActions.parse(child.item.subActions, context)
+    val actions = WidgetPanelSubActions.parse(child.item.subActions)
     if (actions.isEmpty()) {
       subMenu = null
       invalidate()
       return
     }
+    val config = child.item.subMenu.normalized()
     val dm = resources.displayMetrics
-    val itemRadius = 26f * dm.density
-    val ringRadius = child.width.coerceAtLeast(child.height) / 2f + itemRadius + 10f * dm.density
-    val iconPx = (itemRadius * 1.1f).toInt().coerceAtLeast(1)
+    val itemRadius = 22f * dm.density
+    val gap = 8f * dm.density
+    val iconPx = (itemRadius * 1.15f).toInt().coerceAtLeast(1)
     val anchorX = child.left + child.translationX + child.width / 2f
     val anchorY = child.top + child.translationY + child.height / 2f
     subMenu = SubMenuState(
       anchorX = anchorX,
       anchorY = anchorY,
       items = actions,
-      icons = actions.map { WidgetPanelSubActions.icon(context, it.action, iconPx) },
+      icons = actions.map { WidgetPanelSubActions.icon(context, it, iconPx) },
       itemRadiusPx = itemRadius,
-      ringRadiusPx = ringRadius,
+      stepPx = itemRadius * 2f + gap,
+      columns = config.columns,
+      rows = config.rows,
+      offsetXPx = config.offsetXDp * dm.density,
+      offsetYPx = config.offsetYDp * dm.density,
+      showLabels = config.showLabels,
     )
     // 菜单开着时禁止**所有父容器**拦截手势：面板外侧是「左右滑动切页」的 ViewPager、
     // 内侧是竖向滚动的 RecyclerView，不禁止的话手指一划就被它们抢走
@@ -233,7 +267,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   private fun drawSubMenu(canvas: Canvas) {
     val state = subMenu ?: return
     canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), subMenuScrimPaint)
-    val textSize = 12f * resources.displayMetrics.density
+    val textSize = 11f * resources.displayMetrics.density
     subMenuLabelPaint.textSize = textSize
     for (index in state.items.indices) {
       val (cx, cy) = subMenuItemCenter(state, index)
@@ -250,15 +284,16 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         },
       )
       state.icons[index]?.let { icon ->
-        val half = state.itemRadiusPx * 0.55f
+        val half = state.itemRadiusPx * 0.58f
         val dst = android.graphics.RectF(cx - half, cy - half, cx + half, cy + half)
         canvas.drawBitmap(icon, null, dst, null)
       }
-      // 只给「当前指着的那一项」画名字：一圈全写会糊成一团。
-      if (hovered) {
-        val label = state.items[index].label
+      // 名称：开了「显示名称」就每项都画（与轮盘一致）；否则只在指着的那项画，
+      // 避免一排小圆点猜不出是什么。
+      if (state.showLabels || hovered) {
+        val label = WidgetPanelSubActions.displayName(context, state.items[index])
         if (label.isNotBlank()) {
-          canvas.drawText(label, cx, cy + state.itemRadiusPx + textSize * 1.2f, subMenuLabelPaint)
+          canvas.drawText(label, cx, cy + state.itemRadiusPx + textSize * 1.15f, subMenuLabelPaint)
         }
       }
     }

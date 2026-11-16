@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.slideindex.app.di.AppDependencies
 import com.slideindex.app.ui.compose.LocalAppDependencies
 import com.slideindex.app.ui.theme.SlideIndexTheme
+import com.slideindex.app.ui.WidgetPanelSubActionsResult
 import com.slideindex.app.widget.WidgetPanelDefaults
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -47,9 +48,9 @@ class WidgetPanelSubActionsEditorActivity : ComponentActivity() {
                     WidgetPanelSubActionsEditorContent(
                         item = item,
                         onDismiss = { finish() },
-                        onSave = { subActions ->
+                        onSave = { result ->
                             lifecycleScope.launch {
-                                save(pageId, widgetId, subActions)
+                                save(pageId, widgetId, result)
                                 finish()
                             }
                         },
@@ -59,7 +60,7 @@ class WidgetPanelSubActionsEditorActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun save(pageId: Long, widgetId: Int, subActions: List<String>) {
+    private suspend fun save(pageId: Long, widgetId: Int, result: WidgetPanelSubActionsResult) {
         val settings = deps.settingsRepository.readSnapshot()
         val pages = WidgetPanelDefaults.effectivePages(settings.widgetPanel.widgetPanelPages)
         val updated = pages.map { page ->
@@ -68,7 +69,15 @@ class WidgetPanelSubActionsEditorActivity : ComponentActivity() {
             } else {
                 page.copy(
                     items = page.items.map { item ->
-                        if (item.appWidgetId == widgetId) item.copy(subActions = subActions) else item
+                        if (item.appWidgetId == widgetId) {
+                            item.copy(
+                                subActions = result.subActions,
+                                subMenu = result.subMenu,
+                                iconKey = result.iconKey,
+                            )
+                        } else {
+                            item
+                        }
                     },
                 )
             }

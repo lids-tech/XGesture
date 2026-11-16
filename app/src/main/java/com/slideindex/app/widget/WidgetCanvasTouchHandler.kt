@@ -457,6 +457,14 @@ internal class WidgetCanvasTouchHandler(
                         state.hovered = hit
                         layout.invalidate()
                     }
+                    // 菜单弹出后手指移动过（超过 touchSlop）→ 松手在空白处只收菜单。
+                    if (!state.moved) {
+                        val dx = event.x - layout.subMenuTouchDownX
+                        val dy = event.y - layout.subMenuTouchDownY
+                        if (dx * dx + dy * dy > layout.touchSlop * layout.touchSlop) {
+                            state.moved = true
+                        }
+                    }
                     // 「停在某一项上不动 → 该项以小窗打开」，移动离开就取消计时。
                     if (hit >= 0 && !state.longPressConsumed) {
                         if (layout.subMenuLongPressIndex != hit) {
@@ -490,7 +498,10 @@ internal class WidgetCanvasTouchHandler(
                             // 长按已"上膛"：松手执行小窗
                             longPressFired && action != null -> openSubActionInFreeWindow(action)
                             action != null -> runSubAction(action)
-                            else -> openCellDefault(child)
+                            // 空白处：没移动过 = 只是长按了这个格子，按原方式打开；
+                            // 移动过 = 用户在找菜单项没找到 → 只收菜单，什么都不做。
+                            !state.moved -> openCellDefault(child)
+                            else -> Unit
                         }
                     }
                     layout.subMenuTouchChild = null

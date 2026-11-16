@@ -507,13 +507,17 @@ private fun WidgetPanelGridEditor(
         com.slideindex.app.ui.WidgetPanelSubActionsEditorDialog(
           item = editingItem,
           onDismiss = { subActionEditorItem = null },
-          onSave = { subActions ->
+          onSave = { result ->
             onPagesChange(
               latestPages.map { page ->
                 page.copy(
                   items = page.items.map { item ->
                     if (item.appWidgetId == editingItem.appWidgetId && item.x == editingItem.x && item.y == editingItem.y) {
-                      item.copy(subActions = subActions)
+                      item.copy(
+                        subActions = result.subActions,
+                        subMenu = result.subMenu,
+                        iconKey = result.iconKey,
+                      )
                     } else {
                       item
                     }

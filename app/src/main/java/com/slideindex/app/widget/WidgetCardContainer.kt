@@ -122,6 +122,26 @@ class WidgetCardContainer(
             }
           }
         }.apply {
+          // 自定义图标优先：用户给这个格子单独设过图标就先用它，
+          // 渲染与「给动作设置图标」同一通道（字体图标 / 文字 / 图片）。
+          if (item.iconKey.isNotBlank()) {
+            val sizePx = (44 * density).roundToInt()
+            val action = com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
+            val custom = runCatching {
+              com.slideindex.app.ui.ActionIconBitmap.loadByKey(
+                context = context,
+                key = item.iconKey,
+                sizePx = sizePx,
+                tintArgb = Color.WHITE,
+                withPlate = true,
+                action = action,
+              )
+            }.getOrNull()
+            if (custom != null) {
+              setImageDrawable(custom.toDrawable(resources))
+              return@apply
+            }
+          }
           val icon = if (item.itemType == ITEM_TYPE_ACTION) {
             val action = com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
             val iconSizePx = (44 * density).roundToInt()
@@ -423,10 +443,38 @@ class WidgetCardContainer(
 
   fun syncItem(newItem: WidgetPanelItem) {
     if (item == newItem) return
+    val iconChanged = item.iconKey != newItem.iconKey
+    val labelChanged = item.label != newItem.label
     item = newItem
     previewSpanX = newItem.spanX
     previewSpanY = newItem.spanY
+    if (labelChanged) {
+      appLabelView?.text = newItem.label
+    }
+    // 图标 key 变了要重新取图：只改 requestLayout 的话图标会一直是旧的。
+    if (iconChanged) refreshAppCellIcon()
     requestLayout()
+  }
+
+  /** 按当前 `item.iconKey` 重新解析一级格子的图标（自定义优先，否则走原逻辑）。 */
+  private fun refreshAppCellIcon() {
+    val iconView = appIconView ?: return
+    if (item.iconKey.isBlank()) return
+    val sizePx = (44 * density).roundToInt()
+    val action = com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
+    val custom = runCatching {
+      com.slideindex.app.ui.ActionIconBitmap.loadByKey(
+        context = context,
+        key = item.iconKey,
+        sizePx = sizePx,
+        tintArgb = Color.WHITE,
+        withPlate = true,
+        action = action,
+      )
+    }.getOrNull()
+    if (custom != null) {
+      iconView.setImageDrawable(custom.toDrawable(resources))
+    }
   }
 
   fun attachHostView(hostView: AppWidgetHostView) {

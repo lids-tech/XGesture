@@ -16,8 +16,70 @@ const val SUB_ACTION_LABEL_SEP = "\u0003"
 /** 格子「长按二级菜单」里，多项之间的分隔符。 */
 const val SUB_ACTION_SEP = "\u0004"
 
+/**
+ * 二级菜单**单项**内部的分隔符：`动作负载 \u0005 自定义名称 \u0005 自定义图标 key`。
+ *
+ * 动作负载只会用到 \u0002 / \u001D，不会撞上 \u0005，所以不需要转义。
+ */
+const val SUB_ACTION_FIELD_SEP = "\u0005"
+
+/** 二级菜单**布局配置**内部的分隔符。 */
+const val SUB_MENU_CONFIG_SEP = "\u0006"
+
 /** 单个格子的二级菜单最多几项：再多弹出来就盖满整页了。 */
 const val MAX_SUB_ACTIONS = 8
+
+/**
+ * 「长按二级菜单」的布局配置（每个格子各有一套）。
+ *
+ * - [columns] / [rows]：行列数（行数在项目数少于 行×列 时决定整块的垂直居中范围）；
+ * - [offsetXDp] / [offsetYDp]：整块相对格子的偏移；
+ * - [showLabels]：是否在图标下方画名称。
+ */
+data class WidgetPanelSubMenuConfig(
+    val columns: Int = 3,
+    val rows: Int = 2,
+    val offsetXDp: Int = 0,
+    val offsetYDp: Int = 0,
+    val showLabels: Boolean = true,
+) {
+    fun normalized(): WidgetPanelSubMenuConfig = copy(
+        columns = columns.coerceIn(MIN_COLUMNS, MAX_COLUMNS),
+        rows = rows.coerceIn(MIN_ROWS, MAX_ROWS),
+        offsetXDp = offsetXDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
+        offsetYDp = offsetYDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
+    )
+
+    companion object {
+        const val MIN_COLUMNS = 1
+        const val MAX_COLUMNS = 6
+        const val MIN_ROWS = 1
+        const val MAX_ROWS = 6
+        const val MIN_OFFSET_DP = -240
+        const val MAX_OFFSET_DP = 240
+
+        fun decode(raw: String?): WidgetPanelSubMenuConfig {
+            if (raw.isNullOrBlank()) return WidgetPanelSubMenuConfig()
+            val parts = raw.split(SUB_MENU_CONFIG_SEP)
+            if (parts.size < 5) return WidgetPanelSubMenuConfig()
+            return WidgetPanelSubMenuConfig(
+                columns = parts[0].toIntOrNull() ?: 3,
+                rows = parts[1].toIntOrNull() ?: 2,
+                offsetXDp = parts[2].toIntOrNull() ?: 0,
+                offsetYDp = parts[3].toIntOrNull() ?: 0,
+                showLabels = parts[4] != "0",
+            ).normalized()
+        }
+    }
+
+    fun encode(): String = listOf(
+        columns,
+        rows,
+        offsetXDp,
+        offsetYDp,
+        if (showLabels) "1" else "0",
+    ).joinToString(SUB_MENU_CONFIG_SEP)
+}
 
 data class WidgetPanelItem(
     val appWidgetId: Int,
@@ -36,10 +98,16 @@ data class WidgetPanelItem(
     /**
      * 长按该格子弹出的「二级菜单」动作，最多 [MAX_SUB_ACTIONS] 项。
      *
-     * 每项编码为 `标签\u0003动作负载`（负载 = `QuickLauncherItemCodec.encodeActionPayload`），
-     * 多项用 [SUB_ACTION_SEP] 连接；旧数据没有这一列，解析出来是空表（= 不弹菜单）。
+     * 每项编码为 `动作负载\u0005自定义名称\u0005自定义图标key`（负载 =
+     * `QuickLauncherItemCodec.encodeActionPayload`），多项用 [SUB_ACTION_SEP] 连接。
+     * 旧数据没有这一列 → 空表（= 不弹菜单）；更旧的逐项格式是 `名称\u0003负载`，
+     * 解析端两种都认。
      */
     val subActions: List<String> = emptyList(),
+    /** 二级菜单布局（行列 / 偏移 / 是否显示名称）。旧数据解析成默认值。 */
+    val subMenu: WidgetPanelSubMenuConfig = WidgetPanelSubMenuConfig(),
+    /** 该格子的自定义图标 key（空 = 用目标自己的图标）。 */
+    val iconKey: String = "",
 )
 
 data class WidgetPanelPage(
@@ -146,6 +214,8 @@ object WidgetPanelCodec {
             item.shortcutId,
             item.cloneUserId.toString(),
             item.subActions.joinToString(SUB_ACTION_SEP),
+            item.subMenu.encode(),
+            item.iconKey,
         ).joinToString(FIELD_SEP)
 
     private fun decodeItem(raw: String): WidgetPanelItem? {
@@ -173,6 +243,8 @@ object WidgetPanelCodec {
             itemType = itemType, packageName = packageName, className = className,
             intentUri = intentUri, shortcutId = shortcutId, cloneUserId = cloneUserId,
             subActions = subActions,
+            subMenu = WidgetPanelSubMenuConfig.decode(parts.getOrNull(13)),
+            iconKey = parts.getOrNull(14).orEmpty(),
         )
     }
 
