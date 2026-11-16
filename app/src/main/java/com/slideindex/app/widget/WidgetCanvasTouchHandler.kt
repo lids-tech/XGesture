@@ -247,12 +247,12 @@ internal class WidgetCanvasTouchHandler(
         val runnable = Runnable {
             if (layout.subMenu !== state) return@Runnable
             if (state.hovered != index) return@Runnable
-            val item = state.items.getOrNull(index) ?: return@Runnable
+            // 只"上膛"不执行：真正的动作留到**松手**时再做，
+            // 这样用户在长按后还能反悔（移开 / 抬手取消）。
             state.longPressConsumed = true
             layout.subMenuLongPressFired = true
             layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            openSubActionInFreeWindow(item.action)
-            layout.dismissSubMenu()
+            layout.invalidate()
         }
         layout.subMenuLongPressRunnable = runnable
         layout.postDelayed(runnable, layout.longPressTimeout)
@@ -261,9 +261,11 @@ internal class WidgetCanvasTouchHandler(
     /** 能在小窗里开就用小窗，否则按普通方式执行。 */
     private fun openSubActionInFreeWindow(action: com.slideindex.app.gesture.GestureAction) {
         val context = layout.canvasHostContext ?: layout.context
+        val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
+
+        // 应用：走统一的小窗通道（内含各家 ROM 的特殊处理）。
         val launchApp = action as? com.slideindex.app.gesture.GestureAction.LaunchApp
         if (launchApp != null && launchApp.cloneUserId == 0 && launchApp.packageName.isNotEmpty()) {
-            val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
             val launchFreeWindow = com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchFreeWindow
             if (settings != null && launchFreeWindow != null) {
                 // 先起窗再收面板：先收面板会让这次启动变成后台启动，部分 ROM 直接拦掉。
@@ -277,6 +279,39 @@ internal class WidgetCanvasTouchHandler(
                 }
             }
         }
+
+        // 快捷方式：LauncherApps.startShortcut 的第四个参数就是 ActivityOptions，
+        // 用同一套 launch bounds 打开即为小窗（快捷方式没有 package 级入口可用）。
+        val shortcut = action as? com.slideindex.app.gesture.GestureAction.LaunchShortcut
+        if (shortcut != null && settings != null) {
+            val bundle = runCatching {
+                com.slideindex.app.util.FreeWindowLauncher.launchOptionsBundle(context, settings)
+            }.getOrNull()
+            // payloadKey 是自描述编码（包名/短 id/标签都在里面），必须走官方解码，
+            // 不能自己按 '/' 切 —— 标签里本身就可能有斜杠。
+            val decoded = runCatching {
+                com.slideindex.app.gesture.GestureShortcutPayload.decode(shortcut.payloadKey)
+            }.getOrNull()
+            if (bundle != null && decoded is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Dynamic) {
+                val launched = runCatching {
+                    val launcherApps = context.getSystemService(android.content.pm.LauncherApps::class.java)
+                    launcherApps?.startShortcut(
+                        decoded.packageName,
+                        decoded.shortcutId,
+                        null,
+                        bundle,
+                        android.os.Process.myUserHandle(),
+                    )
+                    true
+                }.getOrDefault(false)
+                if (launched) {
+                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+                    return
+                }
+            }
+        }
+
+        // 没有窗口概念的动作（开关类等）：保持普通执行。
         runSubAction(action)
     }
 
@@ -449,12 +484,13 @@ internal class WidgetCanvasTouchHandler(
                     layout.dismissSubMenu()
                     cancelSubMenuLongPress()
                     layout.subMenuLongPressFired = false
-                    if (event.actionMasked == MotionEvent.ACTION_UP && child != null && !longPressFired) {
+                    if (event.actionMasked == MotionEvent.ACTION_UP && child != null) {
                         val action = state.items.getOrNull(hit)?.action
-                        if (action != null) {
-                            runSubAction(action)
-                        } else {
-                            openCellDefault(child)
+                        when {
+                            // 长按已"上膛"：松手执行小窗
+                            longPressFired && action != null -> openSubActionInFreeWindow(action)
+                            action != null -> runSubAction(action)
+                            else -> openCellDefault(child)
                         }
                     }
                     layout.subMenuTouchChild = null

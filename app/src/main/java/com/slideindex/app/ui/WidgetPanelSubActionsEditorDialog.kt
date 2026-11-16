@@ -80,6 +80,9 @@ fun WidgetPanelSubActionsEditorContent(
 
     var drafts by remember(item) { mutableStateOf(item.subActions) }
     var picking by remember { mutableStateOf(false) }
+    var shortcutPicking by remember { mutableStateOf(false) }
+    var myShortcuts by remember { mutableStateOf(false) }
+    var presetShortcuts by remember { mutableStateOf(false) }
     var allApps by remember { mutableStateOf(listOf<com.slideindex.app.data.AppInfo>()) }
     var appsLoaded by remember { mutableStateOf(false) }
 
@@ -150,13 +153,23 @@ fun WidgetPanelSubActionsEditorContent(
                             }
                         }
                     }
-                    OutlinedButton(
-                        onClick = { picking = true },
-                        enabled = drafts.size < MAX_SUB_ACTIONS && appsLoaded,
-                        modifier = Modifier.padding(top = 8.dp).heightIn(min = 40.dp),
-                    ) {
-                        Icon(Icons.Default.Add, null)
-                        Text("添加动作")
+                    Row(modifier = Modifier.padding(top = 8.dp)) {
+                        OutlinedButton(
+                            onClick = { picking = true },
+                            enabled = drafts.size < MAX_SUB_ACTIONS && appsLoaded,
+                            modifier = Modifier.heightIn(min = 40.dp),
+                        ) {
+                            Icon(Icons.Default.Add, null)
+                            Text("添加动作")
+                        }
+                        OutlinedButton(
+                            onClick = { shortcutPicking = true },
+                            enabled = drafts.size < MAX_SUB_ACTIONS,
+                            modifier = Modifier.padding(start = 8.dp).heightIn(min = 40.dp),
+                        ) {
+                            Icon(Icons.Default.Add, null)
+                            Text("添加快捷方式")
+                        }
                     }
                 }
 
@@ -185,6 +198,72 @@ fun WidgetPanelSubActionsEditorContent(
                             }
                         }
                     }
+                }
+
+                // 快捷方式：直接用边角轮盘二级菜单那个选择页 —— 它带「创建快捷方式」一节
+                // （SystemShortcutCatalogPicker），普通动作选择器里没有。
+                if (shortcutPicking) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                com.slideindex.app.ui.CornerSlotSubMenuShortcutPickScreen(
+                                    appSettings = settings,
+                                    existingPayloadKeys = drafts.mapNotNull { entry ->
+                                        WidgetPanelSubActions.parse(listOf(entry))
+                                            .firstOrNull()
+                                            ?.action
+                                            ?.let { it as? GestureAction.LaunchShortcut }
+                                            ?.payloadKey
+                                    }.toSet(),
+                                    onBack = { shortcutPicking = false },
+                                    onAddShortcut = { shortcut ->
+                                        shortcutPicking = false
+                                        if (drafts.size < MAX_SUB_ACTIONS) {
+                                            drafts = drafts + WidgetPanelSubActions.encode(
+                                                WidgetPanelSubActions.displayName(context, shortcut),
+                                                shortcut,
+                                            )
+                                        }
+                                    },
+                                    onOpenMyShortcuts = { shortcutPicking = false; myShortcuts = true },
+                                    onOpenPresetShortcuts = { shortcutPicking = false; presetShortcuts = true },
+                                    onBrowseActivityShortcut = { shortcutPicking = false; myShortcuts = true },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (myShortcuts) {
+                    com.slideindex.app.ui.picker.MyShortcutsFolderScreen(
+                        activityShortcuts = settings.activityShortcuts,
+                        onBack = { myShortcuts = false; shortcutPicking = true },
+                        onBrowseNewShortcut = { myShortcuts = false; shortcutPicking = true },
+                        onSelectRadio = { action ->
+                            myShortcuts = false
+                            if (drafts.size < MAX_SUB_ACTIONS) {
+                                drafts = drafts + WidgetPanelSubActions.encode(
+                                    WidgetPanelSubActions.displayName(context, action),
+                                    action,
+                                )
+                            }
+                        },
+                    )
+                }
+
+                if (presetShortcuts) {
+                    com.slideindex.app.ui.picker.PresetShortcutsFolderScreen(
+                        onBack = { presetShortcuts = false; shortcutPicking = true },
+                        onSelectRadio = { action ->
+                            presetShortcuts = false
+                            if (drafts.size < MAX_SUB_ACTIONS) {
+                                drafts = drafts + WidgetPanelSubActions.encode(
+                                    WidgetPanelSubActions.displayName(context, action),
+                                    action,
+                                )
+                            }
+                        },
+                    )
                 }
             }
 }

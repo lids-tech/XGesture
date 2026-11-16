@@ -219,6 +219,12 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     color = 0xFF3478F6.toInt()
     style = Paint.Style.FILL
   }
+
+  /** 长按"上膛"（松手即以小窗打开）时的底色：与普通选中区分开，用户能预期结果。 */
+  private val subMenuItemArmedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = 0xFF2E9E5B.toInt()
+    style = Paint.Style.FILL
+  }
   private val subMenuLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = 0xFFFFFFFF.toInt()
     textAlign = Paint.Align.CENTER
@@ -232,11 +238,16 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     for (index in state.items.indices) {
       val (cx, cy) = subMenuItemCenter(state, index)
       val hovered = state.hovered == index
+      val armed = hovered && state.longPressConsumed
       canvas.drawCircle(
         cx,
         cy,
         state.itemRadiusPx,
-        if (hovered) subMenuItemHoverPaint else subMenuItemPaint,
+        when {
+          armed -> subMenuItemArmedPaint
+          hovered -> subMenuItemHoverPaint
+          else -> subMenuItemPaint
+        },
       )
       state.icons[index]?.let { icon ->
         val half = state.itemRadiusPx * 0.55f
