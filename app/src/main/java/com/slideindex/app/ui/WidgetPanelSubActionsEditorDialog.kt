@@ -83,6 +83,7 @@ fun WidgetPanelSubActionsEditorContent(
     var allApps by remember { mutableStateOf(listOf<com.slideindex.app.data.AppInfo>()) }
     var appsLoaded by remember { mutableStateOf(false) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     val appRepository = com.slideindex.app.ui.compose.rememberAppRepository()
     LaunchedEffect(Unit) {
         allApps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -174,7 +175,7 @@ fun WidgetPanelSubActionsEditorContent(
                                         picking = false
                                         if (drafts.size < MAX_SUB_ACTIONS) {
                                             drafts = drafts +
-                                                WidgetPanelSubActions.encode(labelFor(action), action)
+                                                WidgetPanelSubActions.encode(WidgetPanelSubActions.displayName(context, action), action)
                                         }
                                     },
                                     onCancel = { picking = false },

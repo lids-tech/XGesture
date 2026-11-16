@@ -155,7 +155,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
 
   /** 弹出 / 收起二级菜单。 */
   internal fun showSubMenu(child: WidgetCardContainer) {
-    val actions = WidgetPanelSubActions.parse(child.item.subActions)
+    val actions = WidgetPanelSubActions.parse(child.item.subActions, context)
     if (actions.isEmpty()) {
       subMenu = null
       invalidate()

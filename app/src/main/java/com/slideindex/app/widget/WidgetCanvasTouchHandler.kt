@@ -210,6 +210,28 @@ internal class WidgetCanvasTouchHandler(
      *
      * 小窗通道不可用（没配悬浮窗权限 / 分身应用）时回落到普通点击。
      */
+    /**
+     * 执行二级菜单里选中的动作。
+     *
+     * ⚠️ 必须走 [com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner]
+     * （与快捷轮盘 / 浮球同一套执行器）：直接调 `SlideIndexAccessibilityService.perform`
+     * 时，「启动应用 / 启动快捷方式」这类要拉起 Activity 的动作会被后台启动限制静默拦掉，
+     * 而开关类动作不需要窗口所以看起来正常——正是真机上「动作能执行、应用和快捷方式没反应」。
+     */
+    private fun runSubAction(action: com.slideindex.app.gesture.GestureAction) {
+        val context = layout.canvasHostContext ?: layout.context
+        val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
+        val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
+            ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
+        com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+        if (settings != null && runner != null) {
+            runCatching { runner.run(action, settings, false, null, null, null) }
+                .onFailure { android.util.Log.e("WidgetPanelSubActions", "run failed", it) }
+        } else {
+            com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
+        }
+    }
+
     private fun openCellDefault(child: WidgetCardContainer) {
         val item = child.item
         val context = layout.canvasHostContext ?: layout.context
@@ -371,8 +393,7 @@ internal class WidgetCanvasTouchHandler(
                     if (event.actionMasked == MotionEvent.ACTION_UP && child != null) {
                         val action = state.items.getOrNull(hit)?.action
                         if (action != null) {
-                            com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-                            com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
+                            runSubAction(action)
                         } else {
                             openCellDefault(child)
                         }
