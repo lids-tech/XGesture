@@ -173,33 +173,16 @@ fun WidgetPanelSubActionsEditorContent(
 
                     // ── 布局与容器外观：全部复用快捷轮盘的滑条 / 颜色行 ──
                     item(key = "layout") {
-                        Text("布局", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                        QuickWheelIntRow(
-                            title = "列数",
-                            description = "网格每行放几个",
-                            value = config.columns,
-                            range = WidgetPanelSubMenuConfig.MIN_COLUMNS..WidgetPanelSubMenuConfig.MAX_COLUMNS,
-                        ) { config = config.copy(columns = it) }
-                        QuickWheelIntRow(
-                            title = "行数",
-                            description = "网格放几行（不足时整块垂直居中）",
-                            value = config.rows,
-                            range = WidgetPanelSubMenuConfig.MIN_ROWS..WidgetPanelSubMenuConfig.MAX_ROWS,
-                        ) { config = config.copy(rows = it) }
-                        QuickWheelSliderRow(
-                            title = "左右偏移",
-                            description = "整块网格相对格子的水平位移",
-                            value = config.offsetXDp.toFloat(),
-                            range = -240f..240f,
-                            unit = "dp",
-                        ) { config = config.copy(offsetXDp = it.roundToInt()) }
-                        QuickWheelSliderRow(
-                            title = "上下偏移",
-                            description = "整块网格相对格子的垂直位移",
-                            value = config.offsetYDp.toFloat(),
-                            range = -240f..240f,
-                            unit = "dp",
-                        ) { config = config.copy(offsetYDp = it.roundToInt()) }
+                        // 列数 / 行数 / 偏移是**全局**设置（所有容器共用一套），
+                        // 这里不再重复放控件：以前放在这里时，调了也不生效
+                        // （被全局值覆盖），看起来像"布局设置失效"。
+                        Text(
+                            "列数 / 行数 / 左右偏移 / 上下偏移 已改为全局设置：\n" +
+                                "设置 → 小组件面板 → 二级菜单布局",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
 
                         Text("容器外观", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                         QuickWheelSliderRow(
