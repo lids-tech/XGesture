@@ -276,24 +276,24 @@ class WidgetCardContainer(
     } else {
       // 单进程后宿主视图与编辑器同进程：调用方没传视图时自己取一次，
       // 否则编辑器永远停在占位卡（以前只有 :overlay 进程能创建宿主视图）。
-      // 宿主视图**异步**取：取到后再贴上。
-      // 占位图**延迟 120ms** 才显示 —— 通常 binder 几十毫秒就回来了，
-      // 直接设 VISIBLE 会先闪一下"加载中"再跳成内容（观感很差）。
-      loadingPlaceholder.visibility = INVISIBLE
-      postDelayed({ if (!hostEverBound) loadingPlaceholder.visibility = VISIBLE }, 120L)
-      post {
-        val selfHostView = runCatching {
-          WidgetPopupHost.startListening(context)
-          WidgetPopupHost.obtainHostView(context, item.appWidgetId)
-        }.getOrNull()
-        if (selfHostView != null && item.itemType == ITEM_TYPE_WIDGET) {
-          scalableFrame.visibility = VISIBLE
-          scalableFrame.bindWidget(selfHostView, item.appWidgetId, item.spanX, item.spanY)
-          loadingPlaceholder.visibility = GONE
-          hostEverBound = true
-          updateScalableTargetFromContainer()
-          scalableFrame.commitHostLayout()
-        }
+      //
+      // ⚠️ 这里必须**同步**取：改成 post 异步后，窗口先出现、小组件区域先是空白，
+      // 过一帧才补上内容（真机反馈"其他格子秒出，只有小组件位置空一下"）。
+      // 图标解析已经全部异步化，剩下的 obtainHostView 只是 binder + 建视图，
+      // 同步做完反而让首帧就是完整面板。
+      val selfHostView = runCatching {
+        WidgetPopupHost.startListening(context)
+        WidgetPopupHost.obtainHostView(context, item.appWidgetId)
+      }.getOrNull()
+      if (selfHostView != null && item.itemType == ITEM_TYPE_WIDGET) {
+        scalableFrame.visibility = VISIBLE
+        scalableFrame.bindWidget(selfHostView, item.appWidgetId, item.spanX, item.spanY)
+        loadingPlaceholder.visibility = GONE
+        hostEverBound = true
+        updateScalableTargetFromContainer()
+        scalableFrame.commitHostLayout()
+      } else {
+        loadingPlaceholder.visibility = VISIBLE
       }
     }
 

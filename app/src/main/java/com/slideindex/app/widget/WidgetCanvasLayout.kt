@@ -469,10 +469,14 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   }
 
   fun addWidgetCard(hostContext: Context, item: WidgetPanelItem): WidgetCardContainer {
-    // 小组件的宿主视图**不在这里同步取**：obtainHostView 要走 binder 拿 providerInfo +
-    // 创建 AppWidgetHostView，卡片一多就会把面板首帧/收起卡住。
-    // 交给卡片自己在 post 里异步取（先显示占位，取到再贴上），呼出因此不再跟跟手。
-    val hostView: android.appwidget.AppWidgetHostView? = null
+    // 小组件宿主视图在**建卡时同步取**（与上游一致）：binder 量很小，
+    // 同步做的好处是窗口首帧就是完整面板，不会出现"小组件位置先空白一下"。
+    // 真正影响呼出速度的是图标解析，那部分已经全部挪到后台线程。
+    val hostView = if (item.itemType == ITEM_TYPE_WIDGET) {
+      WidgetPopupHost.obtainHostView(hostContext, item.appWidgetId)
+    } else {
+      null
+    }
     val container = WidgetCardContainer(context, item, hostView).apply {
       onDelete = {
         val widgetId = this.item.appWidgetId
