@@ -120,6 +120,18 @@ class WidgetCardContainer(
                 circular = false,
               )
             }
+            // 快捷方式角标（闪电）：与快捷轮盘 / 圆环启动器同一渲染器，
+            // 用以区分「这是跳进应用某功能的快捷方式」和「普通打开应用」。
+            if (item.itemType == ITEM_TYPE_SHORTCUT) {
+              com.slideindex.app.overlay.ShortcutBadgeRenderer.draw(
+                canvas,
+                width / 2f,
+                height / 2f,
+                minOf(width, height).toFloat(),
+                1f,
+                resources.displayMetrics.density,
+              )
+            }
           }
         }.apply {
           // ── 图标加载全部走后台 + 缓存（WidgetCellIconLoader）──

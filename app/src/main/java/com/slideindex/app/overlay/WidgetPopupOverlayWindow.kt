@@ -180,18 +180,15 @@ object WidgetPopupOverlayWindow {
       TAG,
       "show: window added in ${(System.nanoTime() - showStartNs) / 1_000_000}ms items=${effectivePages.sumOf { it.items.size }}",
     )
-    // 入场动画：窗口先淡入 + 轻微放大，动画期间分帧建卡逐步铺满。
-    // alpha/scale 走 RenderNode（渲染线程），即使主线程在建卡，动画也不掉帧。
+    // 入场动画：只用 alpha + 轻微上移。不再用 scale ——
+    // 缩放期间卡片还在分帧逐个加进来，每加一张都会重排整层，再叠加缩放会把
+    // 文字糊掉、观感"一顿一顿"；alpha/translation 走 RenderNode，最顺滑。
     root.alpha = 0f
-    root.scaleX = 0.92f
-    root.scaleY = 0.92f
-    root.pivotX = root.width / 2f
-    root.pivotY = root.height / 2f
+    root.translationY = 12f * root.resources.displayMetrics.density
     root.animate()
       .alpha(1f)
-      .scaleX(1f)
-      .scaleY(1f)
-      .setDuration(260L)
+      .translationY(0f)
+      .setDuration(240L)
       .setInterpolator(android.view.animation.DecelerateInterpolator())
       .start()
 

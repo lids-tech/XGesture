@@ -469,8 +469,16 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       var index = start
       while (index < items.size) {
         val card = addWidgetCard(hostContext, items[index])
+        // 逐个淡入并带一点「错峰」：看起来是依次铺开，而不是一坨同时闪出来。
         card.alpha = 0f
-        card.animate().alpha(1f).setDuration(CARD_FADE_IN_MS).start()
+        card.translationY = 6f * resources.displayMetrics.density
+        card.animate()
+          .alpha(1f)
+          .translationY(0f)
+          .setStartDelay((index % 8) * 12L)
+          .setDuration(CARD_FADE_IN_MS)
+          .setInterpolator(android.view.animation.DecelerateInterpolator())
+          .start()
         index++
         // 至少建一张；之后按 8ms 预算，超了就把剩下的丢给下一帧。
         val elapsedMs = (System.nanoTime() - frameStartNs) / 1_000_000
@@ -479,9 +487,11 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       if (index < items.size) {
         post { buildChunk(index) }
       } else {
-        postRefreshAllWidgetLayouts()
         requestLayout()
         invalidate()
+        // 小组件宿主视图的最终排版放在淡入动画之后再做：
+        // 它要逐张测量/缩放宿主视图，压在最后一帧会和动画抢主线程（"最后卡一下"）。
+        postDelayed({ postRefreshAllWidgetLayouts() }, CARD_FADE_IN_MS + 60L)
       }
     }
     requestLayout()
