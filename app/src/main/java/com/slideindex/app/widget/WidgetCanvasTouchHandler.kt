@@ -330,6 +330,38 @@ internal class WidgetCanvasTouchHandler(
                 }
             }
         }
+
+        // 快捷方式 / 动作：长按也走"小窗"语义。
+        // 交给 gestureActionRunner(longPressArmed = true)——执行器对快捷方式
+        // 有 launchShortcutInFreeWindow 那条 ROM 适配链，对动作里的 LaunchApp
+        // 也一样（开关类动作不受该标记影响）。
+        if (item.itemType == ITEM_TYPE_SHORTCUT || item.itemType == ITEM_TYPE_ACTION) {
+            val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
+            val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
+                ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
+            val action: com.slideindex.app.gesture.GestureAction? = when (item.itemType) {
+                ITEM_TYPE_SHORTCUT -> runCatching {
+                    com.slideindex.app.gesture.GestureAction.LaunchShortcut.dynamic(
+                        item.packageName,
+                        item.shortcutId,
+                        item.label,
+                    )
+                }.getOrNull()
+                else -> com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
+            }
+            if (settings != null && runner != null && action != null) {
+                // 先执行再收面板（执行器要前台窗口上下文）。
+                val ran = runCatching {
+                    runner.run(action, settings, true, null, null, null)
+                    true
+                }.getOrDefault(false)
+                if (ran) {
+                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+                    return
+                }
+            }
+        }
+
         child.performContentClick()
     }
 
