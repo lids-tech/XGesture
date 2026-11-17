@@ -82,6 +82,8 @@ fun InteractionAppearanceSettingsScreen(
     onBottomNavBlurPreviewStop: () -> Unit = {},
     overlayBlurEnabled: Boolean = true,
     onOverlayBlurEnabledChange: (Boolean) -> Unit = {},
+    settingIconPlateEnabled: Boolean = false,
+    onSettingIconPlateEnabledChange: (Boolean) -> Unit = {},
 ) {
 
     // LazyListScope 里不能调用 stringResource，先在这里取好
@@ -95,6 +97,7 @@ fun InteractionAppearanceSettingsScreen(
 
 
     val themeAppearanceItems = themeAppearanceSettingsCardItems(
+
         outlinedPreferenceIcons = true,
         themeModeId = settings.themeModeId,
         customColorEnabled = settings.customColorEnabled,
@@ -124,6 +127,16 @@ fun InteractionAppearanceSettingsScreen(
         onUiDensityScaleChange = onUiDensityScaleChange,
         onBottomNavBlurPreviewChange = onBottomNavBlurPreviewChange,
         onBottomNavBlurPreviewStop = onBottomNavBlurPreviewStop,
+    ) + listOf(
+        settingsCardScopeItem("page-leading-icon-plate") {
+            SettingSwitchRow(
+                title = stringResource(R.string.setting_icon_plate_enabled),
+                subtitle = stringResource(R.string.setting_icon_plate_enabled_desc),
+                checked = settingIconPlateEnabled,
+                enabled = true,
+                onCheckedChange = onSettingIconPlateEnabledChange,
+            )
+        },
     )
 
     val languageItems = appLanguageSettingsCardItems(

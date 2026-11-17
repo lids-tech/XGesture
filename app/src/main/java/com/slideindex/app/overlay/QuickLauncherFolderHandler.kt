@@ -491,6 +491,7 @@ internal class QuickLauncherFolderHandler(
                     action,
                     localX,
                     localY,
+                    event.rawX,
                     event.rawY,
                     confirmHaptic = longPress
                 )
@@ -502,6 +503,7 @@ internal class QuickLauncherFolderHandler(
                     childItem,
                     host.settings(),
                     longPressArmed = longPress,
+                    anchorRawX = event.rawX,
                     anchorRawY = event.rawY,
                     panelSide = host.side(),
                 )

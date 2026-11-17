@@ -332,6 +332,10 @@ sealed interface AppNavKey : NavKey {
 
     // Extension tab
     @Serializable data object ExtensionHub : AppNavKey
+    /** 内置动作浏览页：按动作类型全量列出。 */
+    @Serializable data object ActionCenter : AppNavKey
+    /** 动作详情页；[actionType] 是 `GestureActionType.name`。 */
+    @Serializable data class ActionDetail(val actionType: String) : AppNavKey
     /** 多指手势设置（Shizuku evdev 观察模式）。 */
     @Serializable data object ExtensionMultiTouchGesture : AppNavKey
     /** 路径手势录制页；`entryId` 非空表示重录已有条目（只覆盖轨迹）。 */
@@ -531,6 +535,16 @@ sealed interface AppNavKey : NavKey {
     @Serializable data object ActivityShortcutPickAppShortcut : AppNavKey
     @Serializable data object ActivityShortcutPickAppShortcutPresets : AppNavKey
     @Serializable data object ActivityShortcutPickShell : AppNavKey
+    @Serializable data object ActivityShortcutAddImage : AppNavKey
+    @Serializable data class ActivityShortcutEditImage(val shortcutId: String) : AppNavKey
+    @Serializable data object ActivityShortcutAddFile : AppNavKey
+    @Serializable data class ActivityShortcutEditFile(val shortcutId: String) : AppNavKey
+    @Serializable data class ActivityShortcutPickFileApp(
+        val mimeType: String = "*/*",
+        val isShareMode: Boolean = false,
+        val currentPackage: String = "",
+        val currentActivity: String = "",
+    ) : AppNavKey
     @Serializable data object ShellCommandHistory : AppNavKey
     @Serializable data class ShellCommandEditor(val commandId: String = "") : AppNavKey
     @Serializable data object ShellCommandResult : AppNavKey

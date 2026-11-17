@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 内置动作中心（独立资源文件，避免改动 strings.xml）。 -->
+<resources>
+    <string name="extension_section_actions">动作</string>
+    <string name="extension_action_center_title">内置动作</string>
+    <string name="extension_action_center_subtitle">查看、配置并试运行每个动作</string>
+
+    <string name="action_center_filter_all">全部</string>
+    <string name="action_center_filter_panel">启动面板</string>
+    <string name="action_center_filter_configurable">可配置</string>
+    <string name="action_center_section_special">仅特定入口</string>
+
+    <string name="action_center_badge_pointer">指</string>
+    <string name="action_center_badge_corner">角</string>
+    <string name="action_center_badge_single_tap">单</string>
+    <string name="action_center_badge_shake">晃</string>
+
+    <string name="action_center_info">基本信息</string>
+    <string name="action_center_intro">简介</string>
+    <string name="action_center_deeplink">深度链接</string>
+    <string name="action_center_deeplink_copied">已复制深链</string>
+    <string name="action_center_test">立即执行</string>
+    <string name="action_center_test_success">已执行</string>
+    <string name="action_center_test_failed">执行失败</string>
+    <string name="action_center_test_unavailable">当前不可用</string>
+    <string name="action_center_test_note">这里只用于本次执行，不会保存；绑定时会再填一次。</string>
+    <string name="action_center_test_pointer_reason">只能在悬浮指针中触发</string>
+    <string name="action_center_test_corner_reason">只在角轮内环生效</string>
+    <string name="action_center_test_single_tap_reason">只在单击触发时生效</string>
+    <string name="action_center_test_shake_reason">只能由晃动触发</string>
+    <string name="action_center_test_context_reason">只能由手势触发</string>
+    <string name="action_center_test_macro_reason">请先在宏列表创建并选择宏</string>
+
+    <string name="action_center_settings">设置</string>
+    <string name="action_center_settings_desc">该动作需要配置</string>
+    <string name="action_center_open_settings">打开配置</string>
+    <string name="action_center_config_on_bind">该动作在绑定时配置</string>
+    <string name="action_center_no_config">该动作无需配置，可直接执行</string>
+
+    <string name="action_center_command">命令</string>
+    <string name="action_center_remind_duration">时长</string>
+    <string name="action_center_remind_minutes">%1$d 分钟</string>
+    <string name="action_center_remind_custom">自定义</string>
+
+    <string name="action_center_special_pointer">适用入口：悬浮指针</string>
+    <string name="action_center_special_corner">适用入口：角轮内环</string>
+    <string name="action_center_special_single_tap">适用入口：单击触发</string>
+    <string name="action_center_special_shake">适用入口：晃动</string>
+    <string name="gesture_action_open_index_desc">从屏幕边缘呼出应用索引面板</string>
+    <string name="gesture_action_quick_launcher_desc">打开快捷启动器，快速启动常用应用</string>
+    <string name="gesture_action_task_switcher_desc">打开系统任务切换器</string>
+    <string name="gesture_action_back_desc">执行系统返回</string>
+    <string name="gesture_action_home_desc">回到系统主屏幕</string>
+    <string name="gesture_action_recents_desc">打开系统最近任务</string>
+    <string name="gesture_action_close_current_app_desc">关闭当前前台应用</string>
+    <string name="gesture_action_free_window_current_app_desc">把当前应用缩成小窗</string>
+    <string name="gesture_action_click_passthrough_desc">让本次点击穿透到下层</string>
+    <string name="gesture_action_flashlight_desc">打开或关闭手电筒</string>
+    <string name="gesture_action_launch_assistant_desc">唤醒系统语音助手</string>
+    <string name="gesture_action_media_play_pause_desc">播放或暂停当前媒体</string>
+    <string name="gesture_action_media_previous_desc">切换到上一首</string>
+    <string name="gesture_action_media_next_desc">切换到下一首</string>
+    <string name="gesture_action_previous_app_desc">切换回上一个应用</string>
+    <string name="gesture_action_open_notifications_desc">展开系统通知面板</string>
+    <string name="gesture_action_open_quick_settings_desc">展开系统快捷设置面板</string>
+    <string name="gesture_action_lock_screen_desc">锁定屏幕</string>
+    <string name="gesture_action_screenshot_desc">调用系统截屏</string>
+    <string name="gesture_action_power_menu_desc">打开系统电源菜单</string>
+    <string name="gesture_action_keep_screen_on_desc">切换屏幕常亮</string>
+    <string name="gesture_action_shell_command_panel_desc">打开 Shell 命令面板，快速执行预设命令</string>
+    <string name="gesture_action_quick_tools_overlay_desc">打开快速工具悬浮面板</string>
+    <string name="gesture_action_toggle_dnd_desc">打开或关闭勿扰模式</string>
+    <string name="gesture_action_screen_record_desc">开始或停止屏幕录制</string>
+    <string name="gesture_action_toggle_wifi_desc">打开或关闭 Wi-Fi</string>
+    <string name="gesture_action_toggle_mobile_data_desc">打开或关闭移动数据</string>
+    <string name="gesture_action_switch_input_method_desc">切换到下一个输入法</string>
+    <string name="gesture_action_widget_popup_overlay_desc">弹出小组件面板</string>
+    <string name="gesture_action_floating_pointer_desc">显示或隐藏悬浮指针</string>
+    <string name="gesture_action_open_stash_panel_desc">打开暂存面板</string>
+    <string name="gesture_action_execute_shell_command_desc">执行一条 Shell 命令</string>
+    <string name="gesture_action_open_clipboard_panel_desc">打开剪贴板历史面板</string>
+    <string name="gesture_action_honeycomb_launcher_desc">打开蜂窝启动器</string>
+    <string name="gesture_action_app_ring_launcher_desc">打开圆环启动器</string>
+    <string name="gesture_action_open_clipboard_float_desc">以浮窗打开剪贴板历史</string>
+    <string name="gesture_action_holographic_launcher_desc">打开全息启动器</string>
+    <string name="gesture_action_run_macro_desc">运行指定的宏</string>
+    <string name="gesture_action_page_scroll_desc">用悬浮控制条让页面持续滚动</string>
+    <string name="gesture_action_shake_menu_desc">晃动后打开菜单，再次晃动选择功能</string>
+    <string name="gesture_action_toggle_nfc_desc">打开或关闭 NFC</string>
+    <string name="gesture_action_toggle_bluetooth_desc">打开或关闭蓝牙</string>
+    <string name="action_center_special_fingertip">适用入口：指尖轮盘</string>
+    <string name="action_center_special_regional">适用入口：区域截图</string>
+    <string name="key_event_presets_title">常用按键</string>
+    <string name="magnifier_scale_title">缩放倍率</string>
+    <string name="magnifier_scale_summary">设定放大镜放大倍数</string>
+    <string name="magnifier_fullscreen_scale_title">全屏放大倍率（持续跟手）</string>
+    <string name="magnifier_fullscreen_scale_summary">推摇杆或长按手势持续漫游推视野时的全屏放大倍数</string>
+    <string name="magnifier_window_scale_title">局部放大倍率（视窗模式）</string>
+    <string name="magnifier_window_scale_summary">单次点击或松手触发的悬浮视窗放大镜倍数</string>
+</resources>

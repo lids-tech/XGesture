@@ -1679,6 +1679,27 @@ object ThinActionIcons {
         }
     }
 
+    val ActionCenter: ImageVector by lazy {
+        createThinIcon("ThinActionCenter") {
+            addPath(
+                pathData = PathParser().parsePathString(ACTION_CENTER_PATH).toNodes(),
+                fill = strokeBrush,
+            )
+        }
+    }
+
+    private const val ACTION_CENTER_PATH =
+        "M6.5,20.75q-1.35,0-2.3-0.95T3.25,17.5T4.2,15.2t2.3-0.95H8.25V9.75H6.5" +
+            "q-1.35,0-2.3-0.95T3.25,6.5T4.2,4.2T6.5,3.25T8.8,4.2T9.75,6.5V8.25h4.5V6.5" +
+            "q0-1.35 0.95-2.3t2.3-0.95T19.8,4.2t0.95,2.3T19.8,8.8T17.5,9.75H15.75v4.5H17.5" +
+            "q1.35,0 2.3,0.95t0.95,2.3T19.8,19.8t-2.3,0.95T15.2,19.8t-0.95-2.3V15.75H9.75V17.5" +
+            "q0,1.35-0.95,2.3T6.5,20.75Zm0-1.5q0.72,0 1.24-0.51T8.25,17.5V15.75H6.5" +
+            "q-0.72,0-1.24,0.51T4.75,17.5t0.51,1.24T6.5,19.25Zm11,0q0.72,0 1.24-0.51t0.51-1.24" +
+            "t-0.51-1.24T17.5,15.75H15.75V17.5q0,0.72 0.51,1.24t1.24,0.51Zm-7.75-5h4.5V9.75H9.75" +
+            "v4.5Zm-3.25-6H8.25V6.5q0-0.72-0.51-1.24T6.5,4.75T5.26,5.26T4.75,6.5T5.26,7.74" +
+            "T6.5,8.25Zm9.25,0H17.5q0.72,0 1.24-0.51T19.25,6.5T18.74,5.26T17.5,4.75T16.26,5.26" +
+            "T15.75,6.5V8.25Z"
+
     val Gesture: ImageVector by lazy {
         createThinIcon("ThinGesture") {
             path(
@@ -1799,25 +1820,41 @@ object ThinActionIcons {
         }
     }
 
-    /** 钉到屏幕 */
+    /** 钉到屏幕：单一闭合图钉轮廓，避免细线断开。 */
     val Pin: ImageVector by lazy {
         createThinIcon("ThinPin") {
             path(
-                stroke = strokeBrush,
-                strokeLineWidth = STROKE_WIDTH,
-                strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round,
+                fill = strokeBrush,
+                pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
             ) {
-                moveTo(16f, 4f)
-                lineTo(20f, 8f)
-                moveTo(14f, 6f)
-                lineTo(9f, 11f)
-                lineTo(5f, 12f)
-                lineTo(12f, 19f)
-                lineTo(13f, 15f)
-                lineTo(18f, 10f)
-                moveTo(8.5f, 15.5f)
-                lineTo(4f, 20f)
+                // 外轮廓
+                moveTo(15.5f, 12.21f)
+                lineTo(17.29f, 14f)
+                verticalLineTo(15.5f)
+                horizontalLineTo(12.75f)
+                verticalLineTo(21f)
+                lineTo(12f, 21.75f)
+                lineTo(11.25f, 21f)
+                verticalLineTo(15.5f)
+                horizontalLineTo(6.71f)
+                verticalLineTo(14f)
+                lineTo(8.5f, 12.21f)
+                verticalLineTo(5f)
+                horizontalLineTo(7.5f)
+                verticalLineTo(3.5f)
+                horizontalLineTo(16.5f)
+                verticalLineTo(5f)
+                horizontalLineTo(15.5f)
+                verticalLineTo(12.21f)
+                close()
+                // 内部镂空
+                moveTo(8.85f, 14f)
+                horizontalLineTo(15.15f)
+                lineTo(14f, 12.85f)
+                verticalLineTo(5f)
+                horizontalLineTo(10f)
+                verticalLineTo(12.85f)
+                close()
             }
         }
     }

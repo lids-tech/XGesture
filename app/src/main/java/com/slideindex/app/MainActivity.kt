@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,7 +30,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.slideindex.app.settings.FreeWindowLayoutFractions
+import com.slideindex.app.settings.HomeMainSettings
 import com.slideindex.app.settings.OverlaySettings
+import com.slideindex.app.ui.LocalBareSettingIcons
 import com.slideindex.app.ui.FreeWindowLayoutEditorOverlay
 import com.slideindex.app.ui.FreeWindowLayoutEditorSession
 import kotlinx.coroutines.launch
@@ -166,18 +169,25 @@ class MainActivity : ComponentActivity() {
             val freeWindowSettings by deps.settingsRepository.overlaySettings.collectAsStateWithLifecycle(
                 initialValue = OverlaySettings.from(deps.settingsRepository.readSnapshot()),
             )
+            val homeMainSettings by deps.settingsRepository.homeMainSettings.collectAsStateWithLifecycle(
+                initialValue = HomeMainSettings.from(deps.settingsRepository.readSnapshot()),
+            )
             val editorScope = rememberCoroutineScope()
             Box(modifier = Modifier.fillMaxSize()) {
-                MainNavHost(
-                    activity = this@MainActivity,
-                    deps = deps,
-                    permissionStates = permissionStates,
-                    initialIntentAction = initialIntentAction,
-                    initialNavRoute = initialNavRoute,
-                    showUpdateFromIntent = showUpdate,
-                    onNavRouteConsumed = { pendingNavRoute.value = null },
-                    onShowUpdateConsumed = { pendingShowUpdate.value = false }
-                )
+                CompositionLocalProvider(
+                    LocalBareSettingIcons provides !homeMainSettings.settingIconPlateEnabled,
+                ) {
+                    MainNavHost(
+                        activity = this@MainActivity,
+                        deps = deps,
+                        permissionStates = permissionStates,
+                        initialIntentAction = initialIntentAction,
+                        initialNavRoute = initialNavRoute,
+                        showUpdateFromIntent = showUpdate,
+                        onNavRouteConsumed = { pendingNavRoute.value = null },
+                        onShowUpdateConsumed = { pendingShowUpdate.value = false }
+                    )
+                }
                 if (FreeWindowLayoutEditorSession.isOpen) {
                     FreeWindowLayoutEditorOverlay(
                         portrait = FreeWindowLayoutFractions(
@@ -229,12 +239,28 @@ class MainActivity : ComponentActivity() {
     private fun applyLaunchIntent(intent: Intent?) {
         val resolvedAction = resolveLaunchAction(intent)
         currentIntentAction.value = resolvedAction
-        pendingNavRoute.value = intent?.getStringExtra(EXTRA_NAV_ROUTE)
+        pendingNavRoute.value = resolveNavRoute(intent)
         pendingShowUpdate.value = intent?.getBooleanExtra(UpdateIntents.EXTRA_SHOW_UPDATE, false) == true
         when (intent?.getStringExtra(EXTRA_FREEZER_TAB)) {
             FREEZER_TAB_FROZEN -> FreezerLaunchState.setPendingInitialTab(FreezerTab.FROZEN)
         }
         reportShortcutUsageIfNeeded(resolvedAction)
+    }
+
+    /**
+     * 启动时要落到的导航位置。
+     *
+     * 显式 `EXTRA_NAV_ROUTE` 优先；否则解析 app link，把 `action?type=` 转成
+     * `action_detail:<GestureActionType.name>`，交给 [MainNavHost] 建栈。
+     */
+    private fun resolveNavRoute(intent: Intent?): String? {
+        intent?.getStringExtra(EXTRA_NAV_ROUTE)?.let { return it }
+        val uri = intent?.data ?: return null
+        if (!AppLinks.isAppLink(uri)) return null
+        if (uri.pathSegments.firstOrNull()?.lowercase() != AppLinks.PATH_ACTION) return null
+        val type = uri.getQueryParameter(AppLinks.TYPE_PARAM)?.trim().orEmpty()
+        if (type.isEmpty()) return null
+        return NAV_ROUTE_ACTION_DETAIL_PREFIX + type
     }
 
     private fun resolveLaunchAction(intent: Intent?): String? {
@@ -421,6 +447,8 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_FREEZER_TAB = "extra_freezer_tab"
         const val NAV_ROUTE_EXTENSION_FREEZER = "extension_freezer"
         const val NAV_ROUTE_EXTENSION_FREEZER_APPS = "extension_freezer_apps"
+        /** 动作详情深链的前缀；完整值是 `action_detail:<GestureActionType.name>`。 */
+        const val NAV_ROUTE_ACTION_DETAIL_PREFIX = "action_detail:"
         const val FREEZER_TAB_FROZEN = "frozen"
 
         /** Gaps after resume; first tick is relative to scheduling (see [schedulePermissionRefreshRetries]). */

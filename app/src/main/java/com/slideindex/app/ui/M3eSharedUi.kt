@@ -35,12 +35,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
 import com.slideindex.app.activity.ActivityShortcut
@@ -51,6 +55,9 @@ import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+
+/** 为 true 时行首图标只保留 40dp 布局槽位，不画底板。默认全 app 裸图标。 */
+val LocalBareSettingIcons = staticCompositionLocalOf { true }
 
 data class PendingPermissionItem(
     val title: String,
@@ -66,21 +73,38 @@ fun SettingIconContainer(
     contentDescription: String? = null,
     content: @Composable () -> Unit,
 ) {
+    val slotModifier = modifier
+        .size(40.dp)
+        .then(
+            if (contentDescription != null) {
+                Modifier.semantics { this.contentDescription = contentDescription }
+            } else {
+                Modifier
+            },
+        )
+    if (LocalBareSettingIcons.current) {
+        // 裸图标没有底板承托，光学尺寸会显得偏小；把内容按 26/24 的真实密度绘制，
+        // 让 Icon 的 24dp 在无底板时真正变成 26dp，而不是先画 24dp 再放大图层。
+        val density = LocalDensity.current
+        Box(modifier = slotModifier, contentAlignment = Alignment.Center) {
+            CompositionLocalProvider(
+                LocalDensity provides Density(
+                    density = density.density * (26f / 24f),
+                    fontScale = density.fontScale,
+                ),
+            ) {
+                content()
+            }
+        }
+        return
+    }
     val shape = if (emphasized) {
         MaterialShapes.Cookie9Sided.toShape()
     } else {
         MaterialTheme.shapes.small
     }
     Surface(
-        modifier = modifier
-            .size(40.dp)
-            .then(
-                if (contentDescription != null) {
-                    Modifier.semantics { this.contentDescription = contentDescription }
-                } else {
-                    Modifier
-                },
-            ),
+        modifier = slotModifier,
         shape = shape,
         color = if (emphasized) {
             MaterialTheme.colorScheme.primaryContainer
