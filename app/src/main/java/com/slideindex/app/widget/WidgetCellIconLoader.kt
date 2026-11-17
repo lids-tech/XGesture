@@ -134,4 +134,38 @@ internal object WidgetCellIconLoader {
       mainHandler.post { onLoaded(bitmap) }
     }
   }
+
+  /**
+   * 快捷方式图标：按 `GestureShortcutPayload` 解码后走 `CornerSlotIconBitmap`
+   * （边角轮盘用的同一个解析器），动态 / 组件 / intent 三种形态都能出图；
+   * 拿不到专属图标时它会自己回落到所属应用图标，不需要调用方再兜一层。
+   */
+  fun loadShortcutIcon(
+    context: Context,
+    payloadKey: String,
+    sizePx: Int,
+    onLoaded: (Bitmap) -> Unit,
+  ) {
+    if (payloadKey.isBlank()) return
+    val key = "sc:$payloadKey:$sizePx"
+    peek(key)?.let { onLoaded(it); return }
+    val appContext = context.applicationContext
+    scope.launch {
+      val action = com.slideindex.app.gesture.GestureAction.LaunchShortcut(
+        payloadKey = payloadKey,
+        label = "",
+      )
+      val bitmap = runCatching {
+        com.slideindex.app.overlay.corner.CornerSlotIconBitmap.get(
+          context = appContext,
+          action = action,
+          sizePx = sizePx,
+          tintArgb = android.graphics.Color.WHITE,
+          plateFallback = true,
+        )
+      }.getOrNull() ?: return@launch
+      cache.put(key, bitmap)
+      mainHandler.post { onLoaded(bitmap) }
+    }
+  }
 }

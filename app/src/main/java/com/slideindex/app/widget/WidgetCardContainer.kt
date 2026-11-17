@@ -181,14 +181,25 @@ class WidgetCardContainer(
                 }
               }
             }
-            item.itemType == ITEM_TYPE_SHORTCUT && item.packageName.isNotEmpty() -> {
-              val key = WidgetCellIconLoader.shortcutKey(item.packageName, item.shortcutId)
+            item.itemType == ITEM_TYPE_SHORTCUT -> {
+              // 走「轮盘同款」解析器：动态 / 组件 / intent 三种 payload 都能出图，
+              // 拿不到专属图标时它会自己回落到所属应用图标。
+              // payloadKey 优先用存下来的 intentUri（自描述编码），
+              // 旧数据没有时再用「包名 + shortcutId」拼动态编码。
+              val payloadKey = item.intentUri.ifBlank {
+                com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
+                  item.packageName,
+                  item.shortcutId,
+                  item.label,
+                )
+              }
+              val key = "sc:$payloadKey:$iconSizePx"
               val cached = WidgetCellIconLoader.peek(key)
               if (cached != null) {
                 setImageDrawable(cached.toDrawable(resources))
               } else {
                 tag = key
-                WidgetCellIconLoader.loadShortcut(context, item.packageName, item.shortcutId) { bitmap ->
+                WidgetCellIconLoader.loadShortcutIcon(context, payloadKey, iconSizePx) { bitmap ->
                   if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
                 }
               }
@@ -235,7 +246,13 @@ class WidgetCardContainer(
               val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
                 ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
               if (settings != null && runner != null) {
-                runCatching { runner.run(action, settings, false, null, null, null) }
+                // ⚠️ 必须传**屏幕坐标**：快捷轮盘这类动作按呼出点定位，
+                // 传 null 会落到默认锚点（真机反馈"从面板打开的轮盘位置不对"）。
+                val location = IntArray(2)
+                getLocationOnScreen(location)
+                val anchorX = location[0] + width / 2f
+                val anchorY = location[1] + height / 2f
+                runCatching { runner.run(action, settings, false, anchorX, anchorY, null) }
               } else {
                 com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
               }
