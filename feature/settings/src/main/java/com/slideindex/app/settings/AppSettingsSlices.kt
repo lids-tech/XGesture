@@ -672,6 +672,18 @@ data class WidgetPanelSettings(
      * 避免文字被下一行图标裁掉。
      */
     val widgetPanelShowLabels: Boolean = true,
+    /** 二级菜单**全局**布局：列数 / 行数 / 左右偏移 / 上下偏移（所有容器共用）。 */
+    val widgetSubmenuColumns: Int = 3,
+    val widgetSubmenuRows: Int = 2,
+    val widgetSubmenuOffsetXDp: Int = 0,
+    val widgetSubmenuOffsetYDp: Int = 0,
+
+    /** 呼出入场动画开关；关掉 = 与上游一致（面板直接出现）。 */
+    val widgetPanelOpenAnimation: Boolean = true,
+    /** 入场动画时长（ms）。 */
+    val widgetPanelOpenAnimationMs: Int = 240,
+    /** 入场动画的竖直位移（dp，0 = 纯淡入）。 */
+    val widgetPanelOpenAnimationTranslateDp: Int = 12,
 )
 
 /** 验证码提取与自动填充规则。 */

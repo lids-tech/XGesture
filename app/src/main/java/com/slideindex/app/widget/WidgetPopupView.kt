@@ -629,6 +629,15 @@ class WidgetPopupCardLayout(
                 onDismiss()
             }
             canvas.appLabelsVisible = showLabels
+            // 呼出入场动画开关：关掉时与上游一致（一帧建完，无分帧淡入）。
+            canvas.chunkedCardBinding = settings.widgetPanelOpenAnimation && !editMode
+            // 二级菜单的全局布局（所有容器共用列数/行数/偏移）。
+            canvas.globalSubMenuLayout = com.slideindex.app.widget.WidgetPanelSubMenuConfig(
+              columns = settings.widgetSubmenuColumns,
+              rows = settings.widgetSubmenuRows,
+              offsetXDp = settings.widgetSubmenuOffsetXDp,
+              offsetYDp = settings.widgetSubmenuOffsetYDp,
+            )
             canvas.editMode = editMode
             canvas.bind(page, hostContext)
         }

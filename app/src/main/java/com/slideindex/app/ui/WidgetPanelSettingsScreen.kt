@@ -97,6 +97,10 @@ fun WidgetPanelSettingsScreen(
     onBlurRadiusChange = viewModel::setBlurRadius,
     onCloseOnClickModeChange = viewModel::setCloseOnClickMode,
     onShowLabelsChange = viewModel::setShowLabels,
+    onSubmenuLayoutChange = viewModel::setSubmenuLayout,
+    onOpenAnimationChange = viewModel::setOpenAnimation,
+    onOpenAnimationMsChange = viewModel::setOpenAnimationMs,
+    onOpenAnimationTranslateChange = viewModel::setOpenAnimationTranslateDp,
     onGridInteractionActiveChange = viewModel::setGridInteractionActive,
     onPreviewWidget = onPreviewWidget,
   )
@@ -116,6 +120,11 @@ fun WidgetPanelSettingsScreen(
   onBlurRadiusChange: (Int) -> Unit = {},
   onCloseOnClickModeChange: (Int) -> Unit = {},
   onShowLabelsChange: (Boolean) -> Unit = {},
+  onSubmenuLayoutChange: (columns: Int, rows: Int, offsetXDp: Int, offsetYDp: Int) -> Unit =
+    { _, _, _, _ -> },
+  onOpenAnimationChange: (Boolean) -> Unit = {},
+  onOpenAnimationMsChange: (Int) -> Unit = {},
+  onOpenAnimationTranslateChange: (Int) -> Unit = {},
   onWidthFractionChange: (Float) -> Unit,
 ) {
   val pages = WidgetPanelDefaults.effectivePages(settings.widgetPanelPages)
@@ -158,6 +167,11 @@ fun WidgetPanelSettingsContent(
   onBlurRadiusChange: (Int) -> Unit = {},
   onCloseOnClickModeChange: (Int) -> Unit = {},
   onShowLabelsChange: (Boolean) -> Unit = {},
+  onSubmenuLayoutChange: (columns: Int, rows: Int, offsetXDp: Int, offsetYDp: Int) -> Unit =
+    { _, _, _, _ -> },
+  onOpenAnimationChange: (Boolean) -> Unit = {},
+  onOpenAnimationMsChange: (Int) -> Unit = {},
+  onOpenAnimationTranslateChange: (Int) -> Unit = {},
   onGridInteractionActiveChange: (Boolean) -> Unit = {},
 ) {
   val settingsDesc = stringResource(R.string.widget_panel_settings_desc)
@@ -254,6 +268,111 @@ fun WidgetPanelSettingsContent(
             enabled = true,
             onCheckedChange = onShowLabelsChange,
           )
+        },
+      ),
+    )
+    groupedCardItems(
+      keyPrefix = "widget-panel-submenu-layout",
+      items = listOf(
+        settingsCardScopeItem("widget-panel-submenu-columns") {
+          SettingsSliderRow(
+            title = stringResource(R.string.widget_sub_menu_columns),
+            value = uiState.submenuColumns.toFloat(),
+            valueRange = 1f..6f,
+            steps = 4,
+            enabled = true,
+            label = uiState.submenuColumns.toString(),
+            onValueChange = {
+              onSubmenuLayoutChange(
+                it.roundToInt(), uiState.submenuRows,
+                uiState.submenuOffsetXDp, uiState.submenuOffsetYDp,
+              )
+            },
+          )
+        },
+        settingsCardScopeItem("widget-panel-submenu-rows") {
+          SettingsSliderRow(
+            title = stringResource(R.string.widget_sub_menu_rows),
+            value = uiState.submenuRows.toFloat(),
+            valueRange = 1f..6f,
+            steps = 4,
+            enabled = true,
+            label = uiState.submenuRows.toString(),
+            onValueChange = {
+              onSubmenuLayoutChange(
+                uiState.submenuColumns, it.roundToInt(),
+                uiState.submenuOffsetXDp, uiState.submenuOffsetYDp,
+              )
+            },
+          )
+        },
+        settingsCardScopeItem("widget-panel-submenu-offset-x") {
+          SettingsSliderRow(
+            title = stringResource(R.string.widget_sub_menu_offset_x),
+            value = uiState.submenuOffsetXDp.toFloat(),
+            valueRange = -240f..240f,
+            steps = 59,
+            enabled = true,
+            label = stringResource(R.string.corner_gesture_zone_dp_value, uiState.submenuOffsetXDp),
+            onValueChange = {
+              onSubmenuLayoutChange(
+                uiState.submenuColumns, uiState.submenuRows,
+                it.roundToInt(), uiState.submenuOffsetYDp,
+              )
+            },
+          )
+        },
+        settingsCardScopeItem("widget-panel-submenu-offset-y") {
+          SettingsSliderRow(
+            title = stringResource(R.string.widget_sub_menu_offset_y),
+            value = uiState.submenuOffsetYDp.toFloat(),
+            valueRange = -240f..240f,
+            steps = 59,
+            enabled = true,
+            label = stringResource(R.string.corner_gesture_zone_dp_value, uiState.submenuOffsetYDp),
+            onValueChange = {
+              onSubmenuLayoutChange(
+                uiState.submenuColumns, uiState.submenuRows,
+                uiState.submenuOffsetXDp, it.roundToInt(),
+              )
+            },
+          )
+        },
+      ),
+    )
+    groupedCardItems(
+      keyPrefix = "widget-panel-open-animation",
+      items = listOf(
+        settingsCardScopeItem("widget-panel-open-animation-toggle") {
+          SettingExpandableSwitchRow(
+            title = stringResource(R.string.widget_panel_open_animation),
+            subtitle = stringResource(R.string.widget_panel_open_animation_desc),
+            checked = uiState.openAnimation,
+            enabled = true,
+            onCheckedChange = onOpenAnimationChange,
+          ) {
+            SettingsSliderRow(
+              title = stringResource(R.string.widget_panel_open_animation_ms),
+              value = uiState.openAnimationMs.toFloat(),
+              valueRange = 80f..600f,
+              steps = 51,
+              enabled = uiState.openAnimation,
+              label = "${uiState.openAnimationMs} ms",
+              onValueChange = { onOpenAnimationMsChange(it.roundToInt()) },
+            )
+            SettingsSliderRow(
+              title = stringResource(R.string.widget_panel_open_animation_translate),
+              value = uiState.openAnimationTranslateDp.toFloat(),
+              valueRange = 0f..40f,
+              steps = 39,
+              enabled = uiState.openAnimation,
+              label = stringResource(
+                R.string.corner_gesture_zone_dp_value,
+                uiState.openAnimationTranslateDp,
+              ),
+              onValueChange = { onOpenAnimationTranslateChange(it.roundToInt()) },
+            )
+          }
         },
       ),
     )

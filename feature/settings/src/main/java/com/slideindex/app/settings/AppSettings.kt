@@ -1,4 +1,4 @@
-package com.slideindex.app.settings
+﻿package com.slideindex.app.settings
 
 import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.otp.OtpKeywords
@@ -167,6 +167,13 @@ data class AppSettings(
     val widgetPanelBlurRadiusDp get() = widgetPanel.widgetPanelBlurRadiusDp
     val widgetPanelCloseOnClickMode get() = widgetPanel.widgetPanelCloseOnClickMode
     val widgetPanelShowLabels get() = widgetPanel.widgetPanelShowLabels
+    val widgetSubmenuColumns get() = widgetPanel.widgetSubmenuColumns
+    val widgetSubmenuRows get() = widgetPanel.widgetSubmenuRows
+    val widgetSubmenuOffsetXDp get() = widgetPanel.widgetSubmenuOffsetXDp
+    val widgetSubmenuOffsetYDp get() = widgetPanel.widgetSubmenuOffsetYDp
+    val widgetPanelOpenAnimation get() = widgetPanel.widgetPanelOpenAnimation
+    val widgetPanelOpenAnimationMs get() = widgetPanel.widgetPanelOpenAnimationMs
+    val widgetPanelOpenAnimationTranslateDp get() = widgetPanel.widgetPanelOpenAnimationTranslateDp
 
     val otpCopyToClipboard get() = otp.otpCopyToClipboard
     val otpKeywordsRegex get() = otp.otpKeywordsRegex

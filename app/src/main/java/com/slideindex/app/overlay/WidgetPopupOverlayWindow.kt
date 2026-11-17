@@ -180,17 +180,21 @@ object WidgetPopupOverlayWindow {
       TAG,
       "show: window added in ${(System.nanoTime() - showStartNs) / 1_000_000}ms items=${effectivePages.sumOf { it.items.size }}",
     )
-    // 入场动画：只用 alpha + 轻微上移。不再用 scale ——
+    // 入场动画：只用 alpha + 轻微上移。不用 scale ——
     // 缩放期间卡片还在分帧逐个加进来，每加一张都会重排整层，再叠加缩放会把
     // 文字糊掉、观感"一顿一顿"；alpha/translation 走 RenderNode，最顺滑。
-    root.alpha = 0f
-    root.translationY = 12f * root.resources.displayMetrics.density
-    root.animate()
-      .alpha(1f)
-      .translationY(0f)
-      .setDuration(240L)
-      .setInterpolator(android.view.animation.DecelerateInterpolator())
-      .start()
+    // 参数与开关都来自设置（关掉 = 与上游一致：直接出现）。
+    if (settings.widgetPanelOpenAnimation) {
+      root.alpha = 0f
+      root.translationY = settings.widgetPanelOpenAnimationTranslateDp *
+        root.resources.displayMetrics.density
+      root.animate()
+        .alpha(1f)
+        .translationY(0f)
+        .setDuration(settings.widgetPanelOpenAnimationMs.toLong())
+        .setInterpolator(android.view.animation.DecelerateInterpolator())
+        .start()
+    }
 
     windowManager = wm
     rootLayout = root

@@ -57,6 +57,22 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
    * 卡片是正方形：44dp 图标 + 4dp 间距 + 一行 11sp 名称要 63~64dp，格子更小时名称会被
    * 下一行图标裁掉。关闭后只画图标（名称仍由 [WidgetCardContainer] 提供给无障碍朗读）。
    */
+  /**
+   * 是否启用「分帧建卡 + 淡入」。
+   *
+   * 关掉 = 一帧内建完（与上游一致）：上游没有入场动画，靠一次建完保证首帧完整。
+   * 由面板按设置里的「呼出入场动画」开关注入。
+   */
+  var chunkedCardBinding: Boolean = true
+
+  /**
+   * 二级菜单的**全局布局**（列数/行数/偏移）。
+   *
+   * 需求：这些布局参数面向所有容器生效，不必每个格子各设一遍。
+   * 单项的外观参数（尺寸/圆角/颜色/图标/文字）仍然逐项生效。
+   */
+  var globalSubMenuLayout: com.slideindex.app.widget.WidgetPanelSubMenuConfig? = null
+
   var appLabelsVisible: Boolean = true
     set(value) {
       if (field == value) return
@@ -244,7 +260,19 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       invalidate()
       return
     }
-    val config = child.item.subMenu.normalized()
+    // 布局（列/行/偏移）优先用**全局设置**，外观（尺寸/圆角/颜色等）仍逐项生效。
+    val itemConfig = child.item.subMenu.normalized()
+    val globalLayout = globalSubMenuLayout
+    val config = if (globalLayout != null) {
+      itemConfig.copy(
+        columns = globalLayout.columns,
+        rows = globalLayout.rows,
+        offsetXDp = globalLayout.offsetXDp,
+        offsetYDp = globalLayout.offsetYDp,
+      )
+    } else {
+      itemConfig
+    }
     val dm = resources.displayMetrics
     // 容器尺寸 / 圆角 / 间距 / 图标占比 / 文字大小 / 背景不透明度全部来自配置，
     // 口径与快捷轮盘的容器外观参数一致。
@@ -456,6 +484,16 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     removeAllViews()
     val items = page.items
     if (items.isEmpty()) {
+      postRefreshAllWidgetLayouts()
+      requestLayout()
+      invalidate()
+      return
+    }
+    if (!chunkedCardBinding) {
+      // 动画关掉时与上游一致：一帧建完，首帧就是完整面板。
+      for (item in items) {
+        addWidgetCard(hostContext, item)
+      }
       postRefreshAllWidgetLayouts()
       requestLayout()
       invalidate()

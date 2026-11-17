@@ -324,9 +324,13 @@ fun WidgetPickerScreen(
           onToggle = { item, added ->
             val key = QuickLauncherItemCodec.shortcutItemKey(item).orEmpty()
             addedShortcutKeys = if (added) addedShortcutKeys - key else addedShortcutKeys + key
+            // payload 是自描述编码（`包名\u001C短id[\u001D标签]` 或 intent 前缀），
+            // 必须用它自己的解码器取包名/shortcutId。之前按 '/' 切得到的是整串，
+            // 导致格子存进去的 packageName 是错的 → 图标解析失败、连应用图标兜底都拿不到。
+            val dynamic = QuickLauncherItemCodec.parseShortcutPayload(item.payload)
             val entry = ShortcutEntry(
-              packageName = item.payload.substringBefore('/'),
-              shortcutId = item.payload,
+              packageName = dynamic?.first ?: item.payload.substringBefore('/'),
+              shortcutId = dynamic?.second ?: item.payload,
               label = item.label,
               sortKey = item.label,
               initialKey = "",
@@ -353,9 +357,13 @@ fun WidgetPickerScreen(
           onToggle = { item, added ->
             val key = QuickLauncherItemCodec.shortcutItemKey(item).orEmpty()
             addedShortcutKeys = if (added) addedShortcutKeys - key else addedShortcutKeys + key
+            // payload 是自描述编码（`包名\u001C短id[\u001D标签]` 或 intent 前缀），
+            // 必须用它自己的解码器取包名/shortcutId。之前按 '/' 切得到的是整串，
+            // 导致格子存进去的 packageName 是错的 → 图标解析失败、连应用图标兜底都拿不到。
+            val dynamic = QuickLauncherItemCodec.parseShortcutPayload(item.payload)
             val entry = ShortcutEntry(
-              packageName = item.payload.substringBefore('/'),
-              shortcutId = item.payload,
+              packageName = dynamic?.first ?: item.payload.substringBefore('/'),
+              shortcutId = dynamic?.second ?: item.payload,
               label = item.label,
               sortKey = item.label,
               initialKey = "",

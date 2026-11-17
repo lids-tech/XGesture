@@ -1,4 +1,4 @@
-package com.slideindex.app.settings
+﻿package com.slideindex.app.settings
 
 import androidx.datastore.preferences.core.Preferences
 import com.slideindex.app.floatball.FloatBallGestureCodec
@@ -925,6 +925,26 @@ class OverlaySettingsMutator @Inject constructor(
 
     suspend fun setWidgetPanelShowLabels(show: Boolean) = editor.edit { prefs ->
         prefs[SettingsPreferenceKeys.WIDGET_PANEL_SHOW_LABELS] = show
+    }
+
+    suspend fun setWidgetSubmenuLayout(columns: Int, rows: Int, offsetXDp: Int, offsetYDp: Int) =
+        editor.edit { prefs ->
+            prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_COLUMNS] = columns.coerceIn(1, 6)
+            prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_ROWS] = rows.coerceIn(1, 6)
+            prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_OFFSET_X_DP] = offsetXDp.coerceIn(-240, 240)
+            prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_OFFSET_Y_DP] = offsetYDp.coerceIn(-240, 240)
+        }
+
+    suspend fun setWidgetPanelOpenAnimation(enabled: Boolean) = editor.edit { prefs ->
+        prefs[SettingsPreferenceKeys.WIDGET_PANEL_OPEN_ANIMATION] = enabled
+    }
+
+    suspend fun setWidgetPanelOpenAnimationMs(durationMs: Int) = editor.edit { prefs ->
+        prefs[SettingsPreferenceKeys.WIDGET_PANEL_OPEN_ANIMATION_MS] = durationMs.coerceIn(80, 600)
+    }
+
+    suspend fun setWidgetPanelOpenAnimationTranslateDp(translateDp: Int) = editor.edit { prefs ->
+        prefs[SettingsPreferenceKeys.WIDGET_PANEL_OPEN_ANIMATION_TRANSLATE_DP] = translateDp.coerceIn(0, 40)
     }
 
     suspend fun setWidgetPanelWidthFraction(fraction: Float) = editor.edit { prefs ->

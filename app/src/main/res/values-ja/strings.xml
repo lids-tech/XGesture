@@ -5179,4 +5179,19 @@
     <string name="pick_image_tap_view">画像を表示</string>
     <string name="pick_result_action_edit_image">画像を編集</string>
     <string name="pick_result_translate_target_switched">翻訳先：%1$s</string>
+    <string name="widget_sub_menu_section_title">Sub-menu layout</string>
+    <string name="widget_sub_menu_columns">Columns</string>
+    <string name="widget_sub_menu_columns_desc">Applies to every container of the widget panel</string>
+    <string name="widget_sub_menu_rows">Rows</string>
+    <string name="widget_sub_menu_rows_desc">Rows the grid reserves before centering</string>
+    <string name="widget_sub_menu_offset_x">Horizontal offset</string>
+    <string name="widget_sub_menu_offset_x_desc">Shift the whole menu in dp</string>
+    <string name="widget_sub_menu_offset_y">Vertical offset</string>
+    <string name="widget_sub_menu_offset_y_desc">Shift the whole menu in dp</string>
+    <string name="widget_panel_open_animation">Open animation</string>
+    <string name="widget_panel_open_animation_desc">Off = panel appears instantly like upstream</string>
+    <string name="widget_panel_open_animation_ms">Duration</string>
+    <string name="widget_panel_open_animation_ms_desc">Animation length in ms</string>
+    <string name="widget_panel_open_animation_translate">Slide-up distance</string>
+    <string name="widget_panel_open_animation_translate_desc">Vertical distance in dp, 0 = pure fade</string>
 </resources>

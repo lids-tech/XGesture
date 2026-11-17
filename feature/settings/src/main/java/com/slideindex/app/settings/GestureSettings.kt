@@ -112,7 +112,13 @@ data class GestureSettings(
     val widgetPanelHeightFraction: Float = 0.55f,
     val widgetPanelTopFraction: Float = 0.15f,
     val widgetPanelBlurEnabled: Boolean = true,
-    val widgetPanelBlurRadiusDp: Int = AppSettings.WIDGET_PANEL_BLUR_RADIUS_DEFAULT_DP,
+    val widgetPanelBlurRadiusDp: Int = AppSettings.WIDGET_PANEL_BLUR_RADIUS_DEFAULT_DP,    val widgetSubmenuColumns: Int = 3,
+    val widgetSubmenuRows: Int = 2,
+    val widgetSubmenuOffsetXDp: Int = 0,
+    val widgetSubmenuOffsetYDp: Int = 0,
+    val widgetPanelOpenAnimation: Boolean = true,
+    val widgetPanelOpenAnimationMs: Int = 240,
+    val widgetPanelOpenAnimationTranslateDp: Int = 12,
     val debugPerformanceMonitorEnabled: Boolean = false,
 ) {
     companion object {
@@ -214,7 +220,13 @@ data class GestureSettings(
             widgetPanelHeightFraction = settings.widgetPanelHeightFraction,
             widgetPanelTopFraction = settings.widgetPanelTopFraction,
             widgetPanelBlurEnabled = settings.widgetPanelBlurEnabled,
-            widgetPanelBlurRadiusDp = settings.widgetPanelBlurRadiusDp,
+            widgetPanelBlurRadiusDp = settings.widgetPanelBlurRadiusDp,            widgetSubmenuColumns = settings.widgetSubmenuColumns,
+            widgetSubmenuRows = settings.widgetSubmenuRows,
+            widgetSubmenuOffsetXDp = settings.widgetSubmenuOffsetXDp,
+            widgetSubmenuOffsetYDp = settings.widgetSubmenuOffsetYDp,
+            widgetPanelOpenAnimation = settings.widgetPanelOpenAnimation,
+            widgetPanelOpenAnimationMs = settings.widgetPanelOpenAnimationMs,
+            widgetPanelOpenAnimationTranslateDp = settings.widgetPanelOpenAnimationTranslateDp,
             debugPerformanceMonitorEnabled = settings.debugPerformanceMonitorEnabled,
         )
     }
