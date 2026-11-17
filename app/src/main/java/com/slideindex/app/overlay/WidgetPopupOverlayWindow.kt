@@ -172,10 +172,11 @@ object WidgetPopupOverlayWindow {
     // 操作提示条（HUD）：屏幕上方固定一条，显示当前操作名称 + 长按进度。
     // 用 ComposeView 叠在面板根布局上：它不改布局、不拦触摸（没有手指交互），
     // 由 WidgetPanelHud 的状态驱动显示/隐藏。
-    val hudView = androidx.compose.ui.platform.ComposeView(hostContext).apply {
-      setViewCompositionStrategy(
-        androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnDetachedFromWindow,
-      )
+    // ⚠️ 浮层窗口没有 ViewTreeLifecycleOwner：裸 ComposeView attach 即崩
+    //（表现 = 打开面板就闪退）。必须走项目里现成的 OverlayCompose.createComposeView
+    //（它会绑 OverlayComposeOwner + DisposeOnDetachedFromWindow）。
+    val hudOwner = com.slideindex.app.overlay.OverlayComposeOwner()
+    val hudView = com.slideindex.app.overlay.OverlayCompose.createComposeView(hostContext, hudOwner).apply {
       isClickable = false
       isFocusable = false
       importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -185,6 +186,8 @@ object WidgetPopupOverlayWindow {
         }
       }
     }
+    this.hudComposeView = hudView
+    this.hudOwner = hudOwner
     root.addView(
       hudView,
       FrameLayout.LayoutParams(
@@ -380,6 +383,11 @@ object WidgetPopupOverlayWindow {
     val startNs = System.nanoTime()
     com.slideindex.app.widget.WidgetPanelHud.clear()
     cardLayout?.cancelAllPendingBinds()
+    // HUD 的 ComposeView 是 root 的子视图，随 root 一起 detach；
+    // 这里只负责销毁 owner（等 detach 完成后），避免泄漏。
+    com.slideindex.app.overlay.OverlayCompose.teardownOverlayCompose(hudComposeView, hudOwner)
+    hudComposeView = null
+    hudOwner = null
     val root = rootLayout
     val wm = windowManager
     if (root != null && wm != null) {
@@ -623,6 +631,9 @@ object WidgetPopupOverlayWindow {
     appContext = null
     overlayDeps = null
   }
+
+  private var hudComposeView: androidx.compose.ui.platform.ComposeView? = null
+  private var hudOwner: com.slideindex.app.overlay.OverlayComposeOwner? = null
 
   private fun startSettingsSync(deps: OverlayDependencies) {
     settingsCollectJob?.cancel()
