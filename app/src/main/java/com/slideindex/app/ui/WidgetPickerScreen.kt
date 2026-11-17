@@ -69,6 +69,7 @@ import com.slideindex.app.freezer.FreezerAppState
 import com.slideindex.app.freezer.FreezerOperations
 import com.slideindex.app.launcher.AppTarget
 import com.slideindex.app.overlay.CloneAppsIndex
+import com.slideindex.app.launcher.QuickLauncherItem
 import com.slideindex.app.launcher.QuickLauncherItemCodec
 import com.slideindex.app.ui.compose.rememberAppRepository
 import com.slideindex.app.ui.picker.AppPickerTabRow
@@ -324,19 +325,7 @@ fun WidgetPickerScreen(
           onToggle = { item, added ->
             val key = QuickLauncherItemCodec.shortcutItemKey(item).orEmpty()
             addedShortcutKeys = if (added) addedShortcutKeys - key else addedShortcutKeys + key
-            // payload 是自描述编码（`包名\u001C短id[\u001D标签]` 或 intent 前缀），
-            // 必须用它自己的解码器取包名/shortcutId。之前按 '/' 切得到的是整串，
-            // 导致格子存进去的 packageName 是错的 → 图标解析失败、连应用图标兜底都拿不到。
-            val dynamic = QuickLauncherItemCodec.parseShortcutPayload(item.payload)
-            val entry = ShortcutEntry(
-              packageName = dynamic?.first ?: item.payload.substringBefore('/'),
-              shortcutId = dynamic?.second ?: item.payload,
-              label = item.label,
-              sortKey = item.label,
-              initialKey = "",
-              iconBitmap = null,
-              intentUri = item.payload,
-            )
+            val entry = shortcutEntryOf(item)
             if (onToggleShortcut != null) {
               onToggleShortcut(entry, added)
             } else if (onShortcutSelected != null) {
@@ -357,19 +346,7 @@ fun WidgetPickerScreen(
           onToggle = { item, added ->
             val key = QuickLauncherItemCodec.shortcutItemKey(item).orEmpty()
             addedShortcutKeys = if (added) addedShortcutKeys - key else addedShortcutKeys + key
-            // payload 是自描述编码（`包名\u001C短id[\u001D标签]` 或 intent 前缀），
-            // 必须用它自己的解码器取包名/shortcutId。之前按 '/' 切得到的是整串，
-            // 导致格子存进去的 packageName 是错的 → 图标解析失败、连应用图标兜底都拿不到。
-            val dynamic = QuickLauncherItemCodec.parseShortcutPayload(item.payload)
-            val entry = ShortcutEntry(
-              packageName = dynamic?.first ?: item.payload.substringBefore('/'),
-              shortcutId = dynamic?.second ?: item.payload,
-              label = item.label,
-              sortKey = item.label,
-              initialKey = "",
-              iconBitmap = null,
-              intentUri = item.payload,
-            )
+            val entry = shortcutEntryOf(item)
             if (onToggleShortcut != null) {
               onToggleShortcut(entry, added)
             } else if (onShortcutSelected != null) {
@@ -976,4 +953,38 @@ private fun WidgetDetailCard(
       )
     }
   }
+}
+
+/**
+ * 把「我的直达 / 预设快捷方式库」里的条目转成面板用的 [ShortcutEntry]。
+ *
+ * 这些条目的 payload 有三种形态（动态快捷方式 / 组件 / intent），
+ * 必须按 `GestureShortcutPayload` 解码后再取包名，否则存进去的 packageName 是
+ * 带前缀的整串（`c:pkg/class`），专属图标与应用图标兜底都会失败 → 格子空白。
+ */
+private fun shortcutEntryOf(item: QuickLauncherItem): ShortcutEntry {
+  val payload = item.payload
+  val decoded = com.slideindex.app.gesture.GestureShortcutPayload.decode(payload)
+  val dynamicPair = com.slideindex.app.launcher.QuickLauncherItemCodec.parseShortcutPayload(payload)
+  val packageName: String = when (decoded) {
+    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Dynamic -> decoded.packageName
+    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Component ->
+      decoded.componentFlat.substringBefore('/')
+    else -> dynamicPair?.first
+      ?: payload.substringBefore('/').removePrefix("c:").removePrefix("i:").removePrefix("is:")
+  }
+  val shortcutId: String = when (decoded) {
+    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Dynamic -> decoded.shortcutId
+    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Component -> decoded.componentFlat
+    else -> dynamicPair?.second ?: payload
+  }
+  return ShortcutEntry(
+    packageName = packageName,
+    shortcutId = shortcutId,
+    label = item.label,
+    sortKey = item.label,
+    initialKey = "",
+    iconBitmap = null,
+    intentUri = payload,
+  )
 }

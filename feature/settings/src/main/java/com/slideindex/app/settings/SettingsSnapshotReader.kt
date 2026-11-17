@@ -383,6 +383,16 @@ internal object SettingsSnapshotReader {
                     ?: AppSettings.WIDGET_PANEL_BLUR_RADIUS_DEFAULT_DP,
                 widgetPanelCloseOnClickMode = prefs[SettingsPreferenceKeys.WIDGET_PANEL_CLOSE_ON_CLICK] ?: 0,
                 widgetPanelShowLabels = prefs[SettingsPreferenceKeys.WIDGET_PANEL_SHOW_LABELS] ?: true,
+                widgetSubmenuColumns = prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_COLUMNS] ?: 3,
+                widgetSubmenuRows = prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_ROWS] ?: 2,
+                widgetSubmenuOffsetXDp = prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_OFFSET_X_DP] ?: 0,
+                widgetSubmenuOffsetYDp = prefs[SettingsPreferenceKeys.WIDGET_SUBMENU_OFFSET_Y_DP] ?: 0,
+                widgetPanelOpenAnimation =
+                    prefs[SettingsPreferenceKeys.WIDGET_PANEL_OPEN_ANIMATION] ?: true,
+                widgetPanelOpenAnimationMs =
+                    prefs[SettingsPreferenceKeys.WIDGET_PANEL_OPEN_ANIMATION_MS] ?: 240,
+                widgetPanelOpenAnimationTranslateDp =
+                    prefs[SettingsPreferenceKeys.WIDGET_PANEL_OPEN_ANIMATION_TRANSLATE_DP] ?: 12,
             ),
             floatingPointer = FloatingPointerSettings(
             floatingPointerSensitivityFraction = readFloatingPointerSensitivityFraction(prefs),

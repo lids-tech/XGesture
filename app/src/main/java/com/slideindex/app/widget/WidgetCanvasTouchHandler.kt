@@ -248,14 +248,25 @@ internal class WidgetCanvasTouchHandler(
      * 时，「启动应用 / 启动快捷方式」这类要拉起 Activity 的动作会被后台启动限制静默拦掉，
      * 而开关类动作不需要窗口所以看起来正常——正是真机上「动作能执行、应用和快捷方式没反应」。
      */
-    private fun runSubAction(action: com.slideindex.app.gesture.GestureAction) {
+    /**
+     * 执行动作。
+     *
+     * [rawX]/[rawY] 是手指松手时的**屏幕坐标**：必须透传给执行器 ——
+     * 「快捷轮盘」这类动作要按呼出点/按下点定位，传 null 会让它按默认锚点
+     * 出现在屏幕别处（真机反馈"从面板打开的轮盘位置不对"）。
+     */
+    private fun runSubAction(
+        action: com.slideindex.app.gesture.GestureAction,
+        rawX: Float? = null,
+        rawY: Float? = null,
+    ) {
         val context = layout.canvasHostContext ?: layout.context
         val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot?.invoke(context)
         val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
             ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
         com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
         if (settings != null && runner != null) {
-            runCatching { runner.run(action, settings, false, null, null, null) }
+            runCatching { runner.run(action, settings, false, rawX, rawY, null) }
                 .onFailure { android.util.Log.e("WidgetPanelSubActions", "run failed", it) }
         } else {
             com.slideindex.app.service.SlideIndexAccessibilityService.perform(action)
@@ -533,10 +544,12 @@ internal class WidgetCanvasTouchHandler(
                     layout.subMenuLongPressFired = false
                     if (event.actionMasked == MotionEvent.ACTION_UP && child != null) {
                         val action = state.items.getOrNull(hit)?.action
+                        val upX = event.rawX
+                        val upY = event.rawY
                         when {
                             // 长按已"上膛"：松手执行小窗
                             longPressFired && action != null -> openSubActionInFreeWindow(action)
-                            action != null -> runSubAction(action)
+                            action != null -> runSubAction(action, upX, upY)
                             // 空白处：没移动过 = 只是长按了这个格子，按原方式打开；
                             // 移动过 = 用户在找菜单项没找到 → 只收菜单，什么都不做。
                             !state.moved -> openCellDefault(child)
