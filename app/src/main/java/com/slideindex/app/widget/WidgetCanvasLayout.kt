@@ -433,10 +433,15 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     syncDynamicRowCount()
     lastBindKey = WidgetCanvasLayoutGeometry.bindKeyFor(page)
 
+    val bindStartNs = System.nanoTime()
     removeAllViews()
     for (item in page.items) {
       addWidgetCard(hostContext, item)
     }
+    android.util.Log.d(
+      "WidgetCanvas",
+      "bind page=${page.id} items=${page.items.size} build=${(System.nanoTime() - bindStartNs) / 1_000_000}ms",
+    )
     postRefreshAllWidgetLayouts()
     requestLayout()
     invalidate()
@@ -464,9 +469,10 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   }
 
   fun addWidgetCard(hostContext: Context, item: WidgetPanelItem): WidgetCardContainer {
-    val hostView = if (item.itemType == ITEM_TYPE_WIDGET) {
-      WidgetPopupHost.obtainHostView(hostContext, item.appWidgetId)
-    } else null
+    // 小组件的宿主视图**不在这里同步取**：obtainHostView 要走 binder 拿 providerInfo +
+    // 创建 AppWidgetHostView，卡片一多就会把面板首帧/收起卡住。
+    // 交给卡片自己在 post 里异步取（先显示占位，取到再贴上），呼出因此不再跟跟手。
+    val hostView: android.appwidget.AppWidgetHostView? = null
     val container = WidgetCardContainer(context, item, hostView).apply {
       onDelete = {
         val widgetId = this.item.appWidgetId

@@ -98,6 +98,8 @@ object WidgetPopupOverlayWindow {
       runCatching { latch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS) }
       return result
     }
+    // 性能打点：adb logcat -s WidgetPopup 可直接看到呼出/收起的各段耗时。
+    val showStartNs = System.nanoTime()
     if (isShowing) {
       if (isVisible) return true
       cleanup()
@@ -174,6 +176,10 @@ object WidgetPopupOverlayWindow {
     if (!added) {
       return false
     }
+    Log.d(
+      TAG,
+      "show: window added in ${(System.nanoTime() - showStartNs) / 1_000_000}ms items=${effectivePages.sumOf { it.items.size }}",
+    )
 
     windowManager = wm
     rootLayout = root
@@ -200,7 +206,11 @@ object WidgetPopupOverlayWindow {
     WidgetPopupHost.startListening(hostContext)
     // 每次打开都让当前所有页的小组件重新拉一次数据，避免显示上一会话的旧内容
     // （步数 / 天气这类只在 provider 自己的周期里更新）。
-    WidgetPopupHost.refreshWidgets(hostContext, effectivePages)
+    // ⚠️ 放到后台线程：每个小组件都要 getAppWidgetInfo + sendBroadcast（binder），
+    // 在 show() 里同步做会让"有小组件时呼出变慢"。
+    Thread {
+      WidgetPopupHost.refreshWidgets(hostContext.applicationContext, effectivePages)
+    }.apply { isDaemon = true }.start()
     SlideIndexAccessibilityService.refreshTriggerVisuals()
 
     root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
@@ -311,7 +321,9 @@ object WidgetPopupOverlayWindow {
     deactivateBackHandling()
     isVisible = false
     ++chromeRaiseToken
+    val dismissStartNs = System.nanoTime()
     cleanup()
+    Log.d(TAG, "dismiss completed in ${(System.nanoTime() - dismissStartNs) / 1_000_000}ms")
   }
 
   fun setWidgetAddFlowActive(active: Boolean) {
@@ -512,7 +524,13 @@ object WidgetPopupOverlayWindow {
     suspendedForPicker = false
     savedFlagsBeforePickerSuspend = null
     OverlaySceneController.onContentPanelHidden()
-    SlideIndexAccessibilityService.refreshTriggerVisuals()
+    // 触钮视觉重排（四条边的浮窗）不该挡在收起路径上：挪到下一帧再刷。
+    val ctxForVisuals = appContext
+    mainHandler.post {
+      if (!isVisible) {
+        SlideIndexAccessibilityService.refreshTriggerVisuals()
+      }
+    }
     isVisible = false
     blockingTouches = false
     currentSettings = null

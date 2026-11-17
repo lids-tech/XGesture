@@ -122,60 +122,62 @@ class WidgetCardContainer(
             }
           }
         }.apply {
-          // 自定义图标优先：用户给这个格子单独设过图标就先用它，
-          // 渲染与「给动作设置图标」同一通道（字体图标 / 文字 / 图片）。
+          // ── 图标加载全部走后台 + 缓存（WidgetCellIconLoader）──
+          // 原先动作图标（矢量渲染）、快捷方式图标（binder 往返）、自定义图标（可能解码图片）
+          // 都在构造期同步解析：面板空着没事，放几张卡之后呼出/收回就"顿一下"。
+          val iconSizePx = (44 * density).roundToInt()
+          val action = if (item.itemType == ITEM_TYPE_ACTION) {
+            com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
+          } else {
+            null
+          }
+          // 自定义图标优先：缓存命中就直接用，没命中后台加载后回填。
           if (item.iconKey.isNotBlank()) {
-            val sizePx = (44 * density).roundToInt()
-            val action = com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
-            val custom = runCatching {
-              com.slideindex.app.ui.ActionIconBitmap.loadByKey(
-                context = context,
-                key = item.iconKey,
-                sizePx = sizePx,
-                tintArgb = Color.WHITE,
-                withPlate = true,
-                action = action,
-              )
-            }.getOrNull()
-            if (custom != null) {
-              setImageDrawable(custom.toDrawable(resources))
+            val customKey = WidgetCellIconLoader.customKey(item.iconKey, iconSizePx)
+            val cached = WidgetCellIconLoader.peek(customKey)
+            if (cached != null) {
+              setImageDrawable(cached.toDrawable(resources))
               return@apply
             }
+            tag = customKey
+            WidgetCellIconLoader.loadCustomIcon(context, item.iconKey, action, iconSizePx) { bitmap ->
+              if (tag == customKey) setImageDrawable(bitmap.toDrawable(resources))
+            }
+            return@apply
           }
-          val icon = if (item.itemType == ITEM_TYPE_ACTION) {
-            val action = com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
-            val iconSizePx = (44 * density).roundToInt()
-            if (action != null) {
-              com.slideindex.app.util.GestureActionIconBitmap.get(
-                action = action,
-                sizePx = iconSizePx,
-                tintArgb = Color.WHITE,
-                outlined = true,
-                withPlate = true,
-              ).toDrawable(resources)
-            } else null
-          } else if (item.itemType == ITEM_TYPE_SHORTCUT && item.shortcutId.isNotEmpty()) {
-            runCatching {
-              val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? android.content.pm.LauncherApps
-              val query = android.content.pm.LauncherApps.ShortcutQuery().apply {
-                setPackage(item.packageName)
-                setShortcutIds(listOf(item.shortcutId))
-                setQueryFlags(
-                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
-                )
+          when {
+            item.itemType == ITEM_TYPE_ACTION && action != null -> {
+              val key = WidgetCellIconLoader.actionKey(action)
+              val cached = WidgetCellIconLoader.peek(key)
+              if (cached != null) {
+                setImageDrawable(cached.toDrawable(resources))
+              } else {
+                tag = key
+                WidgetCellIconLoader.loadAction(context, action, iconSizePx) { bitmap ->
+                  if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
+                }
               }
-              val info = launcherApps?.getShortcuts(query, android.os.Process.myUserHandle())?.firstOrNull()
-              if (info != null) {
-                launcherApps.getShortcutIconDrawable(info, resources.displayMetrics.densityDpi)
-              } else null
-            }.getOrNull()
-          } else null
-          setImageDrawable(icon)
-          // 应用图标不在构造期同步取：PackageManager 在部分 OEM（Flyme）上会走主题引擎逐像素重绘，
-          // 主线程同步调用会让面板首帧卡住数百毫秒。这里统一走缓存 + 后台线程。
-          if (icon == null && item.packageName.isNotEmpty()) {
+            }
+            item.itemType == ITEM_TYPE_SHORTCUT && item.shortcutId.isNotEmpty() -> {
+              val key = WidgetCellIconLoader.shortcutKey(item.packageName, item.shortcutId)
+              val cached = WidgetCellIconLoader.peek(key)
+              if (cached != null) {
+                setImageDrawable(cached.toDrawable(resources))
+              } else {
+                tag = key
+                WidgetCellIconLoader.loadShortcut(context, item.packageName, item.shortcutId) { bitmap ->
+                  if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
+                }
+              }
+            }
+          }
+          // 应用格子（以及动作 / 快捷方式拿不到自家图标时的兜底）：走应用图标缓存。
+          // 同样不在构造期同步取：部分 OEM 会做主题化重绘，主线程同步调用能卡几百毫秒。
+          if (item.iconKey.isBlank() &&
+            item.itemType != ITEM_TYPE_SHORTCUT &&
+            item.itemType != ITEM_TYPE_ACTION &&
+            item.packageName.isNotEmpty()
+          ) {
             val iconPackage = item.packageName
             tag = iconPackage
             WidgetAppIconCache.load(context, iconPackage) { bitmap ->
@@ -278,19 +280,22 @@ class WidgetCardContainer(
     } else {
       // 单进程后宿主视图与编辑器同进程：调用方没传视图时自己取一次，
       // 否则编辑器永远停在占位卡（以前只有 :overlay 进程能创建宿主视图）。
-      val selfHostView = runCatching {
-        WidgetPopupHost.startListening(context)
-        WidgetPopupHost.obtainHostView(context, item.appWidgetId)
-      }.getOrNull()
-      if (selfHostView != null && item.itemType == ITEM_TYPE_WIDGET) {
-        scalableFrame.visibility = VISIBLE
-        scalableFrame.bindWidget(selfHostView, item.appWidgetId, item.spanX, item.spanY)
-        loadingPlaceholder.visibility = GONE
-        hostEverBound = true
-        updateScalableTargetFromContainer()
-        scalableFrame.commitHostLayout()
-      } else {
-        loadingPlaceholder.visibility = VISIBLE
+      // 宿主视图**异步**取：先显示占位，取到后再贴上。
+      // 同步取会走 binder + AppWidgetHostView 创建，卡片一多就把呼出/收回卡住。
+      loadingPlaceholder.visibility = VISIBLE
+      post {
+        val selfHostView = runCatching {
+          WidgetPopupHost.startListening(context)
+          WidgetPopupHost.obtainHostView(context, item.appWidgetId)
+        }.getOrNull()
+        if (selfHostView != null && item.itemType == ITEM_TYPE_WIDGET) {
+          scalableFrame.visibility = VISIBLE
+          scalableFrame.bindWidget(selfHostView, item.appWidgetId, item.spanX, item.spanY)
+          loadingPlaceholder.visibility = GONE
+          hostEverBound = true
+          updateScalableTargetFromContainer()
+          scalableFrame.commitHostLayout()
+        }
       }
     }
 
