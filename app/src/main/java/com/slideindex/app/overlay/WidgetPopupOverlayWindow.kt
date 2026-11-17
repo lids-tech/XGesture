@@ -180,6 +180,20 @@ object WidgetPopupOverlayWindow {
       TAG,
       "show: window added in ${(System.nanoTime() - showStartNs) / 1_000_000}ms items=${effectivePages.sumOf { it.items.size }}",
     )
+    // 入场动画：窗口先淡入 + 轻微放大，动画期间分帧建卡逐步铺满。
+    // alpha/scale 走 RenderNode（渲染线程），即使主线程在建卡，动画也不掉帧。
+    root.alpha = 0f
+    root.scaleX = 0.92f
+    root.scaleY = 0.92f
+    root.pivotX = root.width / 2f
+    root.pivotY = root.height / 2f
+    root.animate()
+      .alpha(1f)
+      .scaleX(1f)
+      .scaleY(1f)
+      .setDuration(180L)
+      .setInterpolator(android.view.animation.DecelerateInterpolator())
+      .start()
 
     windowManager = wm
     rootLayout = root
@@ -339,6 +353,7 @@ object WidgetPopupOverlayWindow {
   /** 收起第一步：把窗口摘掉（只做这一件事，保证当帧返回）。 */
   private fun detachWindowForDismiss() {
     val startNs = System.nanoTime()
+    cardLayout?.cancelAllPendingBinds()
     val root = rootLayout
     val wm = windowManager
     if (root != null && wm != null) {

@@ -86,7 +86,19 @@ class WidgetPopupCardLayout(
     private var showLabels = settings.widgetPanelShowLabels
 
     private val headerTextView: TextView
-    private val recyclerContainer: FrameLayout
+    /**
+   * 取消所有页面画布中尚未执行的分帧建卡。
+   *
+   * 收起面板时调用：不然递归的 `post` 会在窗口已经摘掉之后继续建卡，
+   * 白白占用主线程（表现为"收起后还有一下顿"）。
+   */
+  fun cancelAllPendingBinds() {
+    // 全局代际自增：所有页画布里挂着的递归 post 会自行停下，
+    // 不用去遍历 RecyclerView 里当前还挂了哪些页。
+    WidgetCanvasLayout.cancelAllPendingBinds()
+  }
+
+  private val recyclerContainer: FrameLayout
     private val recyclerView: RecyclerView
     private val adapter: WidgetPageAdapter
     private val dotsLayout: LinearLayout

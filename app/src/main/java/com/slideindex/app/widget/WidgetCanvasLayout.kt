@@ -110,6 +110,15 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   // 不移动直接松手 = 以**小窗**打开该格子；移到某一项松手 = 执行那一项的动作。
 
   /** 二级菜单状态；null = 未弹出。 */
+  /** 分帧建卡的批大小与每张卡的淡入时长（呼出动画期间逐步铺满）。 */
+  private val BIND_CHUNK_SIZE = 6
+  private val CARD_FADE_IN_MS = 160L
+
+  /** 分帧建卡的代际号：收起 / 重新 bind 时自增，让旧的递归立刻停下。 */
+  private var bindChunkToken = 0
+
+
+
   internal var subMenu: SubMenuState? = null
 
   /** 二级菜单里一项的绘制 / 命中信息（图标提前解析好，绘制时不再查表）。 */
@@ -433,18 +442,44 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     syncDynamicRowCount()
     lastBindKey = WidgetCanvasLayoutGeometry.bindKeyFor(page)
 
-    val bindStartNs = System.nanoTime()
+    // ⚠️ 卡片**分帧**建，不再一帧内全建完：
+    // 呼出时要先让窗口 + 入场动画跑起来，把所有卡片一次性建完会把这一帧卡死
+    // （小组件/图标越多越久），看起来就是"呼出顿一下"。
+    // 现在每帧只建 CHUNK 张，卡片自己淡入，动画期间逐步铺满 —— 观感是"弹出来"。
     removeAllViews()
-    for (item in page.items) {
-      addWidgetCard(hostContext, item)
+    val items = page.items
+    if (items.isEmpty()) {
+      postRefreshAllWidgetLayouts()
+      requestLayout()
+      invalidate()
+      return
     }
-    android.util.Log.d(
-      "WidgetCanvas",
-      "bind page=${page.id} items=${page.items.size} build=${(System.nanoTime() - bindStartNs) / 1_000_000}ms",
-    )
-    postRefreshAllWidgetLayouts()
+    bindChunkToken = ++bindGeneration
+    val token = bindChunkToken
+    fun buildChunk(start: Int) {
+      if (token != bindChunkToken || token != bindGeneration) return
+      val end = (start + BIND_CHUNK_SIZE).coerceAtMost(items.size)
+      for (index in start until end) {
+        val card = addWidgetCard(hostContext, items[index])
+        card.alpha = 0f
+        card.animate().alpha(1f).setDuration(CARD_FADE_IN_MS).start()
+      }
+      if (end < items.size) {
+        post { buildChunk(end) }
+      } else {
+        postRefreshAllWidgetLayouts()
+        requestLayout()
+        invalidate()
+      }
+    }
     requestLayout()
     invalidate()
+    post { buildChunk(0) }
+  }
+
+  /** 取消尚未执行的分帧建卡（收起 / 重新 bind 时调用）。 */
+  internal fun cancelPendingBind() {
+    bindChunkToken++
   }
 
   fun bindIfNeeded(page: WidgetPanelPage, hostContext: Context) {
@@ -827,5 +862,18 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   companion object {
     const val CELL_GAP_DP = 0f
     const val EDIT_MODE_BUFFER_ROWS = 5
+
+    /**
+     * 全局「分帧建卡」代际号：一次自增即可让所有页面上挂着的递归 post 停下。
+     *
+     * 收起面板时调用 [cancelAllPendingBinds]，避免窗口已经摘掉之后
+     * 还在继续建卡（那会在收起后继续占用主线程）。
+     */
+    @Volatile
+    private var bindGeneration = 0
+
+    fun cancelAllPendingBinds() {
+      bindGeneration++
+    }
   }
 }
