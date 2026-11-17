@@ -317,6 +317,21 @@ object QuickWheelOverlayWindow {
             anchorX
         }
 
+        // 背景模糊：不再走窗口级 FLAG_BLUR_BEHIND（那会把整屏糊掉），而是和「快速启动器」等面板
+        // 一样，在内容层用 BackgroundBlurDrawable 画在**指定区域**上 —— 见 QuickWheelBackdropDim。
+        // 必须在这里算好：下面的 setContent 要用它。
+        val blurDp = OverlayBlurGate.effectiveBlurRadiusDp(
+            settings.overlayBlurEnabled,
+            QuickWheelLayoutEngine.clampBackdropBlurDp(wheel.backdropBlurDp),
+        )
+        val blurRadiusPx = if (blurDp > 0 && OverlayBlurGate.isSystemBlurEnabled(wm)) {
+            (blurDp * density).toInt().coerceIn(1, 80)
+        } else {
+            0
+        }
+        // 色调边缘羽化（只对「仅轮盘区域」有意义）：用浓度渐变把模糊的硬边界包住。
+        val featherPx = QuickWheelLayoutEngine.clampBackdropFeatherDp(wheel.backdropFeatherDp) * density
+
         activeExecutor = actionExecutor
         activeSettings = settings
         activeSelfPackage = hostContext.packageName
@@ -389,12 +404,15 @@ object QuickWheelOverlayWindow {
                                 adaptive = adaptive,
                                 secondaryAdaptive = secondaryAdaptive,
                                 primarySectorMaskOverride = primarySectorMaskOverride,
-                                // 容器以外区域的黑色遮罩浓度（容器本身不透明，不受影响）。
+                                // 容器以外区域的背景：色调 + 浓度 + 双范围 + 羽化（上游新参数）。
                                 backdropDimAlpha = QuickWheelLayoutEngine
                                     .clampBackdropDimPercent(editorWheel.backdropDimPercent) / 100f,
-                                // 上游新增：HUD 里 Shell 命令按用户自定义名回查。
+                                backdropDimColorArgb = editorWheel.backdropDimColorArgb,
+                                backdropBlurRadiusPx = blurRadiusPx,
+                                backdropBlurScope = editorWheel.backdropBlurScope,
+                                backdropDimScope = editorWheel.backdropDimScope,
+                                backdropFeatherPx = featherPx,
                                 shellCommands = settings.shellCommands,
-                                // 上游新增：划过容器 / 按满长按时间的触觉反馈（与圆环启动器同一套）。
                                 hapticSettings = settings,
                                 onExternalHandlers = { move, up ->
                                     externalMoveHandler = move
@@ -446,13 +464,6 @@ object QuickWheelOverlayWindow {
         val canHostOpaqueOverlay = runCatching {
             PermissionHelper.canDrawOverlays(hostContext.applicationContext)
         }.getOrDefault(false)
-        val blurDp = OverlayBlurGate.effectiveBlurRadiusDp(
-            settings.overlayBlurEnabled,
-            QuickWheelLayoutEngine.clampBackdropBlurDp(wheel.backdropBlurDp),
-        )
-        val blurAvailable = blurDp > 0 &&
-                OverlayBlurGate.isSystemBlurEnabled(wm)
-
         val params = OverlayWindowTypes.createPresentationParams(hostContext).apply {
             OverlayWindowTypes.applyFullScreen(this)
             // ⚠️ 不能用"放行触摸"的实现（= 加 FLAG_NOT_TOUCHABLE）：实测 Oplus/ColorOS（本机 RMX8899，
@@ -478,11 +489,6 @@ object QuickWheelOverlayWindow {
             } else {
                 OverlayWindowTypes.overlayWindowType(hostContext)
             }
-            if (blurAvailable) {
-                // 容器**以外**区域的跨窗口实时模糊；容器自身不透明，不受影响。
-                flags = flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                setBlurBehindRadius((blurDp * density).toInt().coerceIn(1, 80))
-            }
             // 显式声明窗口不透明（默认值即 1f）。参照「圆环启动器」
             // （AppSwitcherOverlayController.show 里同样显式写 params.alpha = 1f），
             // 用于排除部分 OEM 读取 / 继承窗口 alpha、导致整窗（含容器）发透的可能。
@@ -493,9 +499,11 @@ object QuickWheelOverlayWindow {
         Log.i(
             TAG,
             "show params: type=${params.type} opaqueHost=$canHostOpaqueOverlay " +
-                    "flags=0x${Integer.toHexString(params.flags)} alpha=${params.alpha} " +
-                    "externalTracking=$externalTracking " +
-                    "blurDp=$blurDp blurAvailable=$blurAvailable dim=${wheel.backdropDimPercent}",
+                "flags=0x${Integer.toHexString(params.flags)} alpha=${params.alpha} " +
+                "externalTracking=$externalTracking " +
+                "blurDp=$blurDp blurRadiusPx=$blurRadiusPx dim=${wheel.backdropDimPercent} " +
+                "scope=${wheel.backdropBlurScope}/${wheel.backdropDimScope} " +
+                "featherPx=$featherPx",
         )
 
         return runCatching {

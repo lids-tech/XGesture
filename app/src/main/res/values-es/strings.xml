@@ -4767,9 +4767,19 @@ o revocar Root permanente para Shell en APatch.</string>
     <string name="quick_wheel_long_press_time">TiempoMantener presionado</string>
     <string name="quick_wheel_long_press_time_desc">Tiempo que hay que mantener un contenedor para su acción larga y abrir el segundo nivel</string>
     <string name="quick_wheel_backdrop_blur">Borde de fondo</string>
-    <string name="quick_wheel_backdrop_blur_desc">Solo desenfoca la zona fuera de los contenedores; requiere soporte del sistema</string>
-    <string name="quick_wheel_backdrop_dim">Antecedentes</string>
-    <string name="quick_wheel_backdrop_dim_desc">Solo oscurece la zona fuera de los contenedores; 0% = totalmente visible</string>
+    <string name="quick_wheel_backdrop_blur_desc">Intensidad del desenfoque; si el sistema lo desactiva queda solo el tinte</string>
+    <string name="quick_wheel_backdrop_tint">Tono de fondo</string>
+    <string name="quick_wheel_backdrop_blur_scope">Alcance del desenfoque</string>
+    <string name="quick_wheel_backdrop_blur_scope_desc">Toda la pantalla no deja borde; solo la rueda muestra un corte nítido/difuso</string>
+    <string name="quick_wheel_backdrop_scope_full">Toda la pantalla</string>
+    <string name="quick_wheel_backdrop_scope_wheel">Solo la rueda</string>
+    <string name="quick_wheel_backdrop_dim_scope">Alcance del tinte</string>
+    <string name="quick_wheel_backdrop_dim_scope_desc">Zona que cubre el tinte, independiente del desenfoque</string>
+    <string name="quick_wheel_backdrop_feather">Difuminado del borde</string>
+    <string name="quick_wheel_backdrop_feather_desc">Suaviza el borde en modo solo rueda; en algunos dispositivos el borde del desenfoque no cambia</string>
+    <string name="quick_wheel_backdrop_tint_custom">Personalizado…</string>
+    <string name="quick_wheel_backdrop_dim">Intensidad del tono</string>
+    <string name="quick_wheel_backdrop_dim_desc">Opacidad del tono; 0 = sin tono</string>
     <string name="quick_wheel_animation">Animación abierta</string>
     <string name="quick_wheel_open_animation">Efecto de animación</string>
     <string name="quick_wheel_open_animation_desc">Sólo afecta cómo aparece la rueda — las pruebas de golpe y el tiempomantener presionadono son afectados</string>
@@ -4783,6 +4793,7 @@ o revocar Root permanente para Shell en APatch.</string>
     <string name="quick_wheel_shape_circle_desc">Anillos concéntricos, de dentro hacia fuera</string>
     <string name="quick_wheel_shape_rect_desc">En filas con un número fijo de columnas</string>
     <string name="quick_wheel_section_appearance">Apariencia</string>
+    <string name="quick_wheel_section_backdrop">Desenfoque y tinte</string>
     <string name="quick_wheel_section_shape">Forma de la rueda</string>
     <string name="quick_wheel_section_slots">Containers</string>
     <string name="quick_wheel_show_labels">Mostrar etiquetas de texto</string>
@@ -5141,4 +5152,31 @@ o revocar Root permanente para Shell en APatch.</string>
     <string name="side_gestures_long_press_duration_summary">Cuánto tiempo hay que mantener pulsado el borde sin mover el dedo para que cuente como pulsación larga (independiente de la bola flotante)</string>
     <string name="side_gestures_long_press_duration_value">%1$d ms</string>
 
+    <string name="magnifier_opened_toast">Lupa activada: toca el punto de la esquina inferior derecha para cerrarla; mantén pulsado para cambiar el zoom</string>
+    <string name="magnifier_requires_android13">La lupa de pantalla completa requiere Android 13 o superior</string>
+    <string name="float_ball_pick_bar_edit">Editar</string>
+    <string name="float_ball_pick_bar_edit_desc">Abrir el editor integrado</string>
+    <string name="float_ball_pick_bar_view">Vista a pantalla completa</string>
+    <string name="float_ball_pick_bar_view_desc">Ver la imagen actual a pantalla completa dentro del panel</string>
+    <string name="floating_pointer_release_click_keep_joystick">Tocar al soltar y mantener el joystick</string>
+    <string name="floating_pointer_release_click_keep_joystick_desc">Cada vez que levantes el dedo tras mover, se toca en el puntero pero se mantiene el joystick para volver a arrastrar (se oculta tras 8 s sin actividad)</string>
+    <string name="floating_pointer_release_click_mode">Modo al soltar</string>
+    <string name="floating_pointer_release_click_mode_desc">Elige qué ocurre al levantar el dedo: nada, tocar y cerrar el joystick, o tocar y mantenerlo para otro arrastre.</string>
+    <string name="floating_pointer_release_click_off">No hacer nada</string>
+    <string name="gesture_action_magnifier">Lupa</string>
+    <string name="gesture_action_magnifier_desc">Amplía la pantalla alrededor del punto de activación (o de tu dedo)</string>
+    <string name="gesture_action_pointer_pinch">Zoom con pellizco en tiempo real</string>
+    <string name="gesture_action_pointer_pinch_desc">Mantén el puntero y muévete para hacer pellizco/zoom en tiempo real</string>
+    <string name="gesture_action_pointer_scroll">Desplazamiento en tiempo real</string>
+    <string name="gesture_action_pointer_scroll_desc">Mantén el puntero y muévete para desplazarte; más lejos = más rápido</string>
+    <string name="gesture_action_require_min_sdk_33">Requiere Android 13</string>
+    <string name="magnifier_chip_text">Lupa %1$s× · toca para cerrar</string>
+    <string name="pick_image_tap_edit">Editar</string>
+    <string name="pick_image_tap_open">Abrir con la app visor</string>
+    <string name="pick_image_tap_save">Guardar</string>
+    <string name="pick_image_tap_share">Compartir</string>
+    <string name="pick_image_tap_title">Acción al tocar la imagen</string>
+    <string name="pick_image_tap_view">Ver imagen</string>
+    <string name="pick_result_action_edit_image">Editar imagen</string>
+    <string name="pick_result_translate_target_switched">Idioma de traducción: %1$s</string>
 </resources>

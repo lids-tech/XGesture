@@ -34,12 +34,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import com.slideindex.app.overlay.panels.R
 import com.slideindex.app.overlay.FloatBallPickResult
 import com.slideindex.app.ocr.OcrRecognizeResult
 import com.slideindex.app.diagnostic.EdgeDiag
+import com.slideindex.app.overlay.filebrowser.FileBrowserMediaPermissionActivity
 import com.slideindex.app.overlay.OverlayCompose
 import com.slideindex.app.overlay.OverlayComposeOwner
 import com.slideindex.app.overlay.OverlayWindowTypes
@@ -684,7 +689,7 @@ class DragDropFlowController(
                         if (bitmap != null) {
                             com.slideindex.app.overlay.panels.PanelRuntimeHooks.showImageSearchPanel?.invoke(context, bitmap)
                         } else {
-                            Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_unreadable), Toast.LENGTH_SHORT).show()
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         }
                     }
                     targetId.startsWith("image_engine_") && uri != null -> {
@@ -697,6 +702,8 @@ class DragDropFlowController(
                             if (!launched) {
                                 Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_launch_failed), Toast.LENGTH_SHORT).show()
                             }
+                        } else if (bitmap == null) {
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         }
                     }
                     targetId.startsWith("file_engine_") && uri != null -> {
@@ -743,6 +750,8 @@ class DragDropFlowController(
                         val bitmap = decodeBitmapFromUri(uri)
                         if (bitmap != null) {
                             com.slideindex.app.overlay.panels.PanelStashWriteHooks.copyImage?.invoke(context, bitmap)
+                        } else {
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         }
                     }
                     targetId == "system_share_image" && uri != null -> {
@@ -757,6 +766,9 @@ class DragDropFlowController(
                                     dismissSource = { collapseToAnchor() },
                                 )
                             }
+                        } else {
+                            // 以前这里完全静默：图片解不出来时用户只看到"没反应"。
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         }
                     }
                     targetId.startsWith("engine_") && !text.isNullOrBlank() -> {
@@ -806,14 +818,14 @@ class DragDropFlowController(
                             StashCoordinator.pinImageToScreen(context, bitmap)
                             Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_pinned), Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_unreadable), Toast.LENGTH_SHORT).show()
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         }
                     }
                     targetId == "search_image" && uri != null -> {
                         // 不直接弹以图搜图：先把图送进搜索面板，由面板决定用哪个图搜引擎。
                         val bitmap = decodeBitmapFromUri(uri)
                         if (bitmap == null) {
-                            Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_unreadable), Toast.LENGTH_SHORT).show()
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         } else {
                             val hostContext = overlayHostContext() ?: context
                             com.slideindex.app.overlay.panels.PanelRuntimeHooks.pushSearchPanelImage?.invoke(bitmap)
@@ -826,7 +838,7 @@ class DragDropFlowController(
                     targetId == "segment_image" && uri != null -> {
                         val bitmap = decodeBitmapFromUri(uri)
                         if (bitmap == null) {
-                            Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_unreadable), Toast.LENGTH_SHORT).show()
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
                         } else {
                             segmentImage(bitmap)
                         }
@@ -1056,6 +1068,52 @@ class DragDropFlowController(
         }.onFailure {
             Log.w(TAG, "chooser failed", it)
             Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_share_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 拖入图片读不出来时：缺权限就引导授权（授权成功自动重试），否则明确报"无法读取"。 */
+    private fun handleImageDecodeFailure(retry: () -> Unit) {
+        if (hasMediaReadPermission()) {
+            Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_unreadable), Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(context, context.getString(R.string.drag_drop_flow_need_media_permission), Toast.LENGTH_LONG).show()
+        FileBrowserMediaPermissionActivity.launch(context, mediaPermissionsToRequest()) {
+            if (hasMediaReadPermission()) retry()
+        }
+    }
+
+    private fun mediaPermissionsToRequest(): List<String> = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            add(Manifest.permission.READ_MEDIA_IMAGES)
+            add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.READ_MEDIA_IMAGES)
+        } else {
+            add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    /**
+     * 是否有读拖入图片的权限。
+     *
+     * 标准 Android 的跨应用拖拽会临时授予 URI 读权限，不需要这个；但部分 OEM（ColorOS 中转站实测）
+     * 不授这个临时权限，只能靠 App 自己的相册权限硬读。所以这里按"任一可读权限已授"判断，
+     * 14+ 的"选中的照片"（READ_MEDIA_VISUAL_USER_SELECTED）也算。
+     */
+    private fun hasMediaReadPermission(): Boolean {
+        val candidates = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+            )
+            else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        return candidates.any { permission ->
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         }
     }
 

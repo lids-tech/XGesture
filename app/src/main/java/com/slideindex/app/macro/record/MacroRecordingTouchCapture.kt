@@ -158,7 +158,6 @@ class MacroRecordingTouchCapture(
                     .onFailure { Log.w(TAG, "更新捕获窗失败", it) }
             }
         }
-        Log.i(TAG, "洞已更新 bar=${barRectProvider()}")
     }
 
     fun dismiss() {

@@ -99,7 +99,7 @@ fun NavEntryBuilder.floatingPointerNavEntries(ctx: MainNavContext) {
             onHideOnQuickSwipeChange = viewModel::setFloatingPointerHideOnQuickSwipe,
             onHideWhenIdleChange = viewModel::setFloatingPointerHideWhenIdle,
             onIdleDelayChange = viewModel::setFloatingPointerIdleHideDelayMs,
-            onReleaseClickAndDismissChange = viewModel::setFloatingPointerReleaseClickAndDismiss,
+            onReleaseClickModeChange = viewModel::setFloatingPointerReleaseClickMode,
             onHoverEnterSelectChange = viewModel::setFloatingPointerHoverEnterSelect,
             onClickDistanceThresholdChange = viewModel::setFloatingPointerClickDistanceThresholdDp,
             onResetVisualDefaults = viewModel::resetFloatingPointerJoystickVisualDefaults,

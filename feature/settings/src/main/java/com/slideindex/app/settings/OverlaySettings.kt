@@ -74,6 +74,8 @@ data class OverlaySettings(
     val floatingPointerHideWhenIdle: Boolean = true,
     val floatingPointerIdleHideDelayMs: Int = 3000,
     val floatingPointerReleaseClickAndDismiss: Boolean = false,
+    /** 松手在指针处点一下后保留摇杆，可继续拖动。 */
+    val floatingPointerReleaseClickKeepJoystick: Boolean = false,
     val floatingPointerHoverEnterSelect: Boolean = false,
     val floatingPointerJoystickLongPressAction: GestureAction = GestureAction.OpenFloatingPointerRadialMenu,
     val floatingPointerRadialAlwaysVisible: Boolean = false,
@@ -231,6 +233,8 @@ data class OverlaySettings(
     val stashPanelWidthMode: StashPanelWidthMode = StashPanelWidthMode.STANDARD,
     val stashPanelCustomWidthFraction: Float? = null,
     val defaultImageViewerPackage: String? = null,
+    /** 单击图片执行的动作，见 [PickImageTapAction]。 */
+    val pickImageTapActionId: String = PickImageTapAction.VIEW.id,
     val imageEditorDelayDeleteEnabled: Boolean = false,
     val searchEngines: List<SearchEngineConfig> = emptyList(),
     /** 拖拽流转栏里的文字目标（从搜索引擎卡片拖进去的独立副本）。 */
@@ -337,6 +341,7 @@ data class OverlaySettings(
             floatingPointerHideWhenIdle = settings.floatingPointerHideWhenIdle,
             floatingPointerIdleHideDelayMs = settings.floatingPointerIdleHideDelayMs,
             floatingPointerReleaseClickAndDismiss = settings.floatingPointerReleaseClickAndDismiss,
+            floatingPointerReleaseClickKeepJoystick = settings.floatingPointerReleaseClickKeepJoystick,
             floatingPointerHoverEnterSelect = settings.floatingPointerHoverEnterSelect,
             floatingPointerJoystickLongPressAction = settings.floatingPointerJoystickLongPressAction,
             floatingPointerRadialAlwaysVisible = settings.floatingPointerRadialAlwaysVisible,
@@ -483,6 +488,7 @@ data class OverlaySettings(
             stashPanelWidthMode = settings.stashPanelWidthMode,
             stashPanelCustomWidthFraction = settings.stashPanelCustomWidthFraction,
             defaultImageViewerPackage = settings.defaultImageViewerPackage,
+            pickImageTapActionId = settings.pickImageTapActionId,
             imageEditorDelayDeleteEnabled = settings.imageEditorDelayDeleteEnabled,
             searchEngines = settings.searchEngines,
             dragFlowTextEngines = settings.dragFlowTextEngines,

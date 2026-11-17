@@ -4768,9 +4768,19 @@
     <string name="quick_wheel_long_press_time">長押し時間</string>
     <string name="quick_wheel_long_press_time_desc">コンテナを長押しして長押しアクションと二級の展開を起こすまでの時間</string>
     <string name="quick_wheel_backdrop_blur">背景のぼかし</string>
-    <string name="quick_wheel_backdrop_blur_desc">コンテナ以外の領域だけをぼかします（システムの対応が必要）</string>
-    <string name="quick_wheel_backdrop_dim">背景の暗さ</string>
-    <string name="quick_wheel_backdrop_dim_desc">コンテナ以外の領域だけを暗くします。0% = 完全に透ける</string>
+    <string name="quick_wheel_backdrop_blur_desc">ぼかしの強さ。システムでウィンドウ間のぼかしが無効なら色のみになります</string>
+    <string name="quick_wheel_backdrop_tint">背景の色味</string>
+    <string name="quick_wheel_backdrop_blur_scope">ぼかしの範囲</string>
+    <string name="quick_wheel_backdrop_blur_scope_desc">画面全体なら境界なし。輪盤エリアのみだと輪盤の周囲に境目が出ます</string>
+    <string name="quick_wheel_backdrop_scope_full">画面全体</string>
+    <string name="quick_wheel_backdrop_scope_wheel">輪盤エリアのみ</string>
+    <string name="quick_wheel_backdrop_dim_scope">色の範囲</string>
+    <string name="quick_wheel_backdrop_dim_scope_desc">色をかける範囲。ぼかしとは独立しています</string>
+    <string name="quick_wheel_backdrop_feather">境界のぼかし</string>
+    <string name="quick_wheel_backdrop_feather_desc">輪盤エリアのみのとき境界をなじませます。端末によってはぼかしの境界に効果が出ません</string>
+    <string name="quick_wheel_backdrop_tint_custom">カスタム…</string>
+    <string name="quick_wheel_backdrop_dim">色味の濃さ</string>
+    <string name="quick_wheel_backdrop_dim_desc">色味の不透明度。0 = 色を重ねない</string>
     <string name="quick_wheel_animation">表示アニメーション</string>
     <string name="quick_wheel_open_animation">アニメーション効果</string>
     <string name="quick_wheel_open_animation_desc">ホイールの表示方法だけに影響します。ヒット判定と長押しの時間には影響しません</string>
@@ -4784,6 +4794,7 @@
     <string name="quick_wheel_shape_circle_desc">同心円リングで内側から外へ展開</string>
     <string name="quick_wheel_shape_rect_desc">行ごとに並べ、各行の列数は固定</string>
     <string name="quick_wheel_section_appearance">外観</string>
+    <string name="quick_wheel_section_backdrop">ぼかしと色</string>
     <string name="quick_wheel_section_shape">ホイール形状</string>
     <string name="quick_wheel_section_slots">コンテナ</string>
     <string name="quick_wheel_show_labels">テキストラベルを表示</string>
@@ -5141,4 +5152,31 @@
     <string name="side_gestures_long_press_duration_summary">エッジのトリガーを押したまま動かさずに長押しと判定されるまでの時間（フローティングボールとは独立）</string>
     <string name="side_gestures_long_press_duration_value">%1$d ms</string>
 
+    <string name="magnifier_opened_toast">拡大鏡をオンにしました：右下の点をタップで閉じる、長押しで倍率を切り替え</string>
+    <string name="magnifier_requires_android13">全画面の拡大鏡には Android 13 以降が必要です</string>
+    <string name="float_ball_pick_bar_edit">編集</string>
+    <string name="float_ball_pick_bar_edit_desc">内蔵エディタを開く</string>
+    <string name="float_ball_pick_bar_view">全画面表示</string>
+    <string name="float_ball_pick_bar_view_desc">現在の画像をパネル内で全画面表示</string>
+    <string name="floating_pointer_release_click_keep_joystick">離したときにタップ、ジョイスティックは維持</string>
+    <string name="floating_pointer_release_click_keep_joystick_desc">移動後に指を離すたびにポインタ位置でタップしますが、ジョイスティックは維持して再度ドラッグできます（8秒操作がないと自動的に隠れます）</string>
+    <string name="floating_pointer_release_click_mode">離したときの動作</string>
+    <string name="floating_pointer_release_click_mode_desc">指を離したときの動作を選択：何もしない、タップしてジョイスティックを閉じる、タップしてジョイスティックを維持し再度ドラッグ可能</string>
+    <string name="floating_pointer_release_click_off">何もしない</string>
+    <string name="gesture_action_magnifier">拡大鏡</string>
+    <string name="gesture_action_magnifier_desc">トリガー位置（または指）の周囲を拡大</string>
+    <string name="gesture_action_pointer_pinch">リアルタイムのピンチズーム</string>
+    <string name="gesture_action_pointer_pinch_desc">ポインタを押したまま動かしてリアルタイムにピンチ/ズーム</string>
+    <string name="gesture_action_pointer_scroll">リアルタイムスクロール</string>
+    <string name="gesture_action_pointer_scroll_desc">ポインタを押したまま動かしてスクロール。遠いほど速い</string>
+    <string name="gesture_action_require_min_sdk_33">Android 13 が必要</string>
+    <string name="magnifier_chip_text">拡大鏡 %1$s× · タップで閉じる</string>
+    <string name="pick_image_tap_edit">編集</string>
+    <string name="pick_image_tap_open">ビューアアプリで開く</string>
+    <string name="pick_image_tap_save">保存</string>
+    <string name="pick_image_tap_share">共有</string>
+    <string name="pick_image_tap_title">画像タップ時の動作</string>
+    <string name="pick_image_tap_view">画像を表示</string>
+    <string name="pick_result_action_edit_image">画像を編集</string>
+    <string name="pick_result_translate_target_switched">翻訳先：%1$s</string>
 </resources>

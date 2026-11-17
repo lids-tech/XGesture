@@ -1399,6 +1399,24 @@ object FloatBallPickResultPanel {
                     },
                     imageViewerVisible = imageViewerVisible,
                     onImageViewerVisibleChange = { imageViewerVisibleHolder.value = it },
+                    onEditImage = {
+                        val bmp = screenshot
+                        if (bmp != null && !bmp.isRecycled) {
+                            val ctx = appContext ?: overlayContext
+                            val meta = layoutMeta ?: buildScreenshotLayoutMeta(
+                                bitmap = bmp,
+                                screenWidthPx = overlayContext.resources.displayMetrics.widthPixels,
+                                screenHeightPx = overlayContext.resources.displayMetrics.heightPixels,
+                            )
+                            FloatBallTextPick.openBuiltinImageEditor(
+                                context = ctx,
+                                bitmap = bmp,
+                                screenRect = screenRect,
+                                layoutMeta = meta,
+                                pickReturnContext = capturePickReturnContextForEditor(),
+                            )
+                        }
+                    },
                     onTextSourceChange = { source ->
                         if (source == PickResultTextSource.A11Y && !a11ySourceEnabledHolder.value) {
                             return@FloatBallPickResultContent
@@ -1524,6 +1542,26 @@ object FloatBallPickResultPanel {
                         ) { dismiss() }
                     },
                     onTranslate = { FloatBallTranslateCoordinator.translate(context, it) },
+                    onTranslateTargetSelect = { code ->
+                        // 长按翻译键弹出的目标语言菜单里选一项：写设置 + Toast 确认。
+                        val repository = OverlayDependencyAccess.overlayDependencies(overlayContext)
+                            ?.settingsRepository
+                        if (repository != null) {
+                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                repository.setFloatBallTranslateTargetLang(code)
+                            }
+                            val languageName = com.slideindex.app.translate.TranslateLanguageCatalog
+                                .find(code)?.displayName ?: code
+                            Toast.makeText(
+                                overlayContext.applicationContext,
+                                overlayContext.getString(
+                                    R.string.pick_result_translate_target_switched,
+                                    languageName,
+                                ),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
                     onRemoveSpaces = { value, removeAll ->
                         textHolder.value = if (removeAll) {
                             value.replace(Regex("\\s+"), "")
@@ -1855,4 +1893,10 @@ object FloatBallPickResultPanel {
                 .onFailure { Log.w(TAG, "persist pick text mode failed", it) }
         }
     }
+}
+
+/** 长按翻译键时的目标语言轮换：中文 ⇄ 英文（其它/跟随应用都先落到中文）。 */
+private fun nextTranslateTargetLanguage(current: String): String {
+    val normalized = current.lowercase().substringBefore('-')
+    return if (normalized == "zh") "en" else "zh"
 }

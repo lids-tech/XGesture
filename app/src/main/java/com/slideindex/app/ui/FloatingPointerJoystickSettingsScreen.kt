@@ -1,10 +1,13 @@
 package com.slideindex.app.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,9 +27,13 @@ import com.slideindex.app.ui.animationstyle.AnimationStyleColorPickerDialog
 import com.slideindex.app.ui.animationstyle.AnimationStyleColorRow
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.SettingExpandableSwitchRow
+import com.slideindex.app.ui.settings.components.SettingSpinnerRow
+import com.slideindex.app.ui.settings.components.SettingsCardRow
 import com.slideindex.app.ui.settings.components.SettingsHintText
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
+import com.slideindex.app.ui.settings.components.settingsGroupedRowBackground
 import com.slideindex.app.ui.settings.components.settingsLazySmallTitle
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 private enum class JoystickColorTarget {
@@ -47,7 +54,7 @@ fun FloatingPointerJoystickSettingsScreen(
     onHideOnQuickSwipeChange: (Boolean) -> Unit,
     onHideWhenIdleChange: (Boolean) -> Unit,
     onIdleDelayChange: (Int) -> Unit,
-    onReleaseClickAndDismissChange: (Boolean) -> Unit,
+    onReleaseClickModeChange: (com.slideindex.app.settings.FloatingPointerReleaseClickMode) -> Unit,
     onHoverEnterSelectChange: (Boolean) -> Unit,
     onClickDistanceThresholdChange: (Float) -> Unit,
     onResetVisualDefaults: () -> Unit,
@@ -248,12 +255,35 @@ fun FloatingPointerJoystickSettingsScreen(
                 )
                 add(
                     settingsCardScopeItem("release-click") {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.floating_pointer_release_click_and_dismiss),
-                            subtitle = stringResource(R.string.floating_pointer_release_click_and_dismiss_desc),
-                            checked = settings.floatingPointerReleaseClickAndDismiss,
+                        val modes =
+                            com.slideindex.app.settings.FloatingPointerReleaseClickMode.entries
+                        val labels = modes.map { mode ->
+                            stringResource(
+                                when (mode) {
+                                    com.slideindex.app.settings.FloatingPointerReleaseClickMode.OFF ->
+                                        R.string.floating_pointer_release_click_off
+
+                                    com.slideindex.app.settings.FloatingPointerReleaseClickMode.CLICK_AND_DISMISS ->
+                                        R.string.floating_pointer_release_click_and_dismiss
+
+                                    com.slideindex.app.settings.FloatingPointerReleaseClickMode.CLICK_KEEP ->
+                                        R.string.floating_pointer_release_click_keep_joystick
+                                },
+                            )
+                        }
+                        val selectedIndex = modes
+                            .indexOf(settings.floatingPointerReleaseClickMode)
+                            .coerceAtLeast(0)
+                        SettingSpinnerRow(
+                            title = stringResource(R.string.floating_pointer_release_click_mode),
+                            subtitle = labels[selectedIndex],
+                            dialogButtonText = stringResource(android.R.string.cancel),
+                            items = labels.map { top.yukonga.miuix.kmp.basic.DropdownItem(text = it) },
+                            selectedIndex = selectedIndex,
                             enabled = true,
-                            onCheckedChange = onReleaseClickAndDismissChange
+                            onSelectedIndexChange = { index ->
+                                modes.getOrNull(index)?.let(onReleaseClickModeChange)
+                            },
                         )
                     }
                 )

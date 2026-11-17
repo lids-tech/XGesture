@@ -113,6 +113,13 @@ internal fun FloatingPointerDisplay(
             ),
             label = "edgePreviewAlpha"
         )
+        val magnifierJoystickSuppressed by session.magnifierJoystickSuppressed
+        val joystickTargetAlpha = if (magnifierJoystickSuppressed) 0f else 1f
+        val joystickAlpha by animateFloatAsState(
+            targetValue = joystickTargetAlpha,
+            animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+            label = "joystickAlpha"
+        )
         val suppressPointerForGestureAftermath =
             gestureRecordingActive ||
                 gestureReplayActive ||
@@ -333,7 +340,7 @@ internal fun FloatingPointerDisplay(
                     )
                     scaleX = presenceScale
                     scaleY = presenceScale
-                    alpha = presence
+                    alpha = presence * joystickAlpha
                 }
         ) {
             animationTick
@@ -353,6 +360,7 @@ internal fun FloatingPointerDisplay(
                     !gestureRecordingActive &&
                     !gestureTrailRetreatActive &&
                     !gestureReplayActive &&
+                    !session.magnifierJoystickSuppressed.value &&
                     !session.shouldDrawGestureRecorderTrail(now)
                 ) {
                     val lifespanMs = session.trailLifespanOverrideMs
@@ -373,6 +381,101 @@ internal fun FloatingPointerDisplay(
                         rippleColor = Color(settings.floatingPointerRippleColorArgb),
                         rippleSizePx = rippleSizePx
                     )
+                }
+                // 实时缩放 / 滚动提示：颜色统一用轨迹色（用户的轨迹点是红色，点/环其实是白色）。
+                val realtimeKind = session.realtimeGestureKind.value
+                if (realtimeKind != null) {
+                    val center = Offset(pointerX, pointerY)
+                    val accent = Color(settings.floatingPointerTrailColorArgb)
+                    if (realtimeKind == "zoom") {
+                        val fingers = session.pinchFingers.value
+                        val pink = Color(settings.floatingPointerRippleColorArgb)
+                        if (fingers != null && fingers.size == 4) {
+                            // QC 同款：两根虚拟手指 + 虚线圆 + 连线。
+                            val p1 = Offset(fingers[0], fingers[1])
+                            val p2 = Offset(fingers[2], fingers[3])
+                            val radius = (
+                                kotlin.math.hypot(
+                                    (p2.x - p1.x).toDouble(),
+                                    (p2.y - p1.y).toDouble(),
+                                ) / 2.0
+                                ).toFloat()
+                            drawCircle(
+                                color = pink.copy(alpha = 0.5f),
+                                radius = radius,
+                                center = center,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = 1.6f * density,
+                                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                        floatArrayOf(10f * density, 8f * density),
+                                    ),
+                                ),
+                            )
+                            drawLine(
+                                color = pink.copy(alpha = 0.55f),
+                                start = p1,
+                                end = center,
+                                strokeWidth = 2f * density,
+                            )
+                            drawLine(
+                                color = pink.copy(alpha = 0.55f),
+                                start = p2,
+                                end = center,
+                                strokeWidth = 2f * density,
+                            )
+                            drawCircle(pink.copy(alpha = 0.9f), radius = 3.5f * density, center = center)
+                            drawCircle(pink.copy(alpha = 0.16f), radius = 13f * density, center = p1)
+                            drawCircle(
+                                color = pink,
+                                radius = 13f * density,
+                                center = p1,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f * density),
+                            )
+                            drawCircle(pink.copy(alpha = 0.16f), radius = 13f * density, center = p2)
+                            drawCircle(
+                                color = pink,
+                                radius = 13f * density,
+                                center = p2,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f * density),
+                            )
+                        }
+                    } else {
+                        // 滚动：光标处出现多次轨迹线（QC 观感），方向/推力来自滚动控制器。
+                        val axis = session.realtimeScrollAxis.value
+                        val dir = session.realtimeScrollDir.value
+                        val push = session.realtimeScrollPush.value
+                        if (axis != 0 && dir != 0) {
+                            // 轨迹线要"一直在动"：按一次注入滑动的节奏循环，模拟上下滑的行程。
+                            val strength = (push / (120f * density)).coerceIn(0.3f, 1f)
+                            val travel = 90f * density * strength
+                            val cycleMs = 550f
+                            val nowMs = animationTick / 1_000_000L
+                            val phaseBase = (nowMs % cycleMs.toLong()).toFloat() / cycleMs
+                            val half = 7f * density
+                            repeat(4) { index ->
+                                val phase = ((index / 4f) + phaseBase) % 1f
+                                val offset = dir * (6f * density + phase * travel)
+                                val alpha = ((1f - phase) * strength * 0.9f).coerceIn(0f, 1f)
+                                if (axis == 1) {
+                                    drawLine(
+                                        color = accent.copy(alpha = alpha),
+                                        start = Offset(center.x, center.y + offset - half),
+                                        end = Offset(center.x, center.y + offset + half),
+                                        strokeWidth = 2.5f * density,
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                    )
+                                } else {
+                                    drawLine(
+                                        color = accent.copy(alpha = alpha),
+                                        start = Offset(center.x + offset - half, center.y),
+                                        end = Offset(center.x + offset + half, center.y),
+                                        strokeWidth = 2.5f * density,
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
                 val recorderProgress = gestureRecorderProgress.value
                 when {

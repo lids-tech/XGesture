@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ImageSearch
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PushPin
@@ -40,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -275,6 +277,14 @@ fun pickResultImageSectionReservedHeight(
     val searchBar = if (includeSearchBar) ImageSectionItemSpacing + ImageSearchBarHeight else 0.dp
     return header + gaps + imageMaxHeight + searchBar
 }
+
+/**
+ * 图片「编辑」动作：由取词面板注入（打开内置编辑器）；为 null 时不显示编辑按钮。
+ *
+ * 用 CompositionLocal 而不是逐层加参数：图片底栏要穿过 Section/Gallery/Layout 四层，
+ * 每层都加一个只读回调不划算。
+ */
+val LocalPickImageEditAction = compositionLocalOf<(() -> Unit)?> { null }
 
 @Composable
 fun PickResultImageSearchBar(
@@ -955,11 +965,14 @@ private fun PickResultImageIconBar(
     val hiddenIds = remember(hidden) {
         com.slideindex.app.settings.PickResultBarButtons.sanitizeHiddenImage(hidden)
     }
+    val editAction = LocalPickImageEditAction.current
 
     val visible = buttons.filter { button ->
         button.id !in hiddenIds && when (button) {
+            com.slideindex.app.settings.PickResultImageBarButton.VIEW -> onViewImage != null
             com.slideindex.app.settings.PickResultImageBarButton.IMAGE_SEARCH -> true
             com.slideindex.app.settings.PickResultImageBarButton.SAVE -> true
+            com.slideindex.app.settings.PickResultImageBarButton.EDIT -> editAction != null
             com.slideindex.app.settings.PickResultImageBarButton.SHARE -> true
             com.slideindex.app.settings.PickResultImageBarButton.PIN -> onPinToScreen != null
             com.slideindex.app.settings.PickResultImageBarButton.STASH -> onStash != null
@@ -973,17 +986,30 @@ private fun PickResultImageIconBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
     ) {
-        // 「查看图片」不参与按钮排序/隐藏：它是图片区独立的查看入口，始终显示在最左侧。
-        if (onViewImage != null) {
-            PickResultActionIcon(
-                icon = PickResultViewImageIcon,
-                enabled = true,
-                onClick = onViewImage,
-                contentDescription = stringResource(R.string.pick_result_action_view_image),
-            )
-        }
+        // 「查看图片」现在是可排序按钮（VIEW），由 visible 统一渲染；
+        // 这里不再额外画一个固定入口，否则纯图标模式下会出现两个全屏查看。
         visible.forEach { button ->
             when (button) {
+                com.slideindex.app.settings.PickResultImageBarButton.VIEW ->
+                    if (onViewImage != null) {
+                        PickResultActionIcon(
+                            icon = PickResultViewImageIcon,
+                            enabled = true,
+                            onClick = onViewImage,
+                            contentDescription = stringResource(R.string.pick_result_action_view_image),
+                        )
+                    }
+
+                com.slideindex.app.settings.PickResultImageBarButton.EDIT ->
+                    if (editAction != null) {
+                        PickResultActionIcon(
+                            icon = Icons.Outlined.Edit,
+                            enabled = true,
+                            onClick = editAction,
+                            contentDescription = stringResource(R.string.pick_result_action_edit_image),
+                        )
+                    }
+
                 com.slideindex.app.settings.PickResultImageBarButton.IMAGE_SEARCH ->
                     ImageSearchIconButton(
                         engines = engines,
@@ -1098,24 +1124,13 @@ private fun PickResultImageSearchActions(
     compact: Boolean = false,
 ) {
     var moreMenuExpanded by remember { mutableStateOf(false) }
+    val editAction = LocalPickImageEditAction.current
 
     Row(
         modifier = Modifier.height(if (compact) 32.dp else 38.dp),
         horizontalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 0. 独立入口：全屏查看当前图片（不占「更多」菜单、也不参与图标栏排序）。
-        if (onViewImage != null) {
-            PickResultActionIcon(
-                icon = PickResultViewImageIcon,
-                enabled = true,
-                onClick = onViewImage,
-                contentDescription = stringResource(R.string.pick_result_action_view_image),
-                overlayMode = overlayMode,
-                compact = compact,
-            )
-        }
-
         // 1. Direct Action: Image Search (以图搜图)
         PickResultActionIcon(
             icon = Icons.Outlined.ImageSearch,
@@ -1150,8 +1165,9 @@ private fun PickResultImageSearchActions(
             badge = shareDefault,
         )
 
-        // 4. More Action: Dropdown Menu (钉选 / 暂存)
-        val hasMoreActions = onPinToScreen != null || onStash != null
+        // 4. More Action: Dropdown Menu (查看 / 编辑 / 钉选 / 暂存)
+        val hasMoreActions = onViewImage != null || editAction != null ||
+            onPinToScreen != null || onStash != null
         if (hasMoreActions) {
             Box {
                 PickResultActionIcon(
@@ -1167,6 +1183,26 @@ private fun PickResultImageSearchActions(
                     expanded = moreMenuExpanded,
                     onDismissRequest = { moreMenuExpanded = false }
                 ) {
+                    onViewImage?.let { viewAction ->
+                        PickResultActionMenuItem(
+                            label = stringResource(R.string.pick_result_action_view_image),
+                            icon = PickResultViewImageIcon,
+                            onClick = {
+                                moreMenuExpanded = false
+                                viewAction()
+                            },
+                        )
+                    }
+                    editAction?.let { edit ->
+                        PickResultActionMenuItem(
+                            label = stringResource(R.string.pick_result_action_edit_image),
+                            icon = Icons.Outlined.Edit,
+                            onClick = {
+                                moreMenuExpanded = false
+                                edit()
+                            },
+                        )
+                    }
                     onPinToScreen?.let { pinAction ->
                         PickResultActionMenuItem(
                             label = stringResource(R.string.pick_result_pin),

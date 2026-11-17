@@ -79,6 +79,27 @@ class GestureSession(
     internal val sessionLongPressCheckRunnable: Runnable get() = longPressCheckRunnable
 
     private var active = false
+
+    /**
+     * 会话代次：每次开始新会话 / 强制复位都 +1。
+     *
+     * 给 overlay 的"卡住看门狗"用：定时器是上一轮会话留下的、代次对不上时，绝不能复位当前会话
+     * （否则会出现"按住放大镜不到两秒就被莫名其妙收掉"）。
+     */
+    private var sessionToken: Long = 0L
+
+    fun currentSessionToken(): Long = sessionToken
+
+    /** 整个会话最后一次收到输入的时间；看门狗用它判断"是不是真的没输入了"。 */
+    private var lastInputUptimeMs = 0L
+
+    fun millisSinceLastInput(): Long =
+        if (lastInputUptimeMs == 0L) Long.MAX_VALUE else
+            android.os.SystemClock.uptimeMillis() - lastInputUptimeMs
+
+    private fun markInput() {
+        lastInputUptimeMs = android.os.SystemClock.uptimeMillis()
+    }
     internal var sessionPanelMode = OverlayPanelMode.NONE
     internal var sessionIndexMode = false
     internal var sessionAdjustMode: ContinuousAdjustController.Mode? = null
@@ -86,6 +107,9 @@ class GestureSession(
 
     /** 「页面滚动」（按住拖动方式）本次手势内是否已激活。 */
     internal var sessionPageScrollHoldActive = false
+
+    /** 「放大镜」持续触发：按住跟手指放大，松手恢复。 */
+    internal var sessionMagnifierHoldActive = false
     internal var sessionMoveTimeActionFired = false
     internal var sessionActiveHandleId = TriggerHandle.DEFAULT_ID
     internal var sessionQuickLauncherPanelId: String = ""
@@ -336,6 +360,7 @@ class GestureSession(
     fun activeHandleId(): String = sessionActiveHandleId
 
     fun onTouchDown(rawX: Float, rawY: Float, localX: Float, localY: Float): Boolean {
+        markInput()
         if (active) return false
         if (sessionSettings.triggerHandles(side).isEmpty()) return false
         if (!zoneLayout.containsTriggerAtScreen(rawX, rawY, localX, localY)) return false
@@ -354,6 +379,7 @@ class GestureSession(
         localX: Float,
         localY: Float
     ): Boolean {
+        markInput()
         if (active) return false
         if (sessionSettings.triggerHandles(side).isEmpty()) return false
         if (sessionSettings.triggerHandle(side, handleId) == null) return false
@@ -370,6 +396,7 @@ class GestureSession(
         sessionActiveHandleId = handleId
         applyActiveHandleDistances()
         active = true
+        sessionToken++
         EdgeDiag.marker("触钮 DOWN side=$side handle=$handleId raw=($rawX,$rawY)")
         sessionIndexMode = false
         sessionAdjustMode = null
@@ -393,6 +420,7 @@ class GestureSession(
     }
 
     fun onTouchMove(rawX: Float, rawY: Float, localX: Float, localY: Float) {
+        markInput()
         if (!active) return
 
         lastRawX = rawX
@@ -410,6 +438,12 @@ class GestureSession(
         // 「页面滚动」按住拖动方式：手指移动只用来决定方向与节奏，滚动本身由控制器发。
         if (sessionPageScrollHoldActive) {
             actionExecutor.updatePageScrollHoldDrag(rawY)
+            return
+        }
+
+        // 「放大镜」按住：中心跟随手指，松手在 UP 分支恢复。
+        if (sessionMagnifierHoldActive) {
+            actionExecutor.updateMagnifierHold(rawX, rawY)
             return
         }
 
@@ -473,6 +507,7 @@ class GestureSession(
     }
 
     fun onTouchUp(rawX: Float, rawY: Float, localX: Float, localY: Float) {
+        markInput()
         if (!active) return
 
         when (sessionPanelMode) {
@@ -538,6 +573,12 @@ class GestureSession(
 
                 if (sessionPageScrollHoldActive) {
                     stopPageScrollHoldDrag()
+                    endSession()
+                    return
+                }
+
+                if (sessionMagnifierHoldActive) {
+                    stopMagnifierHold()
                     endSession()
                     return
                 }
@@ -779,6 +820,7 @@ class GestureSession(
         }
 
         active = false
+        sessionToken++
         sessionIndexMode = false
         sessionAdjustMode = null
         sessionAdjustLayoutAnchorRawY = 0f
@@ -796,6 +838,7 @@ class GestureSession(
         callbacks.cancelDelayed(hoverHapticCheckRunnable)
         actionExecutor.endContinuousAdjust()
         stopPageScrollHoldDrag()
+        stopMagnifierHold()
         pathRecognizer.reset()
         indexSession.endSession()
 
@@ -927,6 +970,25 @@ class GestureSession(
         if (!sessionPageScrollHoldActive) return
         sessionPageScrollHoldActive = false
         actionExecutor.endPageScrollHoldDrag()
+    }
+
+    /** 进入「放大镜」持续触发：按住放大、移动跟随、松手恢复。 */
+    internal fun enterMagnifierHold(rawX: Float, rawY: Float) {
+        if (!sessionMagnifierHoldActive) {
+            sessionMagnifierHoldActive = true
+            callbacks.onSessionStart(OverlayPanelMode.NONE)
+            actionExecutor.beginMagnifierHold(rawX, rawY)
+            return
+        }
+        // 持续触发会反复进到这里（每次分类到该手势）；已激活时必须把位置继续喂给放大镜，
+        // 否则画面只停在按下那一刻。
+        actionExecutor.updateMagnifierHold(rawX, rawY)
+    }
+
+    internal fun stopMagnifierHold() {
+        if (!sessionMagnifierHoldActive) return
+        sessionMagnifierHoldActive = false
+        actionExecutor.endMagnifierHold()
     }
 
     internal fun enterIndexMode(localX: Float, localY: Float) {

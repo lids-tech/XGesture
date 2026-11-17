@@ -333,6 +333,30 @@ object FloatingPointerOverlayWindow {
                     windowLifecycle.expandTouchCapture()
                 }
             }
+            is GestureAction.PointerPinchZoom -> {
+                if (fingerStillDown) {
+                    startPinchGestureAt(pointerX, pointerY)
+                } else {
+                    pointerSession.armPendingGestureCapture(action)
+                    windowLifecycle.expandTouchCapture()
+                }
+            }
+            is GestureAction.PointerRealtimeScroll -> {
+                if (fingerStillDown) {
+                    startScrollGestureAt(pointerX, pointerY)
+                } else {
+                    pointerSession.armPendingGestureCapture(action)
+                    windowLifecycle.expandTouchCapture()
+                }
+            }
+            is GestureAction.Magnifier -> {
+                if (fingerStillDown) {
+                    SystemMagnifierController.startFollow(pointerX, pointerY)
+                } else {
+                    SystemMagnifierController.toggle(pointerX, pointerY)
+                    dismiss()
+                }
+            }
             else -> executePointerAction(action, settings, pointerX, pointerY)
         }
     }
@@ -345,6 +369,9 @@ object FloatingPointerOverlayWindow {
         when (action) {
             is GestureAction.PointerGestureRecorder -> startGestureRecorder(pointerX, pointerY)
             is GestureAction.PointerRealtimeGesture -> startRealtimeGesture(pointerX, pointerY)
+            is GestureAction.PointerPinchZoom -> startPinchGestureAt(pointerX, pointerY)
+            is GestureAction.PointerRealtimeScroll -> startScrollGestureAt(pointerX, pointerY)
+            is GestureAction.Magnifier -> SystemMagnifierController.startFollow(pointerX, pointerY)
             is GestureAction.OpenFloatingPointerRadialMenu -> {
                 // Already handled by the caller; this branch is defensive.
             }
@@ -361,6 +388,14 @@ object FloatingPointerOverlayWindow {
                 session?.pointerY?.floatValue ?: return
             )
             is GestureAction.PointerRealtimeGesture -> startRealtimeGesture(
+                session?.pointerX?.floatValue ?: return,
+                session?.pointerY?.floatValue ?: return
+            )
+            is GestureAction.PointerPinchZoom -> startPinchGestureAt(
+                session?.pointerX?.floatValue ?: return,
+                session?.pointerY?.floatValue ?: return
+            )
+            is GestureAction.PointerRealtimeScroll -> startScrollGestureAt(
                 session?.pointerX?.floatValue ?: return,
                 session?.pointerY?.floatValue ?: return
             )
@@ -413,7 +448,13 @@ object FloatingPointerOverlayWindow {
         )
     }
 
-    private fun startRealtimeGesture(pointerX: Float, pointerY: Float) {
+    private fun startRealtimeGesture(pointerX: Float, pointerY: Float) = startPointerGesture(KIND_REALTIME, pointerX, pointerY)
+
+    private fun startPinchGestureAt(pointerX: Float, pointerY: Float) = startPointerGesture(KIND_PINCH, pointerX, pointerY)
+
+    private fun startScrollGestureAt(pointerX: Float, pointerY: Float) = startPointerGesture(KIND_SCROLL, pointerX, pointerY)
+
+    private fun startPointerGesture(kind: Int, pointerX: Float, pointerY: Float) {
         val pointerSession = session ?: return
         val service = SlideIndexAccessibilityService.overlayHostContext() as? android.accessibilityservice.AccessibilityService
         if (service == null) {
@@ -422,7 +463,9 @@ object FloatingPointerOverlayWindow {
         }
         Log.i(TAG, "startRealtimeGesture at ($pointerX, $pointerY)")
         suppressOutsideDismissForInjectedGesture()
-        windowLifecycle.expandTouchCapture()
+        if (kind != KIND_PINCH) {
+            windowLifecycle.expandTouchCapture()
+        }
         val endRealtimeCapture = {
             extendOutsideDismissSuppressAfterInjectedGesture()
             windowLifecycle.setTouchOverlayPassthrough(false)
@@ -439,19 +482,19 @@ object FloatingPointerOverlayWindow {
             )
             settingsSync.resetIdleTimer()
         }
-        pointerSession.startRealtimeGesture(
-            service = service,
-            pointerX = pointerX,
-            pointerY = pointerY,
-            onError = {
-                Log.w(TAG, "realtime gesture error")
-                endRealtimeCapture()
-            },
-            onFinished = {
-                Log.i(TAG, "realtime gesture finished")
-                endRealtimeCapture()
-            }
-        )
+        val onError: () -> Unit = {
+            Log.w(TAG, "pointer gesture error kind=$kind")
+            endRealtimeCapture()
+        }
+        val onFinished: () -> Unit = {
+            Log.i(TAG, "pointer gesture finished kind=$kind")
+            endRealtimeCapture()
+        }
+        when (kind) {
+            KIND_PINCH -> pointerSession.startPinchGesture(service, pointerX, pointerY, onError, onFinished)
+            KIND_SCROLL -> pointerSession.startScrollGesture(service, pointerX, pointerY, onError, onFinished)
+            else -> pointerSession.startRealtimeGesture(service, pointerX, pointerY, onError, onFinished)
+        }
     }
 
     private fun executePointerAction(
@@ -464,6 +507,11 @@ object FloatingPointerOverlayWindow {
         onHaptic(settings)
         if (action is GestureAction.SimulatePointerSwipe) {
             schedulePointerSwipe(startX = anchorRawX, startY = anchorRawY, config = action.config)
+            return
+        }
+        // 「放大镜」普通调用（非拖拽抓取）走开关模式
+        if (action is GestureAction.Magnifier) {
+            SystemMagnifierController.toggle(anchorRawX, anchorRawY)
             return
         }
         val executor = actionExecutor ?: return
@@ -637,6 +685,10 @@ object FloatingPointerOverlayWindow {
     }
 
     private const val TAG = "FloatingPointerOverlay"
+    /** 指针上的连续手势种类：0=实时手势（拖动）、1=双指缩放、2=实时滚动。 */
+    private const val KIND_REALTIME = 0
+    private const val KIND_PINCH = 1
+    private const val KIND_SCROLL = 2
     /** Covers injected tap + in-flight ACTION_OUTSIDE echo (coords are zeroed). */
     private const val POINTER_TAP_OUTSIDE_SUPPRESS_MS = 500L
     /** ACTION_OUTSIDE can arrive after dispatchGesture/onFinished returns. */

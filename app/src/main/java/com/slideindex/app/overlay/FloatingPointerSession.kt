@@ -83,6 +83,8 @@ internal class FloatingPointerSession(
     val joystickCenterX = mutableFloatStateOf(0f)
     val joystickCenterY = mutableFloatStateOf(0f)
     val joystickActive = mutableStateOf(false)
+    /** 放大镜跟手推视野时，手指移动后临时隐去摇杆与连线，给放大画面让路。 */
+    val magnifierJoystickSuppressed = mutableStateOf(false)
     /** QC `m81.s` mirror for lifecycle passthrough (`c/d`) decisions. */
     var activeTouchPhase = FloatingPointerTouchPhase.PendingTapOrDrag
     /** When hide-on-release is enabled, stays true after tap; false only after drag release. */
@@ -122,6 +124,17 @@ internal class FloatingPointerSession(
     /** Real-time gesture capture: same pointer shrink as recording, without recorder state. */
     val realtimeGestureActive = mutableStateOf(false)
 
+    /** 实时手势类型："zoom" / "scroll"；仅用于指针动作提示。 */
+    val realtimeGestureKind = mutableStateOf<String?>(null)
+
+    /** 滚动提示状态：轴 1 垂直 / 2 水平；方向 ±1；推力 px。 */
+    val realtimeScrollAxis = mutableStateOf(0)
+    val realtimeScrollDir = mutableStateOf(0)
+    val realtimeScrollPush = mutableStateOf(0f)
+
+    /** 实时缩放的两根虚拟手指位置（x1,y1,x2,y2），QC 同款视觉用。 */
+    val pinchFingers = mutableStateOf<FloatArray?>(null)
+
     /** After finger-up: trail retreats on a wall-clock timeline until consumed. */
     val gestureTrailRetreatActive = mutableStateOf(false)
 
@@ -135,6 +148,14 @@ internal class FloatingPointerSession(
 
     /** Active QC-style real-time gesture, if any. */
     internal var realtimeGesture: FloatingPointerRealtimeGesture? = null
+        private set
+
+    /** 实时双指缩放（指针专属）。 */
+    internal var pinchGesture: FloatingPointerPinchGesture? = null
+        private set
+
+    /** 实时滚动（指针专属）。 */
+    internal var scrollGesture: FloatingPointerScrollGesture? = null
         private set
 
     /**
@@ -231,7 +252,9 @@ internal class FloatingPointerSession(
 
     /** True while gesture capture is sampling, replaying, or armed for the next touch. */
     val gestureCaptureActive: Boolean
-        get() = gestureRecorder != null || realtimeGesture != null || pendingGestureCaptureAction != null
+        get() = gestureRecorder != null || realtimeGesture != null || pinchGesture != null ||
+            scrollGesture != null || pendingGestureCaptureAction != null ||
+            SystemMagnifierController.isFollowingCursor()
 
     fun armPendingGestureCapture(action: GestureAction) {
         pendingGestureCaptureAction = action
@@ -327,7 +350,74 @@ internal class FloatingPointerSession(
 
     fun releaseRealtimeGesture() {
         realtimeGesture = null
+        pinchGesture = null
+        scrollGesture = null
         realtimeGestureActive.value = false
+        realtimeGestureKind.value = null
+        realtimeScrollAxis.value = 0
+        realtimeScrollDir.value = 0
+        realtimeScrollPush.value = 0f
+        pinchFingers.value = null
+    }
+
+    /** 指针长按/功能环触发的实时双指缩放。 */
+    fun startPinchGesture(
+        service: android.accessibilityservice.AccessibilityService,
+        pointerX: Float,
+        pointerY: Float,
+        onError: () -> Unit,
+        onFinished: () -> Unit,
+    ) {
+        clearPendingGestureCapture()
+        realtimeGestureActive.value = true
+        realtimeGestureKind.value = "zoom"
+        pinchGesture = FloatingPointerPinchGesture(
+            service = service,
+            startX = pointerX,
+            startY = pointerY,
+            onError = {
+                releaseRealtimeGesture()
+                onError()
+            },
+            onFinished = {
+                releaseRealtimeGesture()
+                onFinished()
+            },
+            onVisualize = { x1, y1, x2, y2 ->
+                pinchFingers.value = floatArrayOf(x1, y1, x2, y2)
+            },
+        )
+    }
+
+    /** 指针长按/功能环触发的实时滚动。 */
+    fun startScrollGesture(
+        service: android.accessibilityservice.AccessibilityService,
+        pointerX: Float,
+        pointerY: Float,
+        onError: () -> Unit,
+        onFinished: () -> Unit
+    ) {
+        clearPendingGestureCapture()
+        realtimeGestureActive.value = true
+        realtimeGestureKind.value = "scroll"
+        scrollGesture = FloatingPointerScrollGesture(
+            service = service,
+            startX = pointerX,
+            startY = pointerY,
+            onError = {
+                releaseRealtimeGesture()
+                onError()
+            },
+            onFinished = {
+                releaseRealtimeGesture()
+                onFinished()
+            },
+            onState = { axis, dir, push ->
+                realtimeScrollAxis.value = axis
+                realtimeScrollDir.value = dir
+                realtimeScrollPush.value = push
+            }
+        )
     }
 
     fun openRadialMenu(centerX: Float, centerY: Float) {
@@ -479,14 +569,22 @@ internal class FloatingPointerSession(
         )
     }
 
+    /** 实时缩放由手指位移驱动（指针冻结），见 [updatePinchByFinger]。 */
+    fun updatePinchByFinger(dx: Float, dy: Float) {
+        pinchGesture?.updateFingerDelta(dx, dy)
+    }
+
     /** Updates the active real-time gesture with the current pointer position. */
     fun updateRealtimeGesture() {
         realtimeGesture?.updatePosition(pointerX.floatValue, pointerY.floatValue)
+        scrollGesture?.updatePosition(pointerX.floatValue, pointerY.floatValue)
     }
 
     /** Ends the active real-time gesture. */
     fun finishRealtimeGesture() {
         realtimeGesture?.finish()
+        pinchGesture?.finish()
+        scrollGesture?.finish()
     }
 
     fun triggerRipple(x: Float, y: Float) {
@@ -556,6 +654,7 @@ internal class FloatingPointerSession(
 
     /** Arms a new drag without moving the pointer or re-anchoring the joystick area. */
     fun beginGesture(rawX: Float, rawY: Float, settings: AppSettings) {
+        magnifierJoystickSuppressed.value = false
         if (awaitingPlacement || !hasEstablishedPointerTravel()) {
             placeAtTouch(rawX, rawY, settings)
         } else {
@@ -753,6 +852,8 @@ internal class FloatingPointerSession(
         )
         pointerX.floatValue = next.x
         pointerY.floatValue = next.y
+        // 若放大镜是摇杆功能环触发的：光标在哪，放大中心就在哪。
+        SystemMagnifierController.updateFollow(next.x, next.y)
         if (!gestureRecordingActive.value) {
             recordTrail(next.x, next.y)
         }
