@@ -50,8 +50,15 @@ data class WidgetPanelSubMenuConfig(
     val containerCornerDp: Int = 22,
     /** 容器背景色（ARGB）。 */
     val containerColorArgb: Long = DEFAULT_CONTAINER_COLOR_ARGB,
-    /** 名称文字颜色（ARGB）。 */
+    /**
+     * 名称文字颜色（ARGB）。
+     *
+     * ⚠️ 名称画在容器**外面**（在菜单底层的暗色遮罩上），所以它**不跟着容器颜色反色**，
+     * 默认就是白色；只有用户显式改过才变。
+     */
     val labelColorArgb: Long = DEFAULT_LABEL_COLOR_ARGB,
+    /** 图标颜色（ARGB）；0 = 按容器背景自动反色（白底深色图标、深底白色图标）。 */
+    val iconColorArgb: Long = DEFAULT_ICON_COLOR_ARGB,
     /** 图标占容器尺寸的百分比。 */
     val iconSizePercent: Int = 55,
     /** 名称文字大小百分比（100 = 基准 11sp）。 */
@@ -94,6 +101,9 @@ data class WidgetPanelSubMenuConfig(
         /** 默认文字颜色：白色（菜单底下是半透明黑遮罩）。 */
         const val DEFAULT_LABEL_COLOR_ARGB = 0xFFFFFFFFL
 
+        /** 默认图标颜色：0 = 自动按容器背景反色。 */
+        const val DEFAULT_ICON_COLOR_ARGB = 0L
+
         fun decode(raw: String?): WidgetPanelSubMenuConfig {
             if (raw.isNullOrBlank()) return WidgetPanelSubMenuConfig()
             val parts = raw.split(SUB_MENU_CONFIG_SEP)
@@ -114,6 +124,7 @@ data class WidgetPanelSubMenuConfig(
                 containerCornerDp = parts.getOrNull(10)?.toIntOrNull() ?: base.containerCornerDp,
                 containerColorArgb = parts.getOrNull(11)?.toLongOrNull() ?: base.containerColorArgb,
                 labelColorArgb = parts.getOrNull(12)?.toLongOrNull() ?: base.labelColorArgb,
+                iconColorArgb = parts.getOrNull(13)?.toLongOrNull() ?: base.iconColorArgb,
             ).normalized()
         }
     }
@@ -132,6 +143,7 @@ data class WidgetPanelSubMenuConfig(
         containerCornerDp,
         containerColorArgb,
         labelColorArgb,
+        iconColorArgb,
     ).joinToString(SUB_MENU_CONFIG_SEP)
 }
 

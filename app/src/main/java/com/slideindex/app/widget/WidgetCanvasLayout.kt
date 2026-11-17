@@ -172,8 +172,10 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val defaultLabelColor: Int,
     /** 每格的容器色（0 = 跟随默认）。 */
     val containerColors: List<Int>,
-    /** 每格的文字 / 图标色（0 = 跟随默认）。 */
+    /** 每格的图标色（0 = 跟随默认）。 */
     val iconTints: List<Int>,
+    /** 每格的名称色（0 = 跟随默认）。 */
+    val labelColors: List<Int>,
   ) {
     var hovered: Int = -1
     /**
@@ -356,9 +358,9 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     // 每格颜色：0 = 跟随菜单级设置。
     val containerColors = actions.map { it.containerColorArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 }
     val iconTints = actions.map { it.iconTintArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 }
-    // 图标 / 文字颜色的**自动反色**：容器是浅色就画深色图标，深色就画白色图标。
-    // （需求：白色容器 + 白色图标 = 看起来没有图标。轮盘容器也是这套自动反色。）
-    val autoTintFor: (Int) -> Int = { index ->
+    // **图标**颜色：容器是浅色就画深色图标、深色就画白色（自动反色）；
+    // 用户显式设过「图标颜色」就按用户的。
+    val autoIconTintFor: (Int) -> Int = { index ->
       val background = containerColors.getOrNull(index).takeIf { it != 0 }
         ?: config.containerColorArgb.toInt()
       if (androidx.core.graphics.ColorUtils.calculateLuminance(background) > 0.5) {
@@ -367,26 +369,15 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         0xFFFFFFFF.toInt()
       }
     }
-    val autoLabelFor: (Int) -> Int = { index ->
-      // 用户显式设过菜单级文字色且不是默认白 → 用用户的；否则跟着背景自动反色。
-      if (config.labelColorArgb.toInt() != 0xFFFFFFFF.toInt()) {
-        config.labelColorArgb.toInt()
-      } else {
-        autoTintFor(index)
-      }
-    }
     subMenu = SubMenuState(
       anchorX = anchorX,
       anchorY = anchorY,
       items = actions,
       icons = actions.mapIndexed { index, item ->
-        // 图标色优先级：本格覆盖 → 菜单级设置 → 按容器背景自动反色。
+        // 图标色优先级：本格覆盖 → 菜单级「图标颜色」→ 按容器背景自动反色。
         val tint = iconTints[index].takeIf { it != 0 }
-          ?: if (config.labelColorArgb.toInt() != 0xFFFFFFFF.toInt()) {
-            config.labelColorArgb.toInt()
-          } else {
-            autoTintFor(index)
-          }
+          ?: config.iconColorArgb.toInt().takeIf { it != 0 }
+          ?: autoIconTintFor(index)
         WidgetPanelSubActions.icon(context, item, iconPx, tint)
       },
       itemRadiusPx = itemRadius,
@@ -404,6 +395,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       defaultLabelColor = config.labelColorArgb.toInt(),
       containerColors = containerColors,
       iconTints = iconTints,
+      labelColors = actions.map { it.labelColorArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 },
     )
     // 菜单开着时禁止**所有父容器**拦截手势：面板外侧是「左右滑动切页」的 ViewPager、
     // 内侧是竖向滚动的 RecyclerView，不禁止的话手指一划就被它们抢走
@@ -463,17 +455,10 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       val (cx, cy) = subMenuItemCenter(state, index)
       val hovered = state.hovered == index
       val armed = hovered && state.longPressConsumed
-      val containerColor = state.containerColors.getOrNull(index).takeIf { it != null && it != 0 }
-        ?: state.defaultContainerColor
-      // 文字 / 图标自动反色：白底黑字、黑底白字（轮盘同一套规则）。
-      val autoTint =
-        if (androidx.core.graphics.ColorUtils.calculateLuminance(containerColor) > 0.5) {
-          0xFF333333.toInt()
-        } else {
-          0xFFFFFFFF.toInt()
-        }
-      val tint = state.iconTints.getOrNull(index).takeIf { it != null && it != 0 }
-        ?: if (state.defaultLabelColor != 0xFFFFFFFF.toInt()) state.defaultLabelColor else autoTint
+      // 名称画在容器**外面**（菜单暗色遮罩上），不跟容器颜色反色：
+      // 优先该格自己的名称色，否则用菜单级名称色（默认白）。
+      val labelColor = state.labelColors.getOrNull(index).takeIf { it != null && it != 0 }
+        ?: state.defaultLabelColor
       // 容器色：每格自己的 → 菜单级默认；选中 / 上膛时换成对应强调色但保留 alpha。
       val baseColor = state.containerColors.getOrNull(index).takeIf { it != null && it != 0 }
         ?: state.defaultContainerColor
@@ -505,7 +490,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       if (state.showLabels || hovered) {
         val label = WidgetPanelSubActions.displayName(context, state.items[index])
         if (label.isNotBlank()) {
-          subMenuLabelPaint.color = tint
+          subMenuLabelPaint.color = labelColor
           canvas.drawText(label, cx, cy + state.itemRadiusPx + textSize * 1.15f, subMenuLabelPaint)
         }
       }

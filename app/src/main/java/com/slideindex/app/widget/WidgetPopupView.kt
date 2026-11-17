@@ -109,11 +109,12 @@ class WidgetPopupRootLayout(
         val titleWidth = minOf(hudTitlePaint.measureText(state.title), maxTextWidth)
         val subtitleWidth = state.subtitle?.let { minOf(hudSubtitlePaint.measureText(it), maxTextWidth) } ?: 0f
         val textWidth = maxOf(titleWidth, subtitleWidth)
-        val textBlockHeight = if (state.subtitle.isNullOrBlank()) {
-            hudTitlePaint.textSize
-        } else {
-            hudTitlePaint.textSize + hudSubtitlePaint.textSize + 2f * density
-        }
+        // 用真实 fontMetrics 算行高（textSize 不等于实际行高，直接拿 textSize 会让文字偏下）。
+        val titleHeight = hudTitlePaint.descent() - hudTitlePaint.ascent()
+        val subtitleHeight = hudSubtitlePaint.descent() - hudSubtitlePaint.ascent()
+        val lineGap = 2f * density
+        val hasSubtitle = !state.subtitle.isNullOrBlank()
+        val textBlockHeight = if (hasSubtitle) titleHeight + lineGap + subtitleHeight else titleHeight
         val contentHeight = maxOf(iconSize, textBlockHeight)
         val pillWidth = paddingH * 2 + iconSize + gap + textWidth
         val pillHeight = contentHeight + paddingV * 2
@@ -151,19 +152,14 @@ class WidgetPopupRootLayout(
             )
         }
 
-        // 文字
+        // 文字：整块（一行或两行）**垂直居中**于胶囊中线。
         val textLeft = iconCx + iconSize / 2f + gap
-        val baselineCenterY = iconCy + contentHeight / 2f
-        if (state.subtitle.isNullOrBlank()) {
-            val baseline = baselineCenterY - (hudTitlePaint.descent() + hudTitlePaint.ascent()) / 2f
-            canvas.drawText(state.title, textLeft, baseline, hudTitlePaint)
-        } else {
-            val twoLineTop = baselineCenterY - textBlockHeight / 2f
-            val titleBaseline = twoLineTop - hudTitlePaint.ascent()
-            canvas.drawText(state.title, textLeft, titleBaseline, hudTitlePaint)
-            val subtitleBaseline = twoLineTop + hudTitlePaint.textSize + 2f * density -
-                hudSubtitlePaint.ascent()
-            canvas.drawText(state.subtitle, textLeft, subtitleBaseline, hudSubtitlePaint)
+        val blockTop = iconCy - textBlockHeight / 2f
+        val titleBaseline = blockTop - hudTitlePaint.ascent()
+        canvas.drawText(state.title, textLeft, titleBaseline, hudTitlePaint)
+        if (hasSubtitle) {
+            val subtitleBaseline = blockTop + titleHeight + lineGap - hudSubtitlePaint.ascent()
+            canvas.drawText(state.subtitle.orEmpty(), textLeft, subtitleBaseline, hudSubtitlePaint)
         }
     }
 }

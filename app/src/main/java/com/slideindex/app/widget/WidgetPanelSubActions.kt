@@ -22,8 +22,10 @@ data class WidgetPanelSubAction(
     val iconKey: String = "",
     /** 该格单独的容器颜色（ARGB）；0 = 跟随菜单的统一设置。 */
     val containerColorArgb: Long = 0L,
-    /** 该格单独的文字 / 图标颜色（ARGB）；0 = 跟随菜单的统一设置。 */
+    /** 该格单独的**图标**颜色（ARGB）；0 = 跟随菜单设置 / 自动反色。 */
     val iconTintArgb: Long = 0L,
+    /** 该格单独的**名称**颜色（ARGB）；0 = 跟随菜单设置。 */
+    val labelColorArgb: Long = 0L,
 )
 
 object WidgetPanelSubActions {
@@ -45,12 +47,14 @@ object WidgetPanelSubActions {
                 val iconKey: String
                 val containerColorArgb: Long
                 val iconTintArgb: Long
+                val labelColorArgb: Long
                 if (fields.size >= 1 && entry.contains(SUB_ACTION_FIELD_SEP)) {
                     payload = fields.getOrElse(0) { "" }
                     name = fields.getOrElse(1) { "" }
                     iconKey = fields.getOrElse(2) { "" }
                     containerColorArgb = fields.getOrNull(3)?.toLongOrNull() ?: 0L
                     iconTintArgb = fields.getOrNull(4)?.toLongOrNull() ?: 0L
+                    labelColorArgb = fields.getOrNull(5)?.toLongOrNull() ?: 0L
                 } else {
                     // 早期格式：名称\u0003负载
                     val sep = entry.indexOf(SUB_ACTION_LABEL_SEP)
@@ -64,6 +68,7 @@ object WidgetPanelSubActions {
                     iconKey = ""
                     containerColorArgb = 0L
                     iconTintArgb = 0L
+                    labelColorArgb = 0L
                 }
                 val action = QuickLauncherItemCodec.parseActionPayload(payload)
                     ?: return@mapNotNull null
@@ -73,6 +78,7 @@ object WidgetPanelSubActions {
                     iconKey = iconKey,
                     containerColorArgb = containerColorArgb,
                     iconTintArgb = iconTintArgb,
+                    labelColorArgb = labelColorArgb,
                 )
             }
             .toList()
@@ -91,12 +97,14 @@ object WidgetPanelSubActions {
         iconKey: String,
         containerColorArgb: Long = 0L,
         iconTintArgb: Long = 0L,
+        labelColorArgb: Long = 0L,
     ): String = listOf(
         QuickLauncherItemCodec.encodeActionPayload(action),
         customName,
         iconKey,
         containerColorArgb.toString(),
         iconTintArgb.toString(),
+        labelColorArgb.toString(),
     ).joinToString(SUB_ACTION_FIELD_SEP)
 
     /** 没存名称时的兜底名（配置时一般都会有正规文案）。 */

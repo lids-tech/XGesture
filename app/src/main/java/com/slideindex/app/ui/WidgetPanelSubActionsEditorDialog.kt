@@ -243,11 +243,22 @@ fun WidgetPanelSubActionsEditorContent(
                             description = "所有菜单项的默认底色",
                             argb = config.containerColorArgb,
                         ) { config = config.copy(containerColorArgb = it) }
-                        QuickWheelColorRow(
-                            title = "文字颜色",
-                            description = "所有菜单项的默认文字 / 图标颜色",
-                            argb = config.labelColorArgb,
-                        ) { config = config.copy(labelColorArgb = it) }
+                        // 图标 / 名称颜色分开：
+                        // - 图标画在**容器内**，可自动反色（0 = 自动）；
+                        // - 名称画在容器**外面**（暗色遮罩上），不反色，默认白。
+                        QuickWheelSlotColorRow(
+                            title = "图标颜色",
+                            argb = config.iconColorArgb,
+                        ) { config = config.copy(iconColorArgb = it) }
+                        QuickWheelSlotColorRow(
+                            title = "名称颜色",
+                            argb = config.labelColorArgb.takeIf { it != 0xFFFFFFFFL } ?: 0L,
+                        ) {
+                            // 0 = 恢复默认白（SlotColorRow 的「跟随」语义）
+                            config = config.copy(
+                                labelColorArgb = if (it == 0L) 0xFFFFFFFFL else it,
+                            )
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("显示名称", modifier = Modifier.weight(1f))
                             Switch(
@@ -316,9 +327,13 @@ fun WidgetPanelSubActionsEditorContent(
                                     argb = parsed.containerColorArgb,
                                 ) { replace(index, parsed.copy(containerColorArgb = it).encode()) }
                                 QuickWheelSlotColorRow(
-                                    title = "文字 / 图标颜色",
+                                    title = "图标颜色",
                                     argb = parsed.iconTintArgb,
                                 ) { replace(index, parsed.copy(iconTintArgb = it).encode()) }
+                                QuickWheelSlotColorRow(
+                                    title = "名称颜色",
+                                    argb = parsed.labelColorArgb,
+                                ) { replace(index, parsed.copy(labelColorArgb = it).encode()) }
                             }
                         }
                     }
@@ -442,4 +457,5 @@ private fun WidgetPanelSubAction.encode(): String =
         iconKey = iconKey,
         containerColorArgb = containerColorArgb,
         iconTintArgb = iconTintArgb,
+        labelColorArgb = labelColorArgb,
     )
