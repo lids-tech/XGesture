@@ -271,6 +271,13 @@ fun WidgetPanelSettingsContent(
         },
       ),
     )
+    // 与页面下方「小组件布局」同款的段标题。
+    item(key = "widget-panel-submenu-layout-title") {
+      SmallTitle(
+        text = stringResource(R.string.widget_sub_menu_section_title),
+        modifier = Modifier.fillMaxWidth(),
+      )
+    }
     groupedCardItems(
       keyPrefix = "widget-panel-submenu-layout",
       items = listOf(
@@ -340,6 +347,12 @@ fun WidgetPanelSettingsContent(
         },
       ),
     )
+    item(key = "widget-panel-open-animation-title") {
+      SmallTitle(
+        text = stringResource(R.string.widget_panel_open_animation),
+        modifier = Modifier.fillMaxWidth(),
+      )
+    }
     groupedCardItems(
       keyPrefix = "widget-panel-open-animation",
       items = listOf(

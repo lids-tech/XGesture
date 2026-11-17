@@ -169,6 +169,30 @@ object WidgetPopupOverlayWindow {
     }
     root.addView(card, cardLp)
 
+    // 操作提示条（HUD）：屏幕上方固定一条，显示当前操作名称 + 长按进度。
+    // 用 ComposeView 叠在面板根布局上：它不改布局、不拦触摸（没有手指交互），
+    // 由 WidgetPanelHud 的状态驱动显示/隐藏。
+    val hudView = androidx.compose.ui.platform.ComposeView(hostContext).apply {
+      setViewCompositionStrategy(
+        androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnDetachedFromWindow,
+      )
+      isClickable = false
+      isFocusable = false
+      importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+      setContent {
+        com.slideindex.app.ui.theme.OverlayAwareModuleTheme {
+          com.slideindex.app.widget.WidgetPanelHudHost()
+        }
+      }
+    }
+    root.addView(
+      hudView,
+      FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.WRAP_CONTENT,
+      ).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL },
+    )
+
     val params = buildLayoutParams(hostContext)
     val added = runCatching { wm.addView(root, params) }
       .onFailure { Log.e(TAG, "addView failed", it) }
@@ -354,6 +378,7 @@ object WidgetPopupOverlayWindow {
   /** 收起第一步：把窗口摘掉（只做这一件事，保证当帧返回）。 */
   private fun detachWindowForDismiss() {
     val startNs = System.nanoTime()
+    com.slideindex.app.widget.WidgetPanelHud.clear()
     cardLayout?.cancelAllPendingBinds()
     val root = rootLayout
     val wm = windowManager

@@ -186,9 +186,13 @@ internal class WidgetCanvasTouchHandler(
             layout.noMenuTracking = false
             layout.noMenuArmedChild = child
             layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            // 上膛完成：HUD 提示改为"松手以小窗打开"。
+            layout.pushNoMenuHud(child)
         }
         layout.noMenuPendingRunnable = runnable
         layout.postDelayed(runnable, layout.longPressTimeout)
+        // 按下即先亮 HUD：格子名称 + 长按进度（轮盘同款）。
+        layout.pushNoMenuHud(child, tracking = true)
     }
 
     fun cancelNoMenuLongPress() {
@@ -229,8 +233,10 @@ internal class WidgetCanvasTouchHandler(
             layout.showSubMenu(target)
             layout.subMenu?.let { state ->
                 state.hovered = layout.subMenuHitAt(layout.subMenuTouchDownX, layout.subMenuTouchDownY)
+                layout.hoverToken++
                 layout.invalidate()
             }
+            layout.pushSubMenuHud()
         }
         layout.postDelayed(layout.pendingSubMenuLongPress!!, layout.longPressTimeout)
     }
@@ -294,6 +300,7 @@ internal class WidgetCanvasTouchHandler(
             layout.subMenuLongPressFired = true
             layout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             layout.invalidate()
+            layout.pushSubMenuHud()
         }
         layout.subMenuLongPressRunnable = runnable
         layout.postDelayed(runnable, layout.longPressTimeout)
@@ -482,6 +489,8 @@ internal class WidgetCanvasTouchHandler(
                     cancelBrowseLongPress()
                     cancelNoMenuLongPress()
                     scheduleSubMenuLongPress(child, event.x, event.y)
+                    // 按下即亮 HUD（格子名称 + 长按进度），菜单弹出后再切成菜单项的 HUD。
+                    layout.pushCellLongPressHud(child)
                 } else {
                     // 没配二级菜单：长按 = 小窗打开（应用）/ 按原方式执行。
                     cancelBrowseLongPress()
@@ -497,8 +506,13 @@ internal class WidgetCanvasTouchHandler(
                     val hit = layout.subMenuHitAt(event.x, event.y)
                     if (hit != state.hovered) {
                         state.hovered = hit
+                        // 换了一项 = 上一项的"上膛/长按进度"全部作废，从零重新开始。
+                        state.longPressConsumed = false
+                        layout.subMenuLongPressFired = false
+                        layout.hoverToken++
                         layout.invalidate()
                     }
+                    layout.pushSubMenuHud()
                     // 菜单弹出后手指移动过（超过 touchSlop）→ 松手在空白处只收菜单。
                     if (!state.moved) {
                         val dx = event.x - layout.subMenuTouchDownX
@@ -567,6 +581,7 @@ internal class WidgetCanvasTouchHandler(
                 // 没配菜单的格子：长按已"上膛" → 松手按原方式打开（应用 = 小窗）。
                 val armed = layout.noMenuArmedChild
                 cancelNoMenuLongPress()
+                WidgetPanelHud.clear()
                 if (event.actionMasked == MotionEvent.ACTION_UP && armed != null) {
                     openCellDefault(armed)
                     return true

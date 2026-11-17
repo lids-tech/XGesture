@@ -233,6 +233,78 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     return cx to cy
   }
 
+  /**
+   * 把当前悬停的二级菜单项推给 HUD：名称 + 长按进度环。
+   *
+   * progressKey 里带上悬停代际（[hoverToken]）：移到另一项时它必然变化，
+   * HUD 的进度环从零重新开始 —— 与轮盘"换项即重新长按"完全一致。
+   */
+  internal var hoverToken: Int = 0
+
+  internal fun pushSubMenuHud() {
+    val state = subMenu ?: return WidgetPanelHud.clear()
+    val hovered = state.hovered
+    if (hovered < 0) {
+      // 没指着任何项：只显示提示条标题（面板行为），不画进度。
+      WidgetPanelHud.clear()
+      return
+    }
+    val item = state.items.getOrNull(hovered) ?: return WidgetPanelHud.clear()
+    WidgetPanelHud.show(
+      WidgetPanelHudState(
+        title = WidgetPanelSubActions.displayName(context, item),
+        subtitle = if (state.longPressConsumed) "长按已就绪，松手以小窗打开" else "松手执行 · 停住不放转小窗",
+        icon = state.icons.getOrNull(hovered),
+        progressKey = "sub:$hoverToken:$hovered",
+        longPressMs = longPressTimeout.toInt(),
+        showProgress = !state.longPressConsumed,
+      ),
+    )
+  }
+
+  /** 未配二级菜单的格子：长按 HUD（格子名称 + 进度 ← 轮盘同款）。 */
+  internal fun pushNoMenuHud(child: WidgetCardContainer, tracking: Boolean = false) {
+    val label = child.item.label.ifBlank { child.item.packageName.substringAfterLast('.') }
+    val armed = !tracking && noMenuArmedChild === child
+    val icon = noMenuIconFor(child)
+    WidgetPanelHud.show(
+      WidgetPanelHudState(
+        title = label.ifBlank { "打开" },
+        subtitle = if (armed) "长按已就绪，松手以小窗打开" else "松手打开 · 长按转小窗",
+        icon = icon,
+        progressKey = "cell:${child.item.appWidgetId}:$armed",
+        longPressMs = longPressTimeout.toInt(),
+        showProgress = !armed,
+      ),
+    )
+  }
+
+  /** 有二级菜单的格子：长按前先显示「格子名称 + 长按进度」。 */
+  internal fun pushCellLongPressHud(child: WidgetCardContainer) {
+    val label = child.item.label.ifBlank { child.item.packageName.substringAfterLast('.') }
+    WidgetPanelHud.show(
+      WidgetPanelHudState(
+        title = label.ifBlank { "打开" },
+        subtitle = "长按弹出二级菜单",
+        icon = noMenuIconFor(child),
+        progressKey = "menu:${child.item.appWidgetId}:$hoverToken",
+        longPressMs = longPressTimeout.toInt(),
+        showProgress = true,
+      ),
+    )
+  }
+
+  /** 格子 HUD 图标：优先缓存里已解析好的（和应用/快捷方式格子同一份缓存）。 */
+  private fun noMenuIconFor(child: WidgetCardContainer): android.graphics.Bitmap? {
+    val item = child.item
+    WidgetCellIconLoader.peek("app:${item.packageName}")?.let { return it }
+    return if (item.iconKey.isNotBlank()) {
+      WidgetCellIconLoader.peek(WidgetCellIconLoader.customKey(item.iconKey, 132))
+    } else {
+      null
+    }
+  }
+
   /** 命中测试：返回菜单项下标，-1 = 不在任何一项上（= 视为「没移动」）。 */
   internal fun subMenuHitAt(x: Float, y: Float): Int {
     val state = subMenu ?: return -1
@@ -284,13 +356,37 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     // 每格颜色：0 = 跟随菜单级设置。
     val containerColors = actions.map { it.containerColorArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 }
     val iconTints = actions.map { it.iconTintArgb.takeIf { c -> c != 0L }?.toInt() ?: 0 }
+    // 图标 / 文字颜色的**自动反色**：容器是浅色就画深色图标，深色就画白色图标。
+    // （需求：白色容器 + 白色图标 = 看起来没有图标。轮盘容器也是这套自动反色。）
+    val autoTintFor: (Int) -> Int = { index ->
+      val background = containerColors.getOrNull(index).takeIf { it != 0 }
+        ?: config.containerColorArgb.toInt()
+      if (androidx.core.graphics.ColorUtils.calculateLuminance(background) > 0.5) {
+        0xFF333333.toInt()
+      } else {
+        0xFFFFFFFF.toInt()
+      }
+    }
+    val autoLabelFor: (Int) -> Int = { index ->
+      // 用户显式设过菜单级文字色且不是默认白 → 用用户的；否则跟着背景自动反色。
+      if (config.labelColorArgb.toInt() != 0xFFFFFFFF.toInt()) {
+        config.labelColorArgb.toInt()
+      } else {
+        autoTintFor(index)
+      }
+    }
     subMenu = SubMenuState(
       anchorX = anchorX,
       anchorY = anchorY,
       items = actions,
       icons = actions.mapIndexed { index, item ->
-        // 文字 / 图标色跟着「该格自己的覆盖色 → 菜单级默认」走，这样图标和文字颜色一致。
-        val tint = iconTints[index].takeIf { it != 0 } ?: config.labelColorArgb.toInt()
+        // 图标色优先级：本格覆盖 → 菜单级设置 → 按容器背景自动反色。
+        val tint = iconTints[index].takeIf { it != 0 }
+          ?: if (config.labelColorArgb.toInt() != 0xFFFFFFFF.toInt()) {
+            config.labelColorArgb.toInt()
+          } else {
+            autoTintFor(index)
+          }
         WidgetPanelSubActions.icon(context, item, iconPx, tint)
       },
       itemRadiusPx = itemRadius,
@@ -320,6 +416,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     if (subMenu == null) return
     cancelSubMenuLongPress()
     subMenu = null
+    WidgetPanelHud.clear()
     // 菜单收起 → 把手势还给父容器（切页 / 滚动）。
     requestDisallowInterceptAllParents(false)
     invalidate()
@@ -351,6 +448,11 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     color = 0xFFFFFFFF.toInt()
     textAlign = Paint.Align.CENTER
   }
+  /** 悬停 / 上膛时的蓝色描边（框选效果，轮盘同款）。 */
+  private val subMenuItemBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.STROKE
+    color = 0xFF3478F6.toInt()
+  }
 
   private fun drawSubMenu(canvas: Canvas) {
     val state = subMenu ?: return
@@ -361,21 +463,38 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       val (cx, cy) = subMenuItemCenter(state, index)
       val hovered = state.hovered == index
       val armed = hovered && state.longPressConsumed
+      val containerColor = state.containerColors.getOrNull(index).takeIf { it != null && it != 0 }
+        ?: state.defaultContainerColor
+      // 文字 / 图标自动反色：白底黑字、黑底白字（轮盘同一套规则）。
+      val autoTint =
+        if (androidx.core.graphics.ColorUtils.calculateLuminance(containerColor) > 0.5) {
+          0xFF333333.toInt()
+        } else {
+          0xFFFFFFFF.toInt()
+        }
       val tint = state.iconTints.getOrNull(index).takeIf { it != null && it != 0 }
-        ?: state.defaultLabelColor
+        ?: if (state.defaultLabelColor != 0xFFFFFFFF.toInt()) state.defaultLabelColor else autoTint
       // 容器色：每格自己的 → 菜单级默认；选中 / 上膛时换成对应强调色但保留 alpha。
       val baseColor = state.containerColors.getOrNull(index).takeIf { it != null && it != 0 }
         ?: state.defaultContainerColor
-      val bgColor = when {
-        armed -> 0xFF2E9E5B.toInt()
-        hovered -> 0xFF3478F6.toInt()
-        else -> baseColor
-      }
-      subMenuItemPaint.color = bgColor
-      subMenuItemPaint.alpha = state.backgroundAlpha
       val r = state.itemRadiusPx
       val rect = android.graphics.RectF(cx - r, cy - r, cx + r, cy + r)
+      // 底色保持用户配置不变；悬停 = 蓝色**描边框选**（轮盘同款），不再整格填蓝/填绿。
+      subMenuItemPaint.color = baseColor
+      subMenuItemPaint.alpha = state.backgroundAlpha
       canvas.drawRoundRect(rect, state.cornerRadiusPx, state.cornerRadiusPx, subMenuItemPaint)
+      if (hovered) {
+        subMenuItemBorderPaint.color = 0xFF3478F6.toInt()
+        subMenuItemBorderPaint.strokeWidth =
+          (if (armed) 3.5f else 2.5f) * resources.displayMetrics.density
+        subMenuItemBorderPaint.alpha = 255
+        canvas.drawRoundRect(
+          rect,
+          state.cornerRadiusPx,
+          state.cornerRadiusPx,
+          subMenuItemBorderPaint,
+        )
+      }
       state.icons[index]?.let { icon ->
         val half = state.iconRadiusPx
         val dst = android.graphics.RectF(cx - half, cy - half, cx + half, cy + half)
