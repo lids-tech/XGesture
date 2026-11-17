@@ -110,9 +110,16 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   // 不移动直接松手 = 以**小窗**打开该格子；移到某一项松手 = 执行那一项的动作。
 
   /** 二级菜单状态；null = 未弹出。 */
-  /** 分帧建卡的批大小与每张卡的淡入时长（呼出动画期间逐步铺满）。 */
-  private val BIND_CHUNK_SIZE = 6
-  private val CARD_FADE_IN_MS = 160L
+  /**
+   * 分帧建卡的参数。
+   *
+   * 用**时间预算**而不是固定张数：卡片成本差别很大（小组件要建宿主视图、
+   * 应用格子只建视图），固定 6 张时遇到重卡会把一帧拖到 100ms+，
+   * 动画放完了内容还没铺满（"空位补上"）。按 8ms/帧 的预算尽量多建，
+   * 单张超过预算就下一帧再继续。
+   */
+  private val BIND_FRAME_BUDGET_MS = 8L
+  private val CARD_FADE_IN_MS = 140L
 
   /** 分帧建卡的代际号：收起 / 重新 bind 时自增，让旧的递归立刻停下。 */
   private var bindChunkToken = 0
@@ -458,14 +465,19 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val token = bindChunkToken
     fun buildChunk(start: Int) {
       if (token != bindChunkToken || token != bindGeneration) return
-      val end = (start + BIND_CHUNK_SIZE).coerceAtMost(items.size)
-      for (index in start until end) {
+      val frameStartNs = System.nanoTime()
+      var index = start
+      while (index < items.size) {
         val card = addWidgetCard(hostContext, items[index])
         card.alpha = 0f
         card.animate().alpha(1f).setDuration(CARD_FADE_IN_MS).start()
+        index++
+        // 至少建一张；之后按 8ms 预算，超了就把剩下的丢给下一帧。
+        val elapsedMs = (System.nanoTime() - frameStartNs) / 1_000_000
+        if (elapsedMs >= BIND_FRAME_BUDGET_MS) break
       }
-      if (end < items.size) {
-        post { buildChunk(end) }
+      if (index < items.size) {
+        post { buildChunk(index) }
       } else {
         postRefreshAllWidgetLayouts()
         requestLayout()

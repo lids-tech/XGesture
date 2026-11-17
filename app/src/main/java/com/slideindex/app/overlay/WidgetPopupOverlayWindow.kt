@@ -191,7 +191,7 @@ object WidgetPopupOverlayWindow {
       .alpha(1f)
       .scaleX(1f)
       .scaleY(1f)
-      .setDuration(180L)
+      .setDuration(260L)
       .setInterpolator(android.view.animation.DecelerateInterpolator())
       .start()
 
