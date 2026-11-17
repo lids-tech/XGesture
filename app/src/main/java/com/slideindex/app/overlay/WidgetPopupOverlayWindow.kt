@@ -169,32 +169,8 @@ object WidgetPopupOverlayWindow {
     }
     root.addView(card, cardLp)
 
-    // 操作提示条（HUD）：屏幕上方固定一条，显示当前操作名称 + 长按进度。
-    // 用 ComposeView 叠在面板根布局上：它不改布局、不拦触摸（没有手指交互），
-    // 由 WidgetPanelHud 的状态驱动显示/隐藏。
-    // ⚠️ 浮层窗口没有 ViewTreeLifecycleOwner：裸 ComposeView attach 即崩
-    //（表现 = 打开面板就闪退）。必须走项目里现成的 OverlayCompose.createComposeView
-    //（它会绑 OverlayComposeOwner + DisposeOnDetachedFromWindow）。
-    val hudOwner = com.slideindex.app.overlay.OverlayComposeOwner()
-    val hudView = com.slideindex.app.overlay.OverlayCompose.createComposeView(hostContext, hudOwner).apply {
-      isClickable = false
-      isFocusable = false
-      importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-      setContent {
-        com.slideindex.app.ui.theme.OverlayAwareModuleTheme {
-          com.slideindex.app.widget.WidgetPanelHudHost()
-        }
-      }
-    }
-    this.hudComposeView = hudView
-    this.hudOwner = hudOwner
-    root.addView(
-      hudView,
-      FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.WRAP_CONTENT,
-      ).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL },
-    )
+        // HUD 由面板根布局（WidgetPopupRootLayout.dispatchDraw）直接绘制：
+    // 不再放 ComposeView —— 浮层窗口没有 ViewTreeLifecycleOwner，塞 ComposeView 会闪退。
 
     val params = buildLayoutParams(hostContext)
     val added = runCatching { wm.addView(root, params) }
@@ -385,9 +361,7 @@ object WidgetPopupOverlayWindow {
     cardLayout?.cancelAllPendingBinds()
     // HUD 的 ComposeView 是 root 的子视图，随 root 一起 detach；
     // 这里只负责销毁 owner（等 detach 完成后），避免泄漏。
-    com.slideindex.app.overlay.OverlayCompose.teardownOverlayCompose(hudComposeView, hudOwner)
-    hudComposeView = null
-    hudOwner = null
+
     val root = rootLayout
     val wm = windowManager
     if (root != null && wm != null) {
@@ -632,8 +606,6 @@ object WidgetPopupOverlayWindow {
     overlayDeps = null
   }
 
-  private var hudComposeView: androidx.compose.ui.platform.ComposeView? = null
-  private var hudOwner: com.slideindex.app.overlay.OverlayComposeOwner? = null
 
   private fun startSettingsSync(deps: OverlayDependencies) {
     settingsCollectJob?.cancel()

@@ -56,6 +56,116 @@ class WidgetPopupRootLayout(
         }
         return super.onTouchEvent(event)
     }
+
+    // ── 操作提示条（HUD）绘制 ──────────────────────────────────────
+    // 纯 Canvas 绘制：面板是 View 体系，塞 ComposeView 会因为没有
+    // ViewTreeLifecycleOwner 直接崩（历史踩坑）。
+    private val hudBackgroundPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        .apply { color = 0xE6202020.toInt() }
+    private val hudTitlePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 14f * resources.displayMetrics.scaledDensity
+    }
+    private val hudSubtitlePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xB3FFFFFF.toInt()
+        textSize = 11f * resources.displayMetrics.scaledDensity
+    }
+    private val hudRingTrackPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = 0x33FFFFFF.toInt()
+        strokeWidth = 3f * resources.displayMetrics.density
+    }
+    private val hudRingFillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = 0xFF64B5F6.toInt()
+        strokeWidth = 3f * resources.displayMetrics.density
+        strokeCap = android.graphics.Paint.Cap.ROUND
+    }
+    private val hudRect = android.graphics.RectF()
+    private val hudRingRect = android.graphics.RectF()
+
+    init {
+        WidgetPanelHud.onChanged = { postInvalidateOnAnimation() }
+    }
+
+    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+        super.dispatchDraw(canvas)
+        val state = WidgetPanelHud.state ?: return
+        drawHud(canvas, state)
+        // 进度环需要逐帧推进：只在还有进度可走时自我调度。
+        if (state.showProgress && WidgetPanelHud.progress() < 1f) {
+            postInvalidateOnAnimation()
+        }
+    }
+
+    private fun drawHud(canvas: android.graphics.Canvas, state: WidgetPanelHudState) {
+        val dm = resources.displayMetrics
+        val density = dm.density
+        val paddingH = 14f * density
+        val paddingV = 10f * density
+        val iconSize = 34f * density
+        val gap = 10f * density
+        val maxTextWidth = 220f * density
+        val titleWidth = minOf(hudTitlePaint.measureText(state.title), maxTextWidth)
+        val subtitleWidth = state.subtitle?.let { minOf(hudSubtitlePaint.measureText(it), maxTextWidth) } ?: 0f
+        val textWidth = maxOf(titleWidth, subtitleWidth)
+        val textBlockHeight = if (state.subtitle.isNullOrBlank()) {
+            hudTitlePaint.textSize
+        } else {
+            hudTitlePaint.textSize + hudSubtitlePaint.textSize + 2f * density
+        }
+        val contentHeight = maxOf(iconSize, textBlockHeight)
+        val pillWidth = paddingH * 2 + iconSize + gap + textWidth
+        val pillHeight = contentHeight + paddingV * 2
+
+        // 顶部固定：避开状态栏（44dp 基线，与轮盘 HUD 一致）。
+        val top = 44f * density
+        val left = (width - pillWidth) / 2f
+        hudRect.set(left, top, left + pillWidth, top + pillHeight)
+        val radius = 16f * density
+        canvas.drawRoundRect(hudRect, radius, radius, hudBackgroundPaint)
+
+        // 图标 + 进度环
+        val iconCx = left + paddingH + iconSize / 2f
+        val iconCy = top + pillHeight / 2f
+        state.icon?.let { bitmap ->
+            val side = iconSize * 0.72f
+            val dst = android.graphics.RectF(
+                iconCx - side / 2f, iconCy - side / 2f,
+                iconCx + side / 2f, iconCy + side / 2f,
+            )
+            canvas.drawBitmap(bitmap, null, dst, null)
+        }
+        if (state.showProgress) {
+            hudRingRect.set(
+                iconCx - iconSize / 2f, iconCy - iconSize / 2f,
+                iconCx + iconSize / 2f, iconCy + iconSize / 2f,
+            )
+            canvas.drawArc(hudRingRect, -90f, 360f, false, hudRingTrackPaint)
+            canvas.drawArc(
+                hudRingRect,
+                -90f,
+                360f * WidgetPanelHud.progress(),
+                false,
+                hudRingFillPaint,
+            )
+        }
+
+        // 文字
+        val textLeft = iconCx + iconSize / 2f + gap
+        val baselineCenterY = iconCy + contentHeight / 2f
+        if (state.subtitle.isNullOrBlank()) {
+            val baseline = baselineCenterY - (hudTitlePaint.descent() + hudTitlePaint.ascent()) / 2f
+            canvas.drawText(state.title, textLeft, baseline, hudTitlePaint)
+        } else {
+            val twoLineTop = baselineCenterY - textBlockHeight / 2f
+            val titleBaseline = twoLineTop - hudTitlePaint.ascent()
+            canvas.drawText(state.title, textLeft, titleBaseline, hudTitlePaint)
+            val subtitleBaseline = twoLineTop + hudTitlePaint.textSize + 2f * density -
+                hudSubtitlePaint.ascent()
+            canvas.drawText(state.subtitle, textLeft, subtitleBaseline, hudSubtitlePaint)
+        }
+    }
 }
 
 @SuppressLint("ViewConstructor")
