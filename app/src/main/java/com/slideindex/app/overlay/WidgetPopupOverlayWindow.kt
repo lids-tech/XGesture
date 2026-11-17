@@ -322,8 +322,32 @@ object WidgetPopupOverlayWindow {
     isVisible = false
     ++chromeRaiseToken
     val dismissStartNs = System.nanoTime()
-    cleanup()
-    Log.d(TAG, "dismiss completed in ${(System.nanoTime() - dismissStartNs) / 1_000_000}ms")
+    // ⚠️ 收起卡顿的主因就是 cleanup() 里的重活（拆整棵卡片树 / 停监听 / 清宿主视图）
+    // 全压在"用户松手的那一帧"。这里先**只摘窗口**（视觉上立刻消失），
+    // 剩下的清理挪到下一帧，手感就不卡了。
+    detachWindowForDismiss()
+    mainHandler.post {
+      finalizeCleanup()
+      val cost = (System.nanoTime() - dismissStartNs) / 1_000_000
+      Log.d(TAG, "dismiss: window detached=${detachCostMs}ms, cleanup finished in ${cost}ms")
+    }
+  }
+
+  @Volatile
+  private var detachCostMs: Long = 0
+
+  /** 收起第一步：把窗口摘掉（只做这一件事，保证当帧返回）。 */
+  private fun detachWindowForDismiss() {
+    val startNs = System.nanoTime()
+    val root = rootLayout
+    val wm = windowManager
+    if (root != null && wm != null) {
+      runCatching { wm.removeView(root) }
+    }
+    rootLayout = null
+    layoutParams = null
+    windowManager = null
+    detachCostMs = (System.nanoTime() - startNs) / 1_000_000
   }
 
   fun setWidgetAddFlowActive(active: Boolean) {
@@ -491,7 +515,14 @@ object WidgetPopupOverlayWindow {
     card.layoutParams = lp
   }
 
+  /** 立即收尾（没有窗口可摘时的路径，例如从未显示过）。 */
   private fun cleanup() {
+    detachWindowForDismiss()
+    finalizeCleanup()
+  }
+
+  /** 窗口摘掉之后的清理：停监听 / 丢宿主视图 / 资源复位。可在下一帧执行。 */
+  private fun finalizeCleanup() {
     ++chromeRaiseToken
     chromeRaiseRunnable?.let { mainHandler.removeCallbacks(it) }
     chromeRaiseRunnable = null
@@ -500,13 +531,6 @@ object WidgetPopupOverlayWindow {
     settingsCollectJob = null
     flushPendingPages()
     deactivateBackHandling()
-    val root = rootLayout
-    val wm = windowManager
-    if (root != null) {
-      if (wm != null) {
-        runCatching { wm.removeView(root) }
-      }
-    }
     appContext?.let { ctx ->
       if (!WidgetPickerOverlayWindow.isShowing &&
         !WidgetBindTrampolineActivity.isActive()

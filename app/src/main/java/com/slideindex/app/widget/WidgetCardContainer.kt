@@ -145,6 +145,17 @@ class WidgetCardContainer(
             }
             return@apply
           }
+          // ① 先铺「应用图标」兜底（缓存 + 后台，命中就是一瞬间）。
+          // 动作 / 快捷方式的专属图标解析失败时（例如"创建快捷方式"存的是伪造 id、
+          // 或 provider 已卸载），至少还能显示所属应用的图标 —— 否则格子会变成空白。
+          if (item.packageName.isNotEmpty()) {
+            val fallbackTag = "app:${item.packageName}"
+            tag = fallbackTag
+            WidgetAppIconCache.load(context, item.packageName) { bitmap ->
+              if (tag == fallbackTag) setImageDrawable(bitmap.toDrawable(resources))
+            }
+          }
+          // ② 再解析专属图标；成功就覆盖掉兜底图标（tag 换掉后，兜底回调会自行放弃）。
           when {
             item.itemType == ITEM_TYPE_ACTION && action != null -> {
               val key = WidgetCellIconLoader.actionKey(action)
@@ -158,7 +169,7 @@ class WidgetCardContainer(
                 }
               }
             }
-            item.itemType == ITEM_TYPE_SHORTCUT && item.shortcutId.isNotEmpty() -> {
+            item.itemType == ITEM_TYPE_SHORTCUT && item.packageName.isNotEmpty() -> {
               val key = WidgetCellIconLoader.shortcutKey(item.packageName, item.shortcutId)
               val cached = WidgetCellIconLoader.peek(key)
               if (cached != null) {
@@ -168,21 +179,6 @@ class WidgetCardContainer(
                 WidgetCellIconLoader.loadShortcut(context, item.packageName, item.shortcutId) { bitmap ->
                   if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
                 }
-              }
-            }
-          }
-          // 应用格子（以及动作 / 快捷方式拿不到自家图标时的兜底）：走应用图标缓存。
-          // 同样不在构造期同步取：部分 OEM 会做主题化重绘，主线程同步调用能卡几百毫秒。
-          if (item.iconKey.isBlank() &&
-            item.itemType != ITEM_TYPE_SHORTCUT &&
-            item.itemType != ITEM_TYPE_ACTION &&
-            item.packageName.isNotEmpty()
-          ) {
-            val iconPackage = item.packageName
-            tag = iconPackage
-            WidgetAppIconCache.load(context, iconPackage) { bitmap ->
-              if (tag == iconPackage) {
-                setImageDrawable(bitmap.toDrawable(resources))
               }
             }
           }
@@ -280,9 +276,11 @@ class WidgetCardContainer(
     } else {
       // 单进程后宿主视图与编辑器同进程：调用方没传视图时自己取一次，
       // 否则编辑器永远停在占位卡（以前只有 :overlay 进程能创建宿主视图）。
-      // 宿主视图**异步**取：先显示占位，取到后再贴上。
-      // 同步取会走 binder + AppWidgetHostView 创建，卡片一多就把呼出/收回卡住。
-      loadingPlaceholder.visibility = VISIBLE
+      // 宿主视图**异步**取：取到后再贴上。
+      // 占位图**延迟 120ms** 才显示 —— 通常 binder 几十毫秒就回来了，
+      // 直接设 VISIBLE 会先闪一下"加载中"再跳成内容（观感很差）。
+      loadingPlaceholder.visibility = INVISIBLE
+      postDelayed({ if (!hostEverBound) loadingPlaceholder.visibility = VISIBLE }, 120L)
       post {
         val selfHostView = runCatching {
           WidgetPopupHost.startListening(context)
