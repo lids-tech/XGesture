@@ -95,6 +95,31 @@ object WidgetPopupHost {
     runCatching { appWidgetManager(context).getAppWidgetInfo(appWidgetId) }.getOrNull()
 
   /**
+   * 预热宿主视图：给所有小组件提前把 [AppWidgetHostView] 建好放进缓存。
+   *
+   * 背景：呼出时同步建宿主视图会"顿一下"，异步建又会出现"先空白再补上"。
+   * 预热走第三条路——**面板关掉之后**（主线程空闲、用户无感）把下一把要用的
+   * 宿主视图建好，下次呼出全部命中缓存：既不顿也不空白。
+   *
+   * ⚠️ 必须在主线程调（View 创建不是线程安全的），调用方用 handler 调度。
+   * 已在缓存里的 id 直接跳过。
+   */
+  fun prewarmHostViews(context: Context, pages: List<com.slideindex.app.widget.WidgetPanelPage>) {
+    val appContext = context.applicationContext
+    pages.asSequence()
+      .flatMap { it.items.asSequence() }
+      .filter { it.itemType == com.slideindex.app.widget.ITEM_TYPE_WIDGET && it.appWidgetId > 0 }
+      .map { it.appWidgetId }
+      .distinct()
+      .filterNot { cachedHostViews.containsKey(it) }
+      .forEach { id ->
+        // createView 内部会把建好的视图写进 cachedHostViews。
+        runCatching { createView(appContext, id) }
+          .onFailure { Log.w(TAG, "prewarm($id) failed: ${it.message}") }
+      }
+  }
+
+  /**
    * 打开面板时让所有小组件重新拉一次数据。
    *
    * 只用一条通道：给 provider 显式发 `ACTION_APPWIDGET_UPDATE` 广播（带 id），

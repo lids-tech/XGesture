@@ -531,6 +531,9 @@ object WidgetPopupOverlayWindow {
     settingsCollectJob = null
     flushPendingPages()
     deactivateBackHandling()
+    // 会话结束**不再**丢弃宿主视图：跨会话复用是"呼出不顿、也不空白"的关键。
+    // （之前每次 clear 的代价是下次打开要同步重建 binder + AppWidgetHostView。）
+    // 打开时本来就会发 ACTION_APPWIDGET_UPDATE，集合型小组件会随新 RemoteViews 重建适配器。
     appContext?.let { ctx ->
       if (!WidgetPickerOverlayWindow.isShowing &&
         !WidgetBindTrampolineActivity.isActive()
@@ -538,8 +541,6 @@ object WidgetPopupOverlayWindow {
         WidgetPopupHost.stopListening(ctx)
       }
     }
-    // 会话结束：宿主视图一起丢掉，下次打开面板重建。
-    WidgetPopupHost.clearCachedHostViews()
     screenOffDismissReceiver.unregister()
     rootLayout = null
     cardLayout = null
@@ -554,6 +555,22 @@ object WidgetPopupOverlayWindow {
       if (!isVisible) {
         SlideIndexAccessibilityService.refreshTriggerVisuals()
       }
+    }
+    // 空格期预热：面板已关、主线程空闲，提前把宿主视图建好（下次呼出即命中缓存）。
+    val prewarmCtx = appContext
+    val prewarmPages = currentSettings?.widgetPanelPages
+    if (prewarmCtx != null && !prewarmPages.isNullOrEmpty()) {
+      mainHandler.postDelayed(
+        {
+          if (!isVisible && !WidgetPopupOverlayWindow.isShowing) {
+            WidgetPopupHost.prewarmHostViews(
+              prewarmCtx,
+              com.slideindex.app.widget.WidgetPanelDefaults.effectivePages(prewarmPages),
+            )
+          }
+        },
+        300L,
+      )
     }
     isVisible = false
     blockingTouches = false
