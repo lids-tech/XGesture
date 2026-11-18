@@ -259,17 +259,61 @@ class WidgetCardContainer(
             }
           } else if (item.itemType == ITEM_TYPE_SHORTCUT) {
             com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-            val launched = runCatching {
-              val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? android.content.pm.LauncherApps
-              launcherApps?.startShortcut(item.packageName, item.shortcutId, null, null, android.os.Process.myUserHandle())
-              true
-            }.getOrDefault(false)
-            if (!launched && item.intentUri.isNotEmpty()) {
+            // ⚠️ 和「动作」格子一样，必须走 gestureActionRunner（= 快捷轮盘/浮球那条链）：
+            // 面板原先自己调 launcherApps.startShortcut + Intent.parseUri 兜底，
+            // 只覆盖"动态快捷方式"一种形态 ——
+            // 「我的直达 / 预设快捷方式库」存的是自描述 payload（c: / i: / 包名\u001Cid），
+            // startShortcut 找不到、parseUri 又解析不了 → 点了没反应。
+            // 执行器里 launchGestureShortcut 会把四种形态（动态/组件/intent/多 intent）
+            // 全部解码后分别启动，并带 root / shell / 小窗等兜底。
+            val payloadKey = item.intentUri.takeIf { it.isNotBlank() }
+              ?: com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
+                item.packageName,
+                item.shortcutId,
+                item.label,
+              )
+            val shortcutAction = com.slideindex.app.gesture.GestureAction.LaunchShortcut(
+              payloadKey = payloadKey,
+              label = item.label,
+            )
+            val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks
+              .settingsSnapshot?.invoke(context)
+            val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
+              ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
+            if (settings != null && runner != null) {
+              val location = IntArray(2)
+              getLocationOnScreen(location)
               runCatching {
-                val intent = android.content.Intent.parseUri(item.intentUri, 0).apply {
-                  addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                runner.run(
+                  shortcutAction,
+                  settings,
+                  false,
+                  location[0] + width / 2f,
+                  location[1] + height / 2f,
+                  null,
+                )
+              }
+            } else {
+              // 极端兜底：执行器不可用时退回原来的直连启动（至少动态快捷方式还能开）。
+              val launched = runCatching {
+                val launcherApps =
+                  context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? android.content.pm.LauncherApps
+                launcherApps?.startShortcut(
+                  item.packageName,
+                  item.shortcutId,
+                  null,
+                  null,
+                  android.os.Process.myUserHandle(),
+                )
+                true
+              }.getOrDefault(false)
+              if (!launched && item.intentUri.isNotEmpty()) {
+                runCatching {
+                  val intent = android.content.Intent.parseUri(item.intentUri, 0).apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                  }
+                  context.startActivity(intent)
                 }
-                context.startActivity(intent)
               }
             }
           } else if (item.packageName.isNotEmpty()) {
