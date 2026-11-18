@@ -163,17 +163,9 @@ class WidgetCardContainer(
           // 单一路径 → 不会出现「应用图标 ↔ 右上箭头」来回跳。
           val wheelAction = when {
             item.itemType == ITEM_TYPE_ACTION -> action
-            item.itemType == ITEM_TYPE_SHORTCUT -> com.slideindex.app.gesture.GestureAction.LaunchShortcut(
-              payloadKey = com.slideindex.app.widget.WidgetPanelFieldCodec
-                .decode(item.intentUri).ifBlank {
-                  com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
-                    item.packageName,
-                    item.shortcutId,
-                    item.label,
-                  )
-                },
-              label = item.label,
-            )
+            // 面板存的是「快速启动器条目」的 payload（包名\u001C快捷id / i: / is: / c:），
+            // 统一用 WidgetPanelShortcutAction 还原成可执行动作（与轮盘添加时同一套规则）。
+            item.itemType == ITEM_TYPE_SHORTCUT -> WidgetPanelShortcutAction.fromItem(item)
             else -> null
           }
           if (wheelAction != null) {
@@ -258,31 +250,29 @@ class WidgetCardContainer(
             // startShortcut 找不到、parseUri 又解析不了 → 点了没反应。
             // 执行器里 launchGestureShortcut 会把四种形态（动态/组件/intent/多 intent）
             // 全部解码后分别启动，并带 root / shell / 小窗等兜底。
-            val payloadKey = com.slideindex.app.widget.WidgetPanelFieldCodec
-              .decode(item.intentUri).takeIf { it.isNotBlank() }
-              ?: com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
-                item.packageName,
-                item.shortcutId,
-                item.label,
-              )
-            val shortcutAction = com.slideindex.app.gesture.GestureAction.LaunchShortcut(
-              payloadKey = payloadKey,
-              label = item.label,
-            )
+            // 面板存的是「快速启动器条目」的 payload（包名\u001C快捷id / i: / is: / c:），
+            // 而 GestureShortcutPayload 只认自己那套编码 —— 日志实测
+            //   pkg=com.niven.translator id=fullscreen payloadKind=UNDECODABLE
+            // 就是这个错位：payload 本身是好的，只是按错的解码器去解。
+            // 统一用 WidgetPanelShortcutAction（= 轮盘添加时的转换规则）还原成可执行动作。
+            val shortcutAction = WidgetPanelShortcutAction.fromItem(item)
             val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks
               .settingsSnapshot?.invoke(context)
             val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
               ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
-            val decoded = runCatching {
-              com.slideindex.app.gesture.GestureShortcutPayload.decode(payloadKey)
-            }.getOrNull()
+            val decoded = shortcutAction?.let { act ->
+              runCatching {
+                com.slideindex.app.gesture.GestureShortcutPayload.decode(act.payloadKey)
+              }.getOrNull()
+            }
             android.util.Log.i(
               "WidgetPanelShortcut",
-              "tap shortcut: pkg=${item.packageName} id=${item.shortcutId} " +
-                "payloadKind=${decoded?.javaClass?.simpleName ?: "UNDECODABLE"} " +
-                "runner=${runner != null} settings=${settings != null}",
+              "tap shortcut: pkg=" + item.packageName + " id=" + item.shortcutId +
+                " payloadKind=" + (decoded?.javaClass?.simpleName ?: "UNDECODABLE") +
+                " action=" + shortcutAction?.payloadKey?.take(40) +
+                " runner=" + (runner != null) + " settings=" + (settings != null),
             )
-            if (settings != null && runner != null && decoded != null) {
+            if (settings != null && runner != null && shortcutAction != null && decoded != null) {
               val location = IntArray(2)
               getLocationOnScreen(location)
               val run = runCatching {
