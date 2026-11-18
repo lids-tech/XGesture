@@ -258,7 +258,9 @@ class WidgetCardContainer(
               }
             }
           } else if (item.itemType == ITEM_TYPE_SHORTCUT) {
-            com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+            // ⚠️ 不在这里先 dismiss：先收面板会让这次启动变成"无可见窗口"的后台启动，
+            // 部分 ROM 直接拦掉（真机反馈"点按打不开、长按却能打开"——长按那条路
+            // 就是先执行再收面板）。统一改成「先执行，成功后收面板」。
             // ⚠️ 和「动作」格子一样，必须走 gestureActionRunner（= 快捷轮盘/浮球那条链）：
             // 面板原先自己调 launcherApps.startShortcut + Intent.parseUri 兜底，
             // 只覆盖"动态快捷方式"一种形态 ——
@@ -280,10 +282,19 @@ class WidgetCardContainer(
               .settingsSnapshot?.invoke(context)
             val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
               ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
-            if (settings != null && runner != null) {
+            val decoded = runCatching {
+              com.slideindex.app.gesture.GestureShortcutPayload.decode(payloadKey)
+            }.getOrNull()
+            android.util.Log.i(
+              "WidgetPanelShortcut",
+              "tap shortcut: pkg=${item.packageName} id=${item.shortcutId} " +
+                "payloadKind=${decoded?.javaClass?.simpleName ?: "UNDECODABLE"} " +
+                "runner=${runner != null} settings=${settings != null}",
+            )
+            if (settings != null && runner != null && decoded != null) {
               val location = IntArray(2)
               getLocationOnScreen(location)
-              runCatching {
+              val run = runCatching {
                 runner.run(
                   shortcutAction,
                   settings,
@@ -293,7 +304,12 @@ class WidgetCardContainer(
                   null,
                 )
               }
+              // 先执行成功再收面板（顺序反了会被后台启动限制拦掉）。
+              if (run.isSuccess) {
+                com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
+              }
             } else {
+              com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
               // 极端兜底：执行器不可用时退回原来的直连启动（至少动态快捷方式还能开）。
               val launched = runCatching {
                 val launcherApps =
