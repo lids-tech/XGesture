@@ -254,7 +254,10 @@ object WidgetPickerTrampoline {
     val page = currentPages[index]
     val exists = page.items.any {
       it.itemType == ITEM_TYPE_SHORTCUT && it.packageName == packageName &&
-        (it.shortcutId == shortcutId || (intentUri.isNotBlank() && it.intentUri == intentUri))
+        // 落盘值是转义过的（payload 分隔符会被面板编码劈开），比对前先解回来。
+        (it.shortcutId == shortcutId ||
+          (intentUri.isNotBlank() &&
+            com.slideindex.app.widget.WidgetPanelFieldCodec.decode(it.intentUri) == intentUri))
     }
     val nextPages = if (exists) {
       WidgetPanelMutator.removeShortcutFromPage(currentPages, ctx.pageIndex, packageName, shortcutId, intentUri)

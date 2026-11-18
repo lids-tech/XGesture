@@ -123,7 +123,8 @@ object WidgetPanelMutator {
       itemType = ITEM_TYPE_SHORTCUT,
       packageName = packageName,
       shortcutId = shortcutId,
-      intentUri = intentUri,
+      // ⚠️ 落盘前转义：payload 自带的分隔符（\u001C/\u001D/\u001F）会把面板编码劈开。
+      intentUri = WidgetPanelFieldCodec.encode(intentUri),
     )
     val updatedPage = WidgetPanelGridLogic.upsertItem(page, item)
     return effective.toMutableList().also { it[index] = updatedPage }
@@ -188,7 +189,9 @@ object WidgetPanelMutator {
     val updatedItems = page.items.filterNot {
       it.itemType == ITEM_TYPE_SHORTCUT &&
         it.packageName == packageName &&
-        (it.shortcutId == shortcutId || (intentUri.isNotBlank() && it.intentUri == intentUri))
+        // 存进 item 的是转义过的值，比对前先解回原始 payload。
+        (it.shortcutId == shortcutId ||
+          (intentUri.isNotBlank() && WidgetPanelFieldCodec.decode(it.intentUri) == intentUri))
     }
     val updatedPage = page.copy(items = updatedItems)
     effective[index] = updatedPage.copy(rowCount = WidgetPanelGridLogic.computeContentRowCount(updatedPage))

@@ -186,8 +186,9 @@ class WidgetCardContainer(
               // 拿不到专属图标时它会自己回落到所属应用图标。
               // payloadKey 优先用存下来的 intentUri（自描述编码），
               // 旧数据没有时再用「包名 + shortcutId」拼动态编码。
-              val payloadKey = item.intentUri.ifBlank {
-                com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
+              val payloadKey = com.slideindex.app.widget.WidgetPanelFieldCodec
+                .decode(item.intentUri).ifBlank {
+                  com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
                   item.packageName,
                   item.shortcutId,
                   item.label,
@@ -268,7 +269,8 @@ class WidgetCardContainer(
             // startShortcut 找不到、parseUri 又解析不了 → 点了没反应。
             // 执行器里 launchGestureShortcut 会把四种形态（动态/组件/intent/多 intent）
             // 全部解码后分别启动，并带 root / shell / 小窗等兜底。
-            val payloadKey = item.intentUri.takeIf { it.isNotBlank() }
+            val payloadKey = com.slideindex.app.widget.WidgetPanelFieldCodec
+              .decode(item.intentUri).takeIf { it.isNotBlank() }
               ?: com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
                 item.packageName,
                 item.shortcutId,

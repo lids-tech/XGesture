@@ -30,6 +30,51 @@ const val SUB_MENU_CONFIG_SEP = "\u0006"
 const val MAX_SUB_ACTIONS = 8
 
 /**
+ * 快捷方式 payload 的"落盘转义"。
+ *
+ * ⚠️ 为什么需要它：快捷方式 payload 自己就是分隔符拼出来的串（
+ * `GestureShortcutPayload` 用 \u001C/\u001D/\u001F），而面板 item 编码的分隔符恰好也是
+ * \u001D（item 间）/\u001E（字段间）/\u001F（页间）。payload 原样塞进 `intentUri`
+ * 会把整个面板的编码**劈开**：带标签的 payload 在 \u001D 处断、多 intent 的在 \u001F 处
+ * 把一页劈成两页。真机表现就是"Shizuku 扫出来的快捷方式有的点了没反应"
+ * （能开的那批恰好是不含这些分隔符的 payload）。
+ *
+ * 处理：落盘前发现 payload 含面板分隔符 → base64 包一层（`b64:` 前缀）；
+ * 读的时候见到前缀再解回来。旧数据没有前缀 = 原样返回（不迁移、不破坏）。
+ */
+object WidgetPanelFieldCodec {
+    private const val B64_PREFIX = "b64:"
+
+    fun encode(raw: String): String {
+        if (raw.isEmpty()) return raw
+        val needsEscape = raw.any { it == '\u001C' || it == '\u001D' || it == '\u001E' || it == '\u001F' }
+        if (!needsEscape) return raw
+        val bytes = raw.toByteArray(Charsets.UTF_8)
+        val sb = StringBuilder(B64_PREFIX.length + bytes.size * 2)
+        sb.append(B64_PREFIX)
+        for (b in bytes) {
+            val v = b.toInt() and 0xFF
+            sb.append("0123456789ABCDEF"[v ushr 4])
+            sb.append("0123456789ABCDEF"[v and 0x0F])
+        }
+        return sb.toString()
+    }
+
+    fun decode(stored: String): String {
+        if (!stored.startsWith(B64_PREFIX)) return stored
+        val hex = stored.substring(B64_PREFIX.length)
+        if (hex.length % 2 != 0) return stored
+        val bytes = ByteArray(hex.length / 2)
+        for (i in bytes.indices) {
+            val hi = hex[i * 2].digitToIntOrNull(16) ?: return stored
+            val lo = hex[i * 2 + 1].digitToIntOrNull(16) ?: return stored
+            bytes[i] = ((hi shl 4) or lo).toByte()
+        }
+        return String(bytes, Charsets.UTF_8)
+    }
+}
+
+/**
  * 「长按二级菜单」的布局配置（每个格子各有一套）。
  *
  * - [columns] / [rows]：行列数（行数在项目数少于 行×列 时决定整块的垂直居中范围）；
