@@ -359,6 +359,7 @@ object EdgeCardOverlayWindow {
             if (entry.view == null) {
                 if (ensureWindow(entry, hostContext)) {
                     applyEntry(entry, animated = false)
+                    scheduleAutoCollapse(entry)
                 } else {
                     // 重建失败：丢掉空壳，避免留下永远不显示的卡。
                     cancelAutoCollapse(entry)
@@ -1102,8 +1103,8 @@ private const val SCROLL_STEP_PAUSE_MS = 800L
 /** 滚到最后一行后停留多久再收起。 */
 private const val SCROLL_FINISH_HOLD_MS = 1_000L
 
-/** 挂起超过这个时长就不再补显，避免解锁瞬间弹出一堆过期卡片。 */
-private const val LOCK_SUSPEND_TTL_MS = 10 * 60 * 1000L
+/** 挂起超过这个时长就不再补显，避免解锁瞬间弹出一堆过期卡片（24小时）。 */
+private const val LOCK_SUSPEND_TTL_MS = 24 * 60 * 60 * 1000L
 
 private class EdgeCardView(context: Context) : ViewGroup(context) {
     var exclusionEdge: SideBubbleHorizontalEdge = SideBubbleHorizontalEdge.Right
@@ -1487,12 +1488,8 @@ private class EdgeCardView(context: Context) : ViewGroup(context) {
         val lines = (contentView.layout?.lineCount ?: 1).coerceIn(1, maxLines)
         val lineHeight = maxOf(contentView.lineHeight, dp(16))
         val contentHeight = lines * lineHeight
-        (contentView.layoutParams as? LinearLayout.LayoutParams)?.let {
-            if (it.height != contentHeight) {
-                it.height = contentHeight
-                contentView.layoutParams = it
-            }
-        }
+        // 只静默更新 LayoutParams 字段，不调用 contentView.layoutParams = it，避免在 onMeasure 期间触发 requestLayout() 导致反复测量震荡
+        (contentView.layoutParams as? LinearLayout.LayoutParams)?.height = contentHeight
         val textHeight = maxOf(titleView.measuredHeight, senderView.measuredHeight) +
             dp(2) + contentHeight
         val cardHeight = maxOf(textHeight + dp(8), dp(42))

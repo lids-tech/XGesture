@@ -146,12 +146,8 @@ object VolumePanelOverlayWindow {
             if (token != bringAboveToken) return
             com.slideindex.app.overlay.panels.PanelFloatBallHooks.scheduleChromeAbovePanels?.invoke(0L)
         }
-        attempt()
-        composeView?.post {
-            attempt()
-            composeView?.postOnAnimation { attempt() }
-        }
-        mainHandler.postDelayed({ attempt() }, 200)
+        // 延后至入场动画（220ms）完成后再抬升悬浮球 Z 序，避免在入场首帧争抢 WindowManager 拆装窗口
+        mainHandler.postDelayed({ attempt() }, 250)
         mainHandler.postDelayed({ attempt() }, 800)
     }
 
@@ -189,11 +185,14 @@ object VolumePanelOverlayWindow {
             WindowManager.LayoutParams.MATCH_PARENT,
             OverlayWindowTypes.contentPanelWindowType(context),
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             title = TAG
+            layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         backHandler = OverlayViewBackHandler(view) { handleBack() }.also { it.attach() }
         wm.addView(view, params)

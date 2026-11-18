@@ -742,6 +742,39 @@ object FloatBallOverlay {
         settingsState?.value?.let { applyBallLayout(it) }
     }
 
+    /**
+     * 长按手势直接接管为拖动挪球（手指不抬起直接拖动挪球，抬手保存）。
+     */
+    fun enterDirectMoveDrag(downX: Float, downY: Float, currentX: Float, currentY: Float) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { enterDirectMoveDrag(downX, downY, currentX, currentY) }
+            return
+        }
+        val settings = settingsState?.value ?: return
+        val view = displayView ?: return
+        val metrics = view.resources.displayMetrics
+
+        moveModeActive = true
+        touchHost?.beginDirectMove(downX, downY, currentX, currentY)
+        scheduleMoveModeTimeout()
+
+        cancelCursorPickPreview()
+        armDragSessionAtFinger(
+            settings = settings,
+            metrics = metrics,
+            touchDownX = downX,
+            touchDownY = downY,
+            fingerX = currentX,
+            fingerY = currentY,
+            fromEdgeGesture = false
+        )
+        setDragging(true)
+        ballDraggingState?.value = true
+        ballIconView?.setDragging(true)
+        flushDragChromeLayout(syncAnchorState = true)
+        updatePickAndBallFromFinger(moveBallWindow = true)
+    }
+
     private fun scheduleMoveModeTimeout() {
         moveModeExitRunnable?.let { mainHandler.removeCallbacks(it) }
         val runnable = Runnable { exitMoveMode() }
@@ -1957,6 +1990,15 @@ object FloatBallOverlay {
         if (!skipBackHaptic) {
             displayView?.let { HapticHelper.floatBallGestureStart(it, settings) }
         }
+        if (action == GestureAction.MoveFloatBall && gestureType == FloatBallGestureType.LONG_PRESS && !fromLineStrip) {
+            enterDirectMoveDrag(
+                downX = touchDownRawX ?: rawX,
+                downY = touchDownRawY ?: rawY,
+                currentX = rawX,
+                currentY = rawY
+            )
+            return
+        }
         executeFloatBallAction(
             settings = settings,
             action = action,
@@ -2628,7 +2670,8 @@ object FloatBallOverlay {
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             density = density,
-            pickDockSide = pickDockSide
+            pickDockSide = pickDockSide,
+            pressOnBall = pressOnBall
         )
         dragScreenBounds = bounds
     }

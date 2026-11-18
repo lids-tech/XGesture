@@ -1,9 +1,13 @@
 package com.slideindex.app.multitouch
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
@@ -34,6 +38,8 @@ import com.slideindex.app.shizuku.ShizukuUserServiceHost
 import com.slideindex.app.privilege.root.RootTaskManagerServiceHost
 import com.slideindex.app.privilege.root.TaskManagerRpcClient
 import com.slideindex.app.ui.gestureKindLabelRes
+import com.slideindex.app.util.OverlaySuppression
+import com.slideindex.app.util.OverlaySuppressionScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,6 +50,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
@@ -110,6 +117,50 @@ class MultiTouchGestureCoordinator @Inject constructor(
 
     @Volatile
     private var lastActionAtMs = 0L
+
+    private var reconnectJob: Job? = null
+
+    private val serviceDeathRecipient = IBinder.DeathRecipient {
+        Log.w(TAG, "observingService binder died, scheduling reconnect")
+        observingService = null
+        _status.value = _status.value.copy(running = false, detail = "binder-died")
+        scheduleAutoReconnect(1000L)
+    }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            val action = intent?.action ?: return
+            if (action == Intent.ACTION_SCREEN_ON || action == Intent.ACTION_USER_PRESENT) {
+                checkChannelHealthAndRecover()
+            }
+        }
+    }
+
+    private fun checkChannelHealthAndRecover() {
+        if (!settingsStore.state.value.enabled) return
+        val globalSettings = runCatching { settingsRepository.readSnapshot() }.getOrNull()
+        if (globalSettings?.serviceEnabled == false) return
+
+        val s = observingService
+        val r = rootService
+        val isAlive = (s != null && runCatching { s.asBinder().pingBinder() }.getOrDefault(false)) ||
+            (r != null && runCatching { r.apiVersion }.getOrNull() != null)
+        if (!isAlive) {
+            Log.i(TAG, "screen wakeup check: multi-touch channel is inactive, auto recovering...")
+            scheduleAutoReconnect(300L)
+        }
+    }
+
+    private fun scheduleAutoReconnect(delayMs: Long) {
+        reconnectJob?.cancel()
+        reconnectJob = applicationScope.launch(Dispatchers.IO) {
+            delay(delayMs)
+            if (settingsStore.state.value.enabled) {
+                Log.i(TAG, "auto reconnecting multi-touch observation...")
+                syncNow()
+            }
+        }
+    }
 
     private val callback = object : IOnMultiTouchGesture.Stub() {
         override fun onGesture(gesture: Int, fingerCount: Int, eventTimeMs: Long) {
@@ -214,24 +265,49 @@ class MultiTouchGestureCoordinator @Inject constructor(
     fun start() {
         if (started) return
         started = true
-        if (!isMainProcess()) return
+        if (!com.slideindex.app.util.AppProcess.isMain) return
+        Log.i(TAG, "MultiTouchCoordinator.start() initialized")
         runCatching { registerDisplayListener() }
         runCatching {
             Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         }
-        applicationScope.launch(Dispatchers.IO) {
-            // 开关、协议或设备变化都需要重启观察器；改手势条目不用重启。
-            settingsStore.state
-                .map { Triple(it.enabled, it.protocol, it.devicePath) }
-                .distinctUntilChanged()
-                .collect { syncNow() }
+        runCatching {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            androidx.core.content.ContextCompat.registerReceiver(
+                context,
+                screenReceiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
         }
-        // 切换「特权执行方式」（root / Shizuku）后要重新选择通道。
+        ShizukuUserServiceHost.onDisconnectedListener = {
+            Log.w(TAG, "ShizukuUserServiceHost disconnected, scheduling reconnect")
+            observingService = null
+            _status.value = _status.value.copy(running = false, detail = "service-disconnected")
+            scheduleAutoReconnect(1000L)
+        }
         applicationScope.launch(Dispatchers.IO) {
-            settingsRepository.settings
-                .map { it.privilegeMode }
+            // 先按磁盘最新鲜快照跑一次初始同步，确保冷启动立刻恢复手势观察
+            syncNow()
+            // 组合手势配置与全局特权/服务设置，监听后续变更
+            combine(
+                settingsStore.state.map { Triple(it.enabled, it.protocol, it.devicePath) },
+                settingsRepository.settings.map { Pair(it.privilegeMode, it.serviceEnabled) },
+            ) { gestureSettings, globalSettings ->
+                Pair(gestureSettings, globalSettings)
+            }
                 .distinctUntilChanged()
-                .collect { syncNow() }
+                .collect { (_, globalSettings) ->
+                    val (privilegeMode, serviceEnabled) = globalSettings
+                    Log.i(TAG, "settings flow changed: privilegeMode=$privilegeMode serviceEnabled=$serviceEnabled")
+                    syncNow(
+                        targetPrivilegeMode = privilegeMode,
+                        serviceEnabledOverride = serviceEnabled,
+                    )
+                }
         }
     }
 
@@ -288,7 +364,10 @@ class MultiTouchGestureCoordinator @Inject constructor(
         applicationScope.launch(Dispatchers.IO) { syncNow() }
     }
 
-    private suspend fun syncNow() {
+    private suspend fun syncNow(
+        targetPrivilegeMode: PrivilegeMode? = null,
+        serviceEnabledOverride: Boolean? = null,
+    ) {
         syncMutex.withLock {
             val settings = settingsStore.state.value
             val shizukuAvailable = runCatching {
@@ -301,14 +380,26 @@ class MultiTouchGestureCoordinator @Inject constructor(
 
             stopObservation()
 
-            if (!settings.enabled) {
-                _status.value = _status.value.copy(running = false, detail = "disabled")
+            val freshSettings = if (targetPrivilegeMode != null && serviceEnabledOverride != null) {
+                null
+            } else {
+                runCatching { settingsRepository.readFreshSnapshot() }.getOrNull()
+            }
+            val serviceEnabled = serviceEnabledOverride
+                ?: freshSettings?.serviceEnabled
+                ?: runCatching { settingsRepository.readSnapshot().serviceEnabled }.getOrDefault(true)
+
+            if (!settings.enabled || !serviceEnabled) {
+                _status.value = _status.value.copy(
+                    running = false,
+                    detail = if (!serviceEnabled) "service-disabled" else "disabled"
+                )
                 return
             }
 
-            val privilegeMode = runCatching {
-                settingsRepository.readSnapshot().privilegeMode
-            }.getOrDefault(PrivilegeMode.SHIZUKU)
+            val privilegeMode = targetPrivilegeMode
+                ?: freshSettings?.privilegeMode
+                ?: runCatching { settingsRepository.readSnapshot().privilegeMode }.getOrDefault(PrivilegeMode.SHIZUKU)
             if (privilegeMode == PrivilegeMode.ROOT) {
                 startRootObservation(false)
                 return
@@ -324,6 +415,7 @@ class MultiTouchGestureCoordinator @Inject constructor(
             if (service == null) {
                 _status.value = _status.value.copy(running = false, detail = "service-unavailable")
                 Log.i(TAG, "sync: user service unavailable")
+                scheduleAutoReconnect(3000L)
                 return
             }
             // 先把当前协议/设备/显示状态推给 service：观察器从第一帧起就按用户配置工作。
@@ -333,10 +425,12 @@ class MultiTouchGestureCoordinator @Inject constructor(
             }.getOrDefault(false)
             Log.i(TAG, "sync: start observation=$startedObservation")
             if (startedObservation) {
+                runCatching { service.asBinder().linkToDeath(serviceDeathRecipient, 0) }
                 observingService = service
                 _status.value = _status.value.copy(running = true, detail = "watching")
             } else {
                 _status.value = _status.value.copy(running = false, detail = "device-unavailable")
+                scheduleAutoReconnect(3000L)
             }
         }
     }
@@ -345,6 +439,7 @@ class MultiTouchGestureCoordinator @Inject constructor(
         val service = observingService
         observingService = null
         if (service != null) {
+            runCatching { service.asBinder().unlinkToDeath(serviceDeathRecipient, 0) }
             runCatching { service.stopMultiTouchObservation() }
         }
         rootPollJob?.cancel()
@@ -360,14 +455,18 @@ class MultiTouchGestureCoordinator @Inject constructor(
 
     /** root 模式：root 守护进程里的观察器入队事件，这里定时取走并分发。 */
     private fun startRootObservation(pathPriority: Boolean) {
-        // ⚠️ 不能用 `ensure(minApi = SERVICE_BUILD)` 强制换新守护进程：ensure 会先 `drop()`
-        // 把旧守护进程 destroy 掉，而它留下的 port 文件还被判为「活着」，maybeSpawnDaemon 于是
-        // 拒绝重启 —— 结果是 root 通道直接不可用（比没有锚点更糟）。
-        // 旧守护进程发的是 `g:kind:fingers`（无锚点），parseAnchor 会退回「无锚点」，面板落屏幕中间；
-        // root 守护进程下次重启（重启特权服务 / 开机）后自动带上锚点。
-        val root = runCatching {
+        var root = runCatching {
             RootTaskManagerServiceHost.ensure(context) as? TaskManagerRpcClient
         }.getOrNull()
+        // API 64 引入了多指手势轮询（startMultiTouchPolling/pollMultiTouchEvents）；
+        // 若当前常驻的守护进程 api < 64（例如系统里留下的远古僵尸进程），必须强制 restart 淘汰并拉起新 Daemon。
+        if (root == null || runCatching { root.apiVersion }.getOrDefault(0) < 64) {
+            Log.i(TAG, "root daemon is missing or outdated (< 64), restarting root service...")
+            RootTaskManagerServiceHost.restart(context)
+            root = runCatching {
+                RootTaskManagerServiceHost.ensure(context) as? TaskManagerRpcClient
+            }.getOrNull()
+        }
         if (root != null) {
             val api = runCatching { root.apiVersion }.getOrNull() ?: 0
             if (api < ShizukuUserServiceHost.SERVICE_BUILD) {
@@ -385,17 +484,27 @@ class MultiTouchGestureCoordinator @Inject constructor(
                 channel = "",
             )
             Log.i(TAG, "sync: root daemon unavailable")
+            scheduleAutoReconnect(3000L)
             return
         }
         pushMultiTouchConfig(root)
-        val started = runCatching { root.startMultiTouchPolling(pathPriority) }.getOrDefault(false)
-        Log.i(TAG, "sync: root start polling=$started")
+        var started = runCatching { root.startMultiTouchPolling(pathPriority) }.getOrDefault(false)
         if (!started) {
+            Log.w(TAG, "root start polling failed on api=${root.apiVersion}, attempting restart once...")
+            RootTaskManagerServiceHost.restart(context)
+            root = runCatching {
+                RootTaskManagerServiceHost.ensure(context) as? TaskManagerRpcClient
+            }.getOrNull()
+            started = root != null && runCatching { root.startMultiTouchPolling(pathPriority) }.getOrDefault(false)
+        }
+        Log.i(TAG, "sync: root start polling=$started")
+        if (!started || root == null) {
             _status.value = _status.value.copy(
                 running = false,
                 detail = "root-start-failed",
                 channel = "",
             )
+            scheduleAutoReconnect(3000L)
             return
         }
         rootService = root
@@ -405,10 +514,28 @@ class MultiTouchGestureCoordinator @Inject constructor(
             channel = "root",
         )
         rootPollJob = applicationScope.launch(Dispatchers.IO) {
+            var consecutiveErrors = 0
             while (isActive) {
-                val events = runCatching { root.pollMultiTouchEvents() }.getOrDefault(emptyArray())
-                for (event in events) {
-                    handleRootEvent(event)
+                val result = runCatching { root.pollMultiTouchEvents() }
+                if (result.isFailure) {
+                    consecutiveErrors++
+                    if (consecutiveErrors >= 5) {
+                        Log.w(TAG, "root polling consecutive failures, scheduling reconnect")
+                        rootService = null
+                        _status.value = _status.value.copy(
+                            running = false,
+                            detail = "root-poll-failed",
+                            channel = "",
+                        )
+                        scheduleAutoReconnect(2000L)
+                        break
+                    }
+                } else {
+                    consecutiveErrors = 0
+                    val events = result.getOrNull() ?: emptyArray()
+                    for (event in events) {
+                        handleRootEvent(event)
+                    }
                 }
                 delay(ROOT_POLL_INTERVAL_MS)
             }
@@ -460,6 +587,17 @@ class MultiTouchGestureCoordinator @Inject constructor(
         fingerCount: Int,
         anchor: TouchAnchor?,
     ) {
+        val hostContext = SlideIndexAccessibilityService.overlayHostContext() ?: context
+        val appSettings = runCatching { settingsRepository.readSnapshot() }.getOrNull()
+        if (appSettings != null && OverlaySuppression.shouldSuppress(
+                settings = appSettings,
+                context = hostContext,
+                foregroundPackage = null,
+                scope = OverlaySuppressionScope.MULTI_TOUCH,
+            )) {
+            Log.i(TAG, "multi-touch suppressed by foreground app")
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         if (now - lastActionAtMs < ACTION_COOLDOWN_MS) return
         lastActionAtMs = now

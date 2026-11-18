@@ -66,6 +66,7 @@ data class GestureSettings(
     val panelOpacity: Float = 0.95f,
     /** 任务切换器面板宽度（dp）。 */
     val taskSwitcherPanelWidthDp: Int = 226,
+    val taskSwitcherCloseMode: TaskSwitcherCloseMode = TaskSwitcherCloseMode.DISMISS_RECENTS,
     val hapticEnabled: Boolean = true,
     val hapticStrengthLevel: Int = HapticStrength.MEDIUM.level,
     val hapticGestureTriggerEnabled: Boolean = true,
@@ -177,6 +178,7 @@ data class GestureSettings(
             quickLauncherRowsPerPage = settings.quickLauncherRowsPerPage,
             panelOpacity = settings.panelOpacity,
             taskSwitcherPanelWidthDp = settings.taskSwitcherPanelWidthDp,
+            taskSwitcherCloseMode = settings.taskSwitcherCloseMode,
             hapticEnabled = settings.hapticEnabled,
             hapticStrengthLevel = settings.hapticStrengthLevel,
             hapticGestureTriggerEnabled = settings.hapticGestureTriggerEnabled,
