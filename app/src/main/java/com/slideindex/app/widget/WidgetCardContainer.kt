@@ -157,53 +157,42 @@ class WidgetCardContainer(
             }
             return@apply
           }
-          // ① 先铺「应用图标」兜底（缓存 + 后台，命中就是一瞬间）。
-          // 动作 / 快捷方式的专属图标解析失败时（例如"创建快捷方式"存的是伪造 id、
-          // 或 provider 已卸载），至少还能显示所属应用的图标 —— 否则格子会变成空白。
-          if (item.packageName.isNotEmpty()) {
-            val fallbackTag = "app:${item.packageName}"
-            tag = fallbackTag
-            WidgetAppIconCache.load(context, item.packageName) { bitmap ->
-              if (tag == fallbackTag) setImageDrawable(bitmap.toDrawable(resources))
-            }
-          }
-          // ② 再解析专属图标；成功就覆盖掉兜底图标（tag 换掉后，兜底回调会自行放弃）。
-          when {
-            item.itemType == ITEM_TYPE_ACTION && action != null -> {
-              val key = WidgetCellIconLoader.actionKey(action)
-              val cached = WidgetCellIconLoader.peek(key)
-              if (cached != null) {
-                setImageDrawable(cached.toDrawable(resources))
-              } else {
-                tag = key
-                WidgetCellIconLoader.loadAction(context, action, iconSizePx) { bitmap ->
-                  if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
-                }
-              }
-            }
-            item.itemType == ITEM_TYPE_SHORTCUT -> {
-              // 走「轮盘同款」解析器：动态 / 组件 / intent 三种 payload 都能出图，
-              // 拿不到专属图标时它会自己回落到所属应用图标。
-              // payloadKey 优先用存下来的 intentUri（自描述编码），
-              // 旧数据没有时再用「包名 + shortcutId」拼动态编码。
-              val payloadKey = com.slideindex.app.widget.WidgetPanelFieldCodec
+          // ② 动作 / 快捷方式：统一走**快捷轮盘同款**解析器
+          //（QuickWheelIconResolver）：快捷方式会按「应用内直达目录」查真实图标，
+          // 查不到才回落宿主应用图标；非这两类动作才用矢量动作图标。
+          // 单一路径 → 不会出现「应用图标 ↔ 右上箭头」来回跳。
+          val wheelAction = when {
+            item.itemType == ITEM_TYPE_ACTION -> action
+            item.itemType == ITEM_TYPE_SHORTCUT -> com.slideindex.app.gesture.GestureAction.LaunchShortcut(
+              payloadKey = com.slideindex.app.widget.WidgetPanelFieldCodec
                 .decode(item.intentUri).ifBlank {
                   com.slideindex.app.gesture.GestureShortcutPayload.encodeDynamic(
-                  item.packageName,
-                  item.shortcutId,
-                  item.label,
-                )
+                    item.packageName,
+                    item.shortcutId,
+                    item.label,
+                  )
+                },
+              label = item.label,
+            )
+            else -> null
+          }
+          if (wheelAction != null) {
+            val key = "wheel:${"${wheelAction.type.id}"}:${"${wheelAction.payload}"}:$iconSizePx"
+            val cached = WidgetCellIconLoader.peek(key)
+            if (cached != null) {
+              setImageDrawable(cached.toDrawable(resources))
+            } else {
+              tag = key
+              WidgetCellIconLoader.loadWheelIcon(context, wheelAction, iconSizePx) { bitmap ->
+                if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
               }
-              val key = "sc:$payloadKey:$iconSizePx"
-              val cached = WidgetCellIconLoader.peek(key)
-              if (cached != null) {
-                setImageDrawable(cached.toDrawable(resources))
-              } else {
-                tag = key
-                WidgetCellIconLoader.loadShortcutIcon(context, payloadKey, iconSizePx) { bitmap ->
-                  if (tag == key) setImageDrawable(bitmap.toDrawable(resources))
-                }
-              }
+            }
+          } else if (item.packageName.isNotEmpty()) {
+            // 应用格子只有一种图标 → 走应用图标缓存（同样单一加载）。
+            val iconPackage = item.packageName
+            tag = iconPackage
+            WidgetAppIconCache.load(context, iconPackage) { bitmap ->
+              if (tag == iconPackage) setImageDrawable(bitmap.toDrawable(resources))
             }
           }
         }

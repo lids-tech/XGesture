@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
+import androidx.compose.ui.graphics.asAndroidBitmap
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.ui.ActionIconBitmap
 import com.slideindex.app.util.GestureActionIconBitmap
@@ -162,6 +163,44 @@ internal object WidgetCellIconLoader {
           sizePx = sizePx,
           tintArgb = android.graphics.Color.WHITE,
           plateFallback = true,
+        )
+      }.getOrNull() ?: return@launch
+      cache.put(key, bitmap)
+      mainHandler.post { onLoaded(bitmap) }
+    }
+  }
+
+  /**
+   * 用**快捷轮盘同款**解析器取图标（[QuickWheelIconResolver.actionBitmapFor]）。
+   *
+   * 为什么不用自己的那套：轮盘的解析器对 LaunchShortcut 会去「应用内直达目录」里
+   * 查真实快捷方式图标（还带目录指纹缓存），查不到才回落到宿主应用图标；
+   * 而 `GestureActionIconBitmap` 对快捷方式只会给一个**默认箭头**——
+   * 这就是"图标一会儿是应用图标、一会儿变成右上箭头"的根因（两条路径抢着贴图）。
+   *
+   * 非应用 / 快捷方式的动作回落到矢量动作图标，行为与之前一致。
+   */
+  fun loadWheelIcon(
+    context: Context,
+    action: GestureAction,
+    sizePx: Int,
+    onLoaded: (Bitmap) -> Unit,
+  ) {
+    val key = "wheel:${action.type.id}:${action.payload}:$sizePx"
+    peek(key)?.let { onLoaded(it); return }
+    val appContext = context.applicationContext
+    scope.launch {
+      val bitmap = runCatching {
+        com.slideindex.app.overlay.quickwheel.QuickWheelIconResolver
+          .actionBitmapFor(appContext, action, sizePx)
+          ?.asAndroidBitmap()
+      }.getOrNull() ?: runCatching {
+        GestureActionIconBitmap.get(
+          action = action,
+          sizePx = sizePx,
+          tintArgb = android.graphics.Color.WHITE,
+          outlined = true,
+          withPlate = true,
         )
       }.getOrNull() ?: return@launch
       cache.put(key, bitmap)
