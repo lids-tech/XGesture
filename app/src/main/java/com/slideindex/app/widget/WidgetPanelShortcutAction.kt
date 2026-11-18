@@ -5,34 +5,57 @@ import com.slideindex.app.gesture.GestureShortcutPayload
 import com.slideindex.app.launcher.QuickLauncherItemCodec
 
 /**
- * 把面板里存下来的「快捷方式 payload」还原成可执行的 [GestureAction.LaunchShortcut]。
+ * 把面板里存下来的「快捷方式」还原成可执行的 [GestureAction.LaunchShortcut]。
  *
- * ⚠️ 面板存的是**快速启动器条目**的 payload（三种形态），而 `GestureShortcutPayload`
- * 只认自己那种编码 —— 日志实测 `pkg=com.niven.translator id=fullscreen payloadKind=UNDECODABLE`
- * 就是这个错位：payload 本身是好的，只是按错的解码器去解。
+ * 真机数据（从 DataStore 里 dump 出来的）长这样：
+ * ```
+ * label       = Fullscreen Translate
+ * packageName = com.niven.translator
+ * shortcutId  = fullscreen
+ * intentUri   = flg=0x1000c000#Intent;launchFlags=0x10000000;
+ *               component=com.niven.translator/com.niven.translate.TileActivity;end
+ * ```
+ * 注意 `intentUri` 是**残缺的 intent URI 片段**（少了 `intent:#Intent;` 前缀），
+ * `Intent.parseUri` 解不了；而 `shortcutId` 是真实的快捷方式 id。
  *
- * 与快捷轮盘添加快捷方式时的 `shortcutToLaunchShortcut` 同一套规则：
- * 1. `包名\u001C快捷id`（快速启动器的动态快捷方式）→ [GestureAction.LaunchShortcut.dynamic]
- * 2. `i:…` / `is:…`（intent / 多 intent）→ intent 形态
- * 3. `c:包名/类名`（组件）→ component 形态
- * 4. 已经是 GestureShortcutPayload 编码 → 直接用
+ * 所以按「最确定 → 最兜底」的顺序还原：
+ * 1. 从片段里抠 `component=包名/类名` → 组件形态（执行器会走 ActivityShortcutLauncher，
+ *    已导出普通启动、未导出走 Root/Shizuku —— TileActivity 这类基本都是未导出的）
+ * 2. `shortcutId` 是干净的 id → 动态快捷方式（与快捷轮盘添加时同一形态）
+ * 3. 完整 intent URI / 快速启动器的 intent 编码
+ * 4. 快速启动器的动态快捷方式编码（包名\u001Cid）
+ * 5. 已经是 LaunchShortcut 原生编码
+ * 6. 兜底：面板字段拼动态快捷方式
  */
 object WidgetPanelShortcutAction {
 
+    /** 快捷方式 payload 里的控制字符（面板编码分隔符，不能出现在 id 里）。 */
+    private val CONTROL_CHARS = charArrayOf('\u001C', '\u001D', '\u001E', '\u001F')
+
     fun fromItem(item: WidgetPanelItem): GestureAction.LaunchShortcut? {
         val label = item.label
-        // 优先：面板自己存的原生 payload（老数据没转义 → 原样返回）。
-        val raw = WidgetPanelFieldCodec.decode(item.intentUri).ifBlank { item.shortcutId }
+        val raw = WidgetPanelFieldCodec.decode(item.intentUri)
 
-        // 1) 直接就是 LaunchShortcut 的编码（c:/i:/is:/动态包名\u001Cid）。
-        GestureShortcutPayload.decode(raw)?.let { return actionOf(raw, label) }
-
-        // 2) 快速启动器的动态快捷方式编码：包名\u001C快捷id[\u001D标签]。
-        QuickLauncherItemCodec.parseShortcutPayload(raw)?.let { (packageName, shortcutId) ->
-            return GestureAction.LaunchShortcut.dynamic(packageName, shortcutId, label)
+        // 1) 从 intent URI（含残缺片段）里抠 component。
+        componentFrom(raw)?.let { flat ->
+            return GestureAction.LaunchShortcut.component(flat, label)
         }
 
-        // 3) intent / 多 intent 编码。
+        // 2) 干净的快捷方式 id → 动态快捷方式。
+        val shortcutId = item.shortcutId.trim()
+        val idLooksReal = shortcutId.isNotEmpty() &&
+            shortcutId.none { it in CONTROL_CHARS } &&
+            !shortcutId.startsWith("c:") &&
+            !shortcutId.startsWith("i:") &&
+            !shortcutId.startsWith("is:")
+        if (idLooksReal && item.packageName.isNotBlank()) {
+            return GestureAction.LaunchShortcut.dynamic(item.packageName, shortcutId, label)
+        }
+
+        // 3) 完整 intent URI / 快速启动器的 intent 编码。
+        if (raw.startsWith("intent:") || raw.startsWith("#Intent;")) {
+            return GestureAction.LaunchShortcut.intent(raw, label)
+        }
         QuickLauncherItemCodec.parseIntentPayload(raw)?.let { uri ->
             return GestureAction.LaunchShortcut.intent(uri, label)
         }
@@ -40,31 +63,40 @@ object WidgetPanelShortcutAction {
             return intentsAction(uris, label)
         }
 
-        // 4) 原始 android intent URI（老面板数据 / 手动创建）。
-        if (raw.startsWith("intent:") || raw.startsWith("#")) {
-            return GestureAction.LaunchShortcut.intent(raw, label)
+        // 4) 快速启动器的动态快捷方式编码：包名\u001C快捷id[\u001D标签]。
+        QuickLauncherItemCodec.parseShortcutPayload(raw)?.let { pair ->
+            return GestureAction.LaunchShortcut.dynamic(pair.first, pair.second, label)
         }
 
-        // 5) 组件形态裸值：包名/类名。
-        if (raw.count { it == '/' } == 1 && raw.contains('.')) {
-            return GestureAction.LaunchShortcut.component(raw, label)
+        // 5) 已经是 LaunchShortcut 自己的编码（c:/i:/is:）。
+        if (GestureShortcutPayload.decode(raw) != null) {
+            return GestureAction.LaunchShortcut(payloadKey = raw, label = label)
         }
 
-        // 6) 兜底：拿 packageName + shortcutId 拼动态快捷方式（面板字段最原始的形态）。
-        if (item.packageName.isNotBlank() && item.shortcutId.isNotBlank()) {
-            return GestureAction.LaunchShortcut.dynamic(item.packageName, item.shortcutId, label)
+        // 6) 兜底：面板字段。
+        if (item.packageName.isNotBlank() && shortcutId.isNotBlank()) {
+            return GestureAction.LaunchShortcut.dynamic(item.packageName, shortcutId, label)
         }
         return null
     }
 
-    private fun actionOf(payloadKey: String, label: String): GestureAction.LaunchShortcut =
-        GestureAction.LaunchShortcut(payloadKey = payloadKey, label = label)
+    /**
+     * 从 intent URI / 残缺片段里抠出 `component=包名/类名`。
+     *
+     * 例：`flg=0x1000c000#Intent;launchFlags=0x10000000;component=com.niven.translator/
+     * com.niven.translate.TileActivity;end` → `com.niven.translator/com.niven.translate.TileActivity`
+     */
+    private fun componentFrom(raw: String): String? {
+        if (raw.isBlank()) return null
+        val match = Regex("component=([^;&\\s]+/[^;&\\s]+)").find(raw) ?: return null
+        val flat = match.groupValues[1].trim()
+        return flat.takeIf { it.count { c -> c == '/' } == 1 && it.contains('.') }
+    }
 
     private fun intentsAction(
         uris: List<String>,
         label: String,
     ): GestureAction.LaunchShortcut {
-        // 多 intent：逐个串成 GestureShortcutPayload 的多 intent 编码（is:…\u001F…）。
         val payload = GestureShortcutPayload.encodeIntents(uris, label)
         return GestureAction.LaunchShortcut(payloadKey = payload, label = label)
     }
