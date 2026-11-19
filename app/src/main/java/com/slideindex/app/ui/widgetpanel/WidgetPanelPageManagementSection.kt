@@ -57,6 +57,7 @@ fun WidgetPanelPageManagementSection(
 ) {
     val latestPages by rememberUpdatedState(pages)
     val safeIndex = selectedIndex.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
+    val context = androidx.compose.ui.platform.LocalContext.current
     val currentPage = pages.getOrElse(safeIndex) { WidgetPanelDefaults.defaultPage }
     var renameTarget by remember { mutableStateOf<WidgetPanelPage?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -93,7 +94,7 @@ fun WidgetPanelPageManagementSection(
                 text = duplicateLabel,
                 enabled = pages.size < QuickLauncherPanelDefaults.MAX_PANELS,
                 onClick = {
-                    val duplicated = WidgetPanelMutator.duplicatePage(latestPages, safeIndex)
+                    val duplicated = WidgetPanelMutator.duplicatePage(context, latestPages, safeIndex)
                     if (duplicated != null) {
                         onPagesChange(duplicated)
                         onSelectedIndexChange(duplicated.lastIndex)

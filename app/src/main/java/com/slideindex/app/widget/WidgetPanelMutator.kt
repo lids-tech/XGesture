@@ -17,21 +17,49 @@ object WidgetPanelMutator {
    * 应用 / 动作 / 快捷方式格子的 id 是合成负数，复制时换新 id 避免和原页冲突；
    * 小组件格子的 id 是真实 AppWidget id，保持不变（这样复制出来的页显示同一个小组件）。
    */
-  fun duplicatePage(pages: List<WidgetPanelPage>, pageIndex: Int): List<WidgetPanelPage>? {
+  fun duplicatePage(
+    context: Context,
+    pages: List<WidgetPanelPage>,
+    pageIndex: Int,
+  ): List<WidgetPanelPage>? {
     val effective = WidgetPanelDefaults.effectivePages(pages).toMutableList()
     if (pageIndex !in effective.indices) return null
     val source = effective[pageIndex]
     val newPageId = (effective.maxOfOrNull { it.id } ?: 0L) + 1L
+    val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context.applicationContext)
     var nextSynthetic = (effective.flatMap { it.items }
       .filter { it.appWidgetId < 0 }
       .minOfOrNull { it.appWidgetId } ?: -1) - 1
+    // 复制页必须「绝对独立」：小组件要分配**新的 AppWidget id** 并绑定到同一个 provider。
+    // 不能沿用原 id —— 同一个 AppWidget 只会有**一个**宿主视图实例
+    // （AppWidgetHost 内部按 appWidgetId 记录视图），两页引用同 id 会互相覆盖更新，
+    // 真机表现就是「复制页内容缺失 / 反复呼出有时正常有时缺失」。
     val copiedItems = source.items.map { item ->
-      if (item.appWidgetId < 0) {
-        item.copy(appWidgetId = nextSynthetic--)
-      } else {
-        item
+      when {
+        item.itemType == ITEM_TYPE_WIDGET && item.appWidgetId > 0 -> {
+          val freshId = runCatching {
+            val allocated = WidgetPopupHost.allocateAppWidgetId(context)
+            val provider = appWidgetManager.getAppWidgetInfo(item.appWidgetId)?.provider
+            if (provider != null &&
+              appWidgetManager.bindAppWidgetIdIfAllowed(allocated, provider)
+            ) {
+              allocated
+            } else {
+              runCatching { WidgetPopupHost.deleteAppWidgetId(context, allocated) }
+              -1
+            }
+          }.getOrDefault(-1)
+          if (freshId > 0) {
+            item.copy(appWidgetId = freshId)
+          } else {
+            // 绑定失败（无 BIND_APPWIDGET 权限）：跳过这个小组件，避免复制页把原页拖坏。
+            null
+          }
+        }
+        item.appWidgetId < 0 -> item.copy(appWidgetId = nextSynthetic--)
+        else -> item
       }
-    }
+    }.filterNotNull()
     effective.add(
       source.copy(
         id = newPageId,
