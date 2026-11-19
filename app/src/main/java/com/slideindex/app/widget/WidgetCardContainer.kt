@@ -143,8 +143,11 @@ class WidgetCardContainer(
             }
           }
         }.apply {
-          // 图标颜色（编辑器可设）：非 0 时给图标整体着色。
-          if (item.iconColorArgb != 0L) {
+          // 图标颜色（编辑器可设）：只作用于**文字 / 矢量**图标（图标库里的字、字形），
+          // 应用/快捷方式的真实位图图标保持原色、不整体染色。
+          if (item.iconColorArgb != 0L &&
+            (item.iconKey.isNotBlank() || item.itemType == ITEM_TYPE_ACTION)
+          ) {
             setColorFilter(item.iconColorArgb.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
           }
           // ── 图标加载全部走后台 + 缓存（WidgetCellIconLoader）──

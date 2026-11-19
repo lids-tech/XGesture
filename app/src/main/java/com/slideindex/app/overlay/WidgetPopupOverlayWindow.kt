@@ -142,6 +142,7 @@ object WidgetPopupOverlayWindow {
       page = initialPage,
       density = density,
       pageCount = effectivePages.size,
+      screenHeightPx = hostContext.resources.displayMetrics.heightPixels,
     )
 
     val root = WidgetPopupRootLayout(hostContext, onDismissOutside = { dismiss() })
