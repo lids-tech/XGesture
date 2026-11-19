@@ -60,6 +60,12 @@ data class WidgetPanelSubActionsResult(
     val subActions: List<String>,
     val subMenu: WidgetPanelSubMenuConfig,
     val iconKey: String,
+    /** 格子容器底色；0 = 不画。 */
+    val containerColorArgb: Long = 0L,
+    /** 图标颜色；0 = 原色。 */
+    val iconColorArgb: Long = 0L,
+    /** 名称颜色；0 = 默认白。 */
+    val labelColorArgb: Long = 0L,
 )
 
 /**
@@ -114,6 +120,9 @@ fun WidgetPanelSubActionsEditorContent(
     var drafts by remember(item) { mutableStateOf(item.subActions) }
     var config by remember(item) { mutableStateOf(item.subMenu.normalized()) }
     var cellIconKey by remember(item) { mutableStateOf(item.iconKey) }
+    var cellContainerColor by remember(item) { mutableStateOf(item.containerColorArgb) }
+    var cellIconColor by remember(item) { mutableStateOf(item.iconColorArgb) }
+    var cellLabelColor by remember(item) { mutableStateOf(item.labelColorArgb) }
     var page by remember { mutableStateOf<SubActionPage>(SubActionPage.List) }
 
     fun addAction(action: GestureAction) {
@@ -145,7 +154,16 @@ fun WidgetPanelSubActionsEditorContent(
                     }
                     Row {
                         TextButton(onClick = {
-                            onSave(WidgetPanelSubActionsResult(drafts, config, cellIconKey))
+                            onSave(
+                                WidgetPanelSubActionsResult(
+                                    subActions = drafts,
+                                    subMenu = config,
+                                    iconKey = cellIconKey,
+                                    containerColorArgb = cellContainerColor,
+                                    iconColorArgb = cellIconColor,
+                                    labelColorArgb = cellLabelColor,
+                                ),
+                            )
                             onDismiss()
                         }) { Text("保存") }
                         IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
@@ -156,10 +174,14 @@ fun WidgetPanelSubActionsEditorContent(
                     modifier = Modifier.weight(1f).padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // ── 一级格子自己的图标 ──
+                    // ── 一级格子自己的图标（容器图标）+ 容器外观三色 ──
                     item(key = "cell-icon") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("格子图标", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text(
+                                "容器图标",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.weight(1f),
+                            )
                             ActionIconPickerHost(
                                 action = item.toGestureAction(),
                                 iconKey = cellIconKey.takeIf { it.isNotBlank() },
@@ -169,8 +191,19 @@ fun WidgetPanelSubActionsEditorContent(
                                 onReset = { cellIconKey = "" },
                             )
                         }
+                        QuickWheelSlotColorRow(
+                            title = "容器颜色",
+                            argb = cellContainerColor,
+                        ) { cellContainerColor = it }
+                        QuickWheelSlotColorRow(
+                            title = "图标颜色",
+                            argb = cellIconColor,
+                        ) { cellIconColor = it }
+                        QuickWheelSlotColorRow(
+                            title = "文字颜色",
+                            argb = cellLabelColor,
+                        ) { cellLabelColor = it }
                     }
-
                     // ── 布局与容器外观：全部复用快捷轮盘的滑条 / 颜色行 ──
                     item(key = "layout") {
                         // 列数 / 行数 / 偏移是**全局**设置（所有容器共用一套），

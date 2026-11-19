@@ -219,6 +219,12 @@ data class WidgetPanelItem(
     val subMenu: WidgetPanelSubMenuConfig = WidgetPanelSubMenuConfig(),
     /** 该格子的自定义图标 key（空 = 用目标自己的图标）。 */
     val iconKey: String = "",
+    /** 格子容器底色（ARGB）；0 = 不画底色（保持透明）。 */
+    val containerColorArgb: Long = 0L,
+    /** 图标颜色（ARGB）；0 = 用目标自己的图标原色。 */
+    val iconColorArgb: Long = 0L,
+    /** 名称文字颜色（ARGB）；0 = 默认白色。 */
+    val labelColorArgb: Long = 0L,
 )
 
 data class WidgetPanelPage(
@@ -327,6 +333,9 @@ object WidgetPanelCodec {
             item.subActions.joinToString(SUB_ACTION_SEP),
             item.subMenu.encode(),
             item.iconKey,
+            item.containerColorArgb.toString(),
+            item.iconColorArgb.toString(),
+            item.labelColorArgb.toString(),
         ).joinToString(FIELD_SEP)
 
     private fun decodeItem(raw: String): WidgetPanelItem? {
@@ -356,6 +365,9 @@ object WidgetPanelCodec {
             subActions = subActions,
             subMenu = WidgetPanelSubMenuConfig.decode(parts.getOrNull(13)),
             iconKey = parts.getOrNull(14).orEmpty(),
+            containerColorArgb = parts.getOrNull(15)?.toLongOrNull() ?: 0L,
+            iconColorArgb = parts.getOrNull(16)?.toLongOrNull() ?: 0L,
+            labelColorArgb = parts.getOrNull(17)?.toLongOrNull() ?: 0L,
         )
     }
 

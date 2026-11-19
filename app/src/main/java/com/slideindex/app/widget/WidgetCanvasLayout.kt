@@ -761,7 +761,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val hoverY = hoverCellY
     if (hoverX < 0 || hoverY < 0) return
 
-    val previewPage = WidgetPanelGridLogic.moveItemWithAutoSwapOrShift(initialPage, item, hoverX, hoverY)
+    val previewPage = WidgetPanelGridLogic.moveItemInsert(initialPage, item, hoverX, hoverY)
     val step = currentGridStepPx
     if (step <= 0) return
 

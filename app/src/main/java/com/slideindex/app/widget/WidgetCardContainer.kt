@@ -99,6 +99,15 @@ class WidgetCardContainer(
     clipToPadding = false
     clipToOutline = false
 
+    // 格子容器底色（编辑器里可设；0 = 不画，保持透明）。
+    if (item.containerColorArgb != 0L) {
+      background = android.graphics.drawable.GradientDrawable().apply {
+        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+        setColor(item.containerColorArgb.toInt())
+        cornerRadius = cardCornerRadiusPx
+      }
+    }
+
     loadingPlaceholder = WidgetLoadingPlaceholder(context)
     scalableFrame = ScalableFrameLayout(context)
 
@@ -134,6 +143,10 @@ class WidgetCardContainer(
             }
           }
         }.apply {
+          // 图标颜色（编辑器可设）：非 0 时给图标整体着色。
+          if (item.iconColorArgb != 0L) {
+            setColorFilter(item.iconColorArgb.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
+          }
           // ── 图标加载全部走后台 + 缓存（WidgetCellIconLoader）──
           // 原先动作图标（矢量渲染）、快捷方式图标（binder 往返）、自定义图标（可能解码图片）
           // 都在构造期同步解析：面板空着没事，放几张卡之后呼出/收回就"顿一下"。
@@ -193,7 +206,7 @@ class WidgetCardContainer(
 
         val labelView = android.widget.TextView(context).apply {
           text = item.label
-          setTextColor(Color.WHITE)
+          setTextColor(if (item.labelColorArgb != 0L) item.labelColorArgb.toInt() else Color.WHITE)
           setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
           gravity = Gravity.CENTER
           maxLines = 1
@@ -255,44 +268,16 @@ class WidgetCardContainer(
             //   pkg=com.niven.translator id=fullscreen payloadKind=UNDECODABLE
             // 就是这个错位：payload 本身是好的，只是按错的解码器去解。
             // 统一用 WidgetPanelShortcutAction（= 轮盘添加时的转换规则）还原成可执行动作。
-            val shortcutAction = WidgetPanelShortcutAction.fromItem(item)
+            // ⚠️ 快捷方式必须按「真实快捷方式」解析（与轮盘添加同源）：
+            // 只按 component 启动会丢 extras（「开始录音」→ 只开界面不录音）。
+            // resolveAsync 会先查 AppShortcutLoader 拿真实 intent，再回退各种编码。
             val settings = com.slideindex.app.overlay.panels.PanelRuntimeHooks
               .settingsSnapshot?.invoke(context)
             val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
               ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
-            val decoded = shortcutAction?.let { act ->
-              runCatching {
-                com.slideindex.app.gesture.GestureShortcutPayload.decode(act.payloadKey)
-              }.getOrNull()
-            }
-            android.util.Log.i(
-              "WidgetPanelShortcut",
-              "tap shortcut: pkg=" + item.packageName + " id=" + item.shortcutId +
-                " payloadKind=" + (decoded?.javaClass?.simpleName ?: "UNDECODABLE") +
-                " action=" + shortcutAction?.payloadKey?.take(40) +
-                " runner=" + (runner != null) + " settings=" + (settings != null),
-            )
-            if (settings != null && runner != null && shortcutAction != null && decoded != null) {
-              val location = IntArray(2)
-              getLocationOnScreen(location)
-              val run = runCatching {
-                runner.run(
-                  shortcutAction,
-                  settings,
-                  false,
-                  location[0] + width / 2f,
-                  location[1] + height / 2f,
-                  null,
-                )
-              }
-              // 先执行成功再收面板（顺序反了会被后台启动限制拦掉）。
-              if (run.isSuccess) {
-                com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-              }
-            } else {
+            if (settings == null || runner == null) {
               com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-              // 极端兜底：执行器不可用时退回原来的直连启动（至少动态快捷方式还能开）。
-              val launched = runCatching {
+              runCatching {
                 val launcherApps =
                   context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? android.content.pm.LauncherApps
                 launcherApps?.startShortcut(
@@ -302,14 +287,31 @@ class WidgetCardContainer(
                   null,
                   android.os.Process.myUserHandle(),
                 )
-                true
-              }.getOrDefault(false)
-              if (!launched && item.intentUri.isNotEmpty()) {
+              }
+              return@setOnClickListener
+            }
+            val location = IntArray(2)
+            getLocationOnScreen(location)
+            val anchorX = location[0] + width / 2f
+            val anchorY = location[1] + height / 2f
+            WidgetPanelShortcutAction.resolveAsync(context, item) { action ->
+              val decoded = action?.let { act ->
                 runCatching {
-                  val intent = android.content.Intent.parseUri(item.intentUri, 0).apply {
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                  }
-                  context.startActivity(intent)
+                  com.slideindex.app.gesture.GestureShortcutPayload.decode(act.payloadKey)
+                }.getOrNull()
+              }
+              android.util.Log.i(
+                "WidgetPanelShortcut",
+                "tap shortcut: pkg=" + item.packageName + " id=" + item.shortcutId +
+                  " payloadKind=" + (decoded?.javaClass?.simpleName ?: "UNDECODABLE") +
+                  " action=" + action?.payloadKey?.take(48),
+              )
+              if (action != null && decoded != null) {
+                val run = runCatching {
+                  runner.run(action, settings, false, anchorX, anchorY, null)
+                }
+                if (run.isSuccess) {
+                  com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
                 }
               }
             }

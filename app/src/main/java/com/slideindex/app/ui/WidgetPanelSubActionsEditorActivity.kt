@@ -74,6 +74,9 @@ class WidgetPanelSubActionsEditorActivity : ComponentActivity() {
                                 subActions = result.subActions,
                                 subMenu = result.subMenu,
                                 iconKey = result.iconKey,
+                                containerColorArgb = result.containerColorArgb,
+                                iconColorArgb = result.iconColorArgb,
+                                labelColorArgb = result.labelColorArgb,
                             )
                         } else {
                             item

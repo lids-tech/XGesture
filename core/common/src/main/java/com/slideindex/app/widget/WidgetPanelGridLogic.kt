@@ -65,9 +65,73 @@ object WidgetPanelGridLogic {
         return item.copy(x = x, y = y, spanX = spanX, spanY = spanY)
     }
 
+    /**
+     * 把一页裁进网格范围。
+     *
+     * ⚠️ 只 clamp 会**重叠**：列数变少时（4 → 3），原本在 x=3 的格子被压到 x=2，
+     * 和本来就在 x=2 的格子撞在一起 → 真机上的"格子互相重叠"。
+     * 所以 clamp 之后还要按顺序**去重叠**：已被占住的就顺延到下一个空位。
+     */
     fun fitPageToGrid(page: WidgetPanelPage): WidgetPanelPage {
         if (page.items.isEmpty()) return page.copy(rowCount = computeContentRowCount(page))
-        val updated = page.copy(items = page.items.map { fitItemToGrid(page, it) })
+        val clamped = page.items.map { fitItemToGrid(page, it) }
+        val placed = mutableListOf<WidgetPanelItem>()
+        for (item in clamped) {
+            var candidate = item
+            // 换个空位（行优先）直到不重叠；用来判断空位的临时页只包含已摆放的格子。
+            val occupied = page.copy(items = placed)
+            if (!isAreaFree(occupied, candidate.x, candidate.y, candidate.spanX, candidate.spanY)) {
+                val free = findFirstFreeSlot(occupied, candidate.spanX, candidate.spanY)
+                if (free != null) {
+                    candidate = candidate.copy(x = free.first, y = free.second)
+                }
+            }
+            placed += candidate
+        }
+        val updated = page.copy(items = placed)
+        return updated.copy(rowCount = computeContentRowCount(updated))
+    }
+
+    /**
+     * 拖动**插入**（不是交换）：目标位置被别的格子占着时，把挡路的格子往后挤，
+     * 给被拖的格子腾位置 —— 和列表拖拽重排的手感一致。
+     *
+     * 旧实现 [moveItemWithAutoSwapOrShift] 是"1 换 1 交换"：拖到别人身上两个格子互换，
+     * 用户要的是"插入"（其余格子依次后移）。
+     */
+    fun moveItemInsert(
+        page: WidgetPanelPage,
+        targetItem: WidgetPanelItem,
+        targetX: Int,
+        targetY: Int,
+    ): WidgetPanelPage {
+        val clampedX = targetX.coerceIn(0, (page.columnCount - targetItem.spanX).coerceAtLeast(0))
+        val clampedY = targetY.coerceAtLeast(0)
+        val moved = targetItem.copy(x = clampedX, y = clampedY)
+        // 1) 先移除被拖的格子，余下的按阅读顺序（y 再 x）排列 —— 插入顺序要稳定。
+        val others = page.items
+            .filterNot { it.appWidgetId == targetItem.appWidgetId }
+            .sortedWith(compareBy({ it.y }, { it.x }))
+        // 2) 依次摆放：先放在插入点之前的格子，再放被拖的格子，最后放其余格子；
+        //    任何与已摆放格子重叠的，顺延到下一个空位（= "插入 + 其余后移"）。
+        val placed = mutableListOf<WidgetPanelItem>()
+        var movedPlaced = false
+        for (other in others) {
+            val afterInsertPoint = other.y > moved.y || (other.y == moved.y && other.x >= moved.x)
+            if (!movedPlaced && afterInsertPoint) {
+                placed += moved
+                movedPlaced = true
+            }
+            var candidate = other
+            val placedPage = page.copy(items = placed)
+            if (!isAreaFree(placedPage, candidate.x, candidate.y, candidate.spanX, candidate.spanY)) {
+                val free = findFirstFreeSlot(placedPage, candidate.spanX, candidate.spanY)
+                if (free != null) candidate = candidate.copy(x = free.first, y = free.second)
+            }
+            placed += candidate
+        }
+        if (!movedPlaced) placed += moved
+        val updated = page.copy(items = placed)
         return updated.copy(rowCount = computeContentRowCount(updated))
     }
 

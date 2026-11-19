@@ -816,7 +816,7 @@ internal class WidgetCanvasTouchHandler(
         if (initialPage != null && (layout.hoverCellX != item.x || layout.hoverCellY != item.y) && layout.hoverCellX >= 0 && layout.hoverCellY >= 0) {
             child.translationX = 0f
             child.translationY = 0f
-            val updatedPage = WidgetPanelGridLogic.moveItemWithAutoSwapOrShift(initialPage, item, layout.hoverCellX, layout.hoverCellY)
+            val updatedPage = WidgetPanelGridLogic.moveItemInsert(initialPage, item, layout.hoverCellX, layout.hoverCellY)
             if (updatedPage != initialPage) {
                 layout.commitPageChange(updatedPage)
             } else {
