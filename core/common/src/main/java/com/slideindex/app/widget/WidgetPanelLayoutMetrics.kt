@@ -69,6 +69,7 @@ object WidgetPanelLayoutMetrics {
         page: WidgetPanelPage,
         density: Float,
         pageCount: Int,
+        screenHeightPx: Int = 0,
         panelPaddingDp: Float = DEFAULT_PANEL_PADDING_DP,
         panelInnerPaddingDp: Float = DEFAULT_PANEL_INNER_PADDING_DP,
         horizontalInsetDp: Float = DEFAULT_HORIZONTAL_INSET_DP,
@@ -93,7 +94,29 @@ object WidgetPanelLayoutMetrics {
             heightPx = panelPaddingPx + metrics.viewportHeightPx + indicatorHeightPx + hintHeightPx,
             topMarginPx = (page.marginTopDp * density).roundToInt(),
             leftMarginPx = leftMarginPx,
+        ).fitToScreen(screenHeightPx = screenHeightPx, density = density)
+    }
+
+    /**
+     * 把卡片盒子夹进屏幕：高度溢出就压低高度，上下都越界就上移。
+     *
+     * 编辑态右下角的「添加 / 退出」按钮是卡片的底部子视图 —— 卡片超出屏幕时
+     * 它们就跑到屏幕外了（真机反馈）。所以卡片本身必须始终完整可见。
+     */
+    private fun PanelBox.fitToScreen(screenHeightPx: Int, density: Float): PanelBox {
+        if (screenHeightPx <= 0) return this
+        val bottomSafePx = (12f * density).roundToInt()
+        val maxHeight = (screenHeightPx - topMarginPx - bottomSafePx).coerceAtLeast(
+            (120f * density).roundToInt(),
         )
+        val fittedHeight = heightPx.coerceAtMost(maxHeight)
+        val overlapBottom = topMarginPx + fittedHeight - (screenHeightPx - bottomSafePx)
+        val fittedTop = if (overlapBottom > 0) {
+            (topMarginPx - overlapBottom).coerceAtLeast((8f * density).roundToInt())
+        } else {
+            topMarginPx
+        }
+        return copy(heightPx = fittedHeight, topMarginPx = fittedTop)
     }
 
     const val DEFAULT_PANEL_PADDING_DP = 12f

@@ -11,6 +11,36 @@ object WidgetPanelMutator {
     return effective
   }
 
+  /**
+   * 复制整页（"现在面板" → 复制一份到末尾并切过去）。
+   *
+   * 应用 / 动作 / 快捷方式格子的 id 是合成负数，复制时换新 id 避免和原页冲突；
+   * 小组件格子的 id 是真实 AppWidget id，保持不变（这样复制出来的页显示同一个小组件）。
+   */
+  fun duplicatePage(pages: List<WidgetPanelPage>, pageIndex: Int): List<WidgetPanelPage>? {
+    val effective = WidgetPanelDefaults.effectivePages(pages).toMutableList()
+    if (pageIndex !in effective.indices) return null
+    val source = effective[pageIndex]
+    val newPageId = (effective.maxOfOrNull { it.id } ?: 0L) + 1L
+    var nextSynthetic = (effective.flatMap { it.items }
+      .filter { it.appWidgetId < 0 }
+      .minOfOrNull { it.appWidgetId } ?: -1) - 1
+    val copiedItems = source.items.map { item ->
+      if (item.appWidgetId < 0) {
+        item.copy(appWidgetId = nextSynthetic--)
+      } else {
+        item
+      }
+    }
+    effective.add(
+      source.copy(
+        id = newPageId,
+        name = "",
+        items = copiedItems,
+      ),
+    )
+    return effective
+  }
   fun removePage(pages: List<WidgetPanelPage>, pageIndex: Int): List<WidgetPanelPage>? {
     val effective = WidgetPanelDefaults.effectivePages(pages).toMutableList()
     if (effective.size <= 1) return null

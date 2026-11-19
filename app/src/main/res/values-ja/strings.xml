@@ -5195,4 +5195,5 @@
     <string name="widget_panel_open_animation_ms_desc">Animation length in ms</string>
     <string name="widget_panel_open_animation_translate">Slide-up distance</string>
     <string name="widget_panel_open_animation_translate_desc">Vertical distance in dp, 0 = pure fade</string>
+    <string name="widget_panel_duplicate_page">Duplicate panel</string>
 </resources>

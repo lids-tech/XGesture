@@ -72,6 +72,7 @@ fun WidgetPanelPageManagementSection(
         renameTarget?.let { renameText = it.name }
     }
     val deleteLabel = stringResource(R.string.quick_launcher_panel_delete)
+    val duplicateLabel = stringResource(R.string.widget_panel_duplicate_page)
     val panelMenuEntry = DropdownEntry(
         items = listOf(
             DropdownItem(
@@ -84,6 +85,25 @@ fun WidgetPanelPageManagementSection(
                     Icon(
                         Icons.Default.Edit,
                         contentDescription = null,
+                        modifier = modifier.size(20.dp),
+                    )
+                },
+            ),
+            DropdownItem(
+                text = duplicateLabel,
+                enabled = pages.size < QuickLauncherPanelDefaults.MAX_PANELS,
+                onClick = {
+                    val duplicated = WidgetPanelMutator.duplicatePage(latestPages, safeIndex)
+                    if (duplicated != null) {
+                        onPagesChange(duplicated)
+                        onSelectedIndexChange(duplicated.lastIndex)
+                    }
+                },
+                icon = { modifier ->
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground,
                         modifier = modifier.size(20.dp),
                     )
                 },

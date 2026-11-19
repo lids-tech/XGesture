@@ -515,6 +515,7 @@ object WidgetPopupOverlayWindow {
       page = page,
       density = density,
       pageCount = pageCount,
+      screenHeightPx = ctx.resources.displayMetrics.heightPixels,
     )
     val lp = card.layoutParams as? FrameLayout.LayoutParams ?: return
     val targetGravity = if (box.leftMarginPx > 0) {
