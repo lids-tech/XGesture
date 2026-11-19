@@ -268,10 +268,12 @@ class WidgetPopupCardLayout(
         }
         contentContainer.addView(
             recyclerContainer,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                layoutMetrics.viewportHeightPx,
-            ),
+            // 0dp + weight=1：滚动区吃掉「标题 / 指示点」之外的全部剩余高度。
+            // 卡片被屏幕夹矮时自动跟着缩、内容在内部滚动 —— 单向依赖，
+            // 不会再出现「传视口高度 ↔ 重算卡片尺寸」的双向回调（上一版因此把面板搞成空白）。
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0).apply {
+                weight = 1f
+            },
         )
 
         recyclerView = RecyclerView(context).apply {
@@ -352,16 +354,14 @@ class WidgetPopupCardLayout(
 
     /** 同步当前页的滚动区高度，并通知浮窗按该页重算整卡尺寸。 */
     fun applyPageMetrics(page: WidgetPanelPage) {
-        val metrics = WidgetPanelLayoutMetrics.compute(
+        // 高度由 weight=1 自动适配（init 里设置），这里不再往 recycler 容器写固定高度 ——
+        // 固定高度 + 卡片夹屏 = 底部被裁；自适应 + 内部滚动 = 永远能滑到底。
+        // metrics 仍要算：onPageMetricsChanged 要按页几何重算整卡尺寸。
+        WidgetPanelLayoutMetrics.compute(
             screenWidthPx = resources.displayMetrics.widthPixels,
             page = page,
             density = density,
         )
-        val lp = recyclerContainer.layoutParams as? LinearLayout.LayoutParams
-        if (lp != null && lp.height != metrics.viewportHeightPx) {
-            lp.height = metrics.viewportHeightPx
-            recyclerContainer.layoutParams = lp
-        }
         onPageMetricsChanged?.invoke(page)
     }
 
