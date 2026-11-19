@@ -239,7 +239,17 @@ object WidgetPanelMutator {
     val page = effective[index]
     effective[index] = WidgetPanelGridLogic.removeItem(page, appWidgetId)
     if (appWidgetId > 0) {
-      WidgetPopupHost.deleteAppWidgetId(context, appWidgetId)
+      // ⚠️ 复制出来的面板和原页可能引用**同一个 AppWidget**。
+      // 只要还有别的页面在用，就只释放「本页」的宿主视图，绝不能删掉底层 AppWidget 绑定 ——
+      // 否则原页那个格子会立刻变成"加载中"（真机反馈：删复制页的组件，原页也没了）。
+      val stillUsed = effective.any { p ->
+        p.items.any { it.appWidgetId == appWidgetId }
+      }
+      if (stillUsed) {
+        WidgetPopupHost.releaseView(page.id, appWidgetId)
+      } else {
+        WidgetPopupHost.deleteAppWidgetId(context, appWidgetId)
+      }
     }
     return effective
   }

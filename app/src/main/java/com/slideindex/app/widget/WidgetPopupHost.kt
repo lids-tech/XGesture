@@ -81,6 +81,12 @@ object WidgetPopupHost {
       .onFailure { Log.w(TAG, "deleteAppWidgetId($appWidgetId) failed", it) }
   }
 
+  /** 释放某页上某个 AppWidget 的宿主视图（页面里删掉这个格子时用）。 */
+  fun releaseView(pageId: Long, appWidgetId: Int) {
+    cachedHostViews.remove(viewKey(pageId, appWidgetId))?.let { view ->
+      runCatching { (view.parent as? ViewGroup)?.removeView(view) }
+    }
+  }
   /** 只保留这些页面的宿主视图缓存（页面被删掉后，它的视图缓存一并释放）。 */
   fun retainPages(pageIds: Set<Long>) {
     cachedHostViews.keys.filterNot { key ->
@@ -104,14 +110,20 @@ object WidgetPopupHost {
 
   fun obtainHostView(context: Context, appWidgetId: Int, cacheKey: String): AppWidgetHostView? {
     cachedHostViews[cacheKey]?.let { cached ->
-      WidgetPanelProbe.hostViewObtained(appWidgetId, fromCache = true)
-      (cached.parent as? ViewGroup)?.removeView(cached)
-      return cached
+      // ⚠️ 仍挂在某个画布上的视图**绝不能抢**：编辑态切换会触发整页重绑，
+      // RecyclerView 新旧 holder 交替的瞬间会有两个画布同时引用同一页，
+      // 从旧父容器 removeView 会把另一页的视图偷走 → 之后滑到那页就是空白。
+      // 这种情况直接另建一个（旧画布回收后它的视图自然释放）。
+      if (cached.parent == null) {
+        WidgetPanelProbe.hostViewObtained(appWidgetId, fromCache = true)
+        return cached
+      }
     }
     val created = createView(context, appWidgetId, cacheKey) as? AppWidgetHostView
     WidgetPanelProbe.hostViewObtained(appWidgetId, fromCache = false)
     return created
   }
+
 
   /**
    * 会话级缓存清理：面板关闭、重新打开前调用。
