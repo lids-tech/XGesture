@@ -21,20 +21,7 @@ object WidgetPopupHost {
   @Volatile
   private var listening = false
 
-  private val cachedHostViews = java.util.concurrent.ConcurrentHashMap<String, AppWidgetHostView>()
-
-  /**
-   * 宿主视图的缓存键 = **页面 id + AppWidget id**。
-   *
-   * 为什么必须带页面：同一个小组件可以被复制到多个面板页（"复制当前面板"）。
-   * 如果按 appWidgetId 缓存，两页会抢同一个 AppWidgetHostView 实例 ——
-   * 后加的一页把视图从上一页 removeView 抢走，表现就是：
-   *  · 左右滑页时单元格内容错乱 / 整页空白 / 文字被放大；
-   *  · 删掉复制页上的小组件，原页那个也跟着变"加载中"。
-   * 按页隔离后每页各自持有自己的宿主视图，互不影响。
-   */
-  fun viewKey(pageId: Long, appWidgetId: Int): String = pageId.toString() + ":" + appWidgetId
-
+  private val cachedHostViews = java.util.concurrent.ConcurrentHashMap<Int, AppWidgetHostView>()
 
   fun appWidgetHost(context: Context): SlideIndexAppWidgetHost {
     val appContext = context.applicationContext
@@ -70,45 +57,20 @@ object WidgetPopupHost {
     appWidgetHost(context).allocateAppWidgetId()
 
   fun deleteAppWidgetId(context: Context, appWidgetId: Int) {
-    val suffix = ":" + appWidgetId
-    cachedHostViews.keys.filter { it == appWidgetId.toString() || it.endsWith(suffix) }
-      .forEach { key ->
-        cachedHostViews.remove(key)?.let { view ->
-          runCatching { (view.parent as? ViewGroup)?.removeView(view) }
-        }
-      }
+    cachedHostViews.remove(appWidgetId)?.let { view ->
+      runCatching { (view.parent as? ViewGroup)?.removeView(view) }
+    }
     runCatching { appWidgetHost(context).deleteAppWidgetId(appWidgetId) }
       .onFailure { Log.w(TAG, "deleteAppWidgetId($appWidgetId) failed", it) }
   }
 
-  /** 只保留这些页面的宿主视图缓存（页面被删掉后，它的视图缓存一并释放）。 */
-  fun retainPages(pageIds: Set<Long>) {
-    cachedHostViews.keys.filterNot { key ->
-      val id = key.substringBefore(':').toLongOrNull()
-      id != null && id in pageIds
-    }.forEach { key ->
-      cachedHostViews.remove(key)?.let { view ->
-        runCatching { (view.parent as? ViewGroup)?.removeView(view) }
-      }
-    }
-  }
-  /** 页面被删除时释放该页的宿主视图（避免删除页的视图一直占内存/被抢）。 */
-  fun releasePageViews(pageId: Long) {
-    val prefix = pageId.toString() + ":"
-    cachedHostViews.keys.filter { it.startsWith(prefix) }.forEach { key ->
-      cachedHostViews.remove(key)?.let { view ->
-        runCatching { (view.parent as? ViewGroup)?.removeView(view) }
-      }
-    }
-  }
-
-  fun obtainHostView(context: Context, appWidgetId: Int, cacheKey: String): AppWidgetHostView? {
-    cachedHostViews[cacheKey]?.let { cached ->
+  fun obtainHostView(context: Context, appWidgetId: Int): AppWidgetHostView? {
+    cachedHostViews[appWidgetId]?.let { cached ->
       WidgetPanelProbe.hostViewObtained(appWidgetId, fromCache = true)
       (cached.parent as? ViewGroup)?.removeView(cached)
       return cached
     }
-    val created = createView(context, appWidgetId, cacheKey) as? AppWidgetHostView
+    val created = createView(context, appWidgetId) as? AppWidgetHostView
     WidgetPanelProbe.hostViewObtained(appWidgetId, fromCache = false)
     return created
   }
@@ -144,15 +106,17 @@ object WidgetPopupHost {
    */
   fun prewarmHostViews(context: Context, pages: List<com.slideindex.app.widget.WidgetPanelPage>) {
     val appContext = context.applicationContext
-    for (page in pages) {
-      for (item in page.items) {
-        if (item.itemType != com.slideindex.app.widget.ITEM_TYPE_WIDGET || item.appWidgetId <= 0) continue
-        val key = viewKey(page.id, item.appWidgetId)
-        if (cachedHostViews.containsKey(key)) continue
-        runCatching { createView(appContext, item.appWidgetId, key) }
-          .onFailure { Log.w(TAG, "prewarm($key) failed: ${it.message}") }
+    pages.asSequence()
+      .flatMap { it.items.asSequence() }
+      .filter { it.itemType == com.slideindex.app.widget.ITEM_TYPE_WIDGET && it.appWidgetId > 0 }
+      .map { it.appWidgetId }
+      .distinct()
+      .filterNot { cachedHostViews.containsKey(it) }
+      .forEach { id ->
+        // createView 内部会把建好的视图写进 cachedHostViews。
+        runCatching { createView(appContext, id) }
+          .onFailure { Log.w(TAG, "prewarm($id) failed: ${it.message}") }
       }
-    }
   }
 
   /**
@@ -189,7 +153,7 @@ object WidgetPopupHost {
     if (count > 0) Log.i(TAG, "refreshWidgets: 已请求刷新 $count 个小组件")
   }
 
-  fun createView(context: Context, appWidgetId: Int, cacheKey: String): View? {
+  fun createView(context: Context, appWidgetId: Int): View? {
     val manager = appWidgetManager(context)
     val info = manager.getAppWidgetInfo(appWidgetId)
     if (info == null) {
@@ -201,7 +165,7 @@ object WidgetPopupHost {
       .onFailure { Log.e(TAG, "createView($appWidgetId) failed", it) }
       .getOrNull()
       ?.also { view ->
-        cachedHostViews[cacheKey] = view
+        cachedHostViews[appWidgetId] = view
       }
   }
 
