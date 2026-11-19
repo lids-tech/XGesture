@@ -18,8 +18,6 @@ object WidgetPanelLayoutMetrics {
         val topMarginPx: Int,
         /** 距屏幕左边的边距；0 表示水平居中。 */
         val leftMarginPx: Int = 0,
-        /** 滚动视口最多能有多高（卡片被夹屏时会变小）。 */
-        val maxViewportHeightPx: Int = Int.MAX_VALUE,
     )
 
     fun compute(
@@ -118,14 +116,7 @@ object WidgetPanelLayoutMetrics {
         } else {
             topMarginPx
         }
-        // 滚动视口最多 = 夹完的卡高 - 固定的非视口开销（面板内边距×2 + 指示点 + 提示）。
-        val fixedOverheadPx = ((DEFAULT_PANEL_PADDING_DP * 2 + DEFAULT_INDICATOR_HEIGHT_DP + DEFAULT_HINT_HEIGHT_DP) * density).roundToInt()
-        val maxViewportPx = (fittedHeight - fixedOverheadPx).coerceAtLeast((80f * density).roundToInt())
-        return copy(
-            heightPx = fittedHeight,
-            topMarginPx = fittedTop,
-            maxViewportHeightPx = maxViewportPx,
-        )
+        return copy(heightPx = fittedHeight, topMarginPx = fittedTop)
     }
 
     const val DEFAULT_PANEL_PADDING_DP = 12f

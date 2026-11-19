@@ -350,25 +350,16 @@ class WidgetPopupCardLayout(
         applyPageMetrics(pages.getOrElse(currentPageIndex) { WidgetPanelPage() })
     }
 
-    /** 同步当前页的滚动区高度，并通知浮窗按该页重算整卡尺寸；视口受上限约束。 */
-    /** 滚动视口的最大高度；卡片被屏幕夹矮时会下调（否则底部内容被裁、滑不到底）。 */
-    var viewportHeightCapPx: Int = Int.MAX_VALUE
-        set(value) {
-            if (field == value) return
-            field = value
-            applyPageMetrics(pages.getOrElse(currentPageIndex) { WidgetPanelPage() })
-        }
-
+    /** 同步当前页的滚动区高度，并通知浮窗按该页重算整卡尺寸。 */
     fun applyPageMetrics(page: WidgetPanelPage) {
         val metrics = WidgetPanelLayoutMetrics.compute(
             screenWidthPx = resources.displayMetrics.widthPixels,
             page = page,
             density = density,
         )
-        val targetHeight = metrics.viewportHeightPx.coerceAtMost(viewportHeightCapPx)
         val lp = recyclerContainer.layoutParams as? LinearLayout.LayoutParams
-        if (lp != null && lp.height != targetHeight) {
-            lp.height = targetHeight
+        if (lp != null && lp.height != metrics.viewportHeightPx) {
+            lp.height = metrics.viewportHeightPx
             recyclerContainer.layoutParams = lp
         }
         onPageMetricsChanged?.invoke(page)
