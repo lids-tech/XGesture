@@ -358,27 +358,14 @@ internal class WidgetCanvasTouchHandler(
             val runner = com.slideindex.app.overlay.panels.PanelRuntimeHooks.gestureActionRunner
                 ?: com.slideindex.app.overlay.panels.PanelRuntimeHooks.defaultGestureRunner
             val action: com.slideindex.app.gesture.GestureAction? = when (item.itemType) {
-                // 快捷方式：和点按同一套解析（优先用「我的直达」目录里的完整 intent，
-                // 否则「开始录音」这类丢 extras 的快捷方式长按也只会开界面）。
-                ITEM_TYPE_SHORTCUT -> null
+                ITEM_TYPE_SHORTCUT -> runCatching {
+                    com.slideindex.app.gesture.GestureAction.LaunchShortcut.dynamic(
+                        item.packageName,
+                        item.shortcutId,
+                        item.label,
+                    )
+                }.getOrNull()
                 else -> com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
-            }
-            if (item.itemType == ITEM_TYPE_SHORTCUT) {
-                if (settings != null && runner != null) {
-                    WidgetPanelShortcutAction.resolveAsync(
-                        context,
-                        item,
-                        settings.activityShortcuts,
-                    ) { resolved ->
-                        if (resolved != null) {
-                            runCatching { runner.run(resolved, settings, true, null, null, null) }
-                                .onSuccess {
-                                    com.slideindex.app.overlay.WidgetPopupOverlayWindow.dismiss()
-                                }
-                        }
-                    }
-                }
-                return
             }
             if (settings != null && runner != null && action != null) {
                 // 先执行再收面板（执行器要前台窗口上下文）。
