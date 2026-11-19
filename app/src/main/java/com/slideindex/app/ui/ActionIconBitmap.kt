@@ -102,7 +102,13 @@ object ActionIconBitmap {
             canvas.drawRoundRect(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), corner, corner, platePaint)
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (darkPlate) tintArgb else Color.BLACK
+            // 带底板时：暗色底板配浅色字，亮色底板配黑字；
+            // 不带底板（文字图标）时直接用调用方给的 tint —— 用户设了红色就该是红字。
+            color = when {
+                !withPlate -> tintArgb
+                darkPlate -> tintArgb
+                else -> Color.BLACK
+            }
             // 与内置图标一致：带底时占 0.54，裸图标占 0.75（见 GestureActionIconBitmap）
             textSize = sizePx * (if (withPlate) 0.54f else 0.75f)
             this.typeface = typeface

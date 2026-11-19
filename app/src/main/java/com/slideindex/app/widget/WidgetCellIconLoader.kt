@@ -115,10 +115,11 @@ internal object WidgetCellIconLoader {
     action: GestureAction?,
     sizePx: Int,
     tintArgb: Int = android.graphics.Color.WHITE,
+    withPlate: Boolean = true,
     onLoaded: (Bitmap) -> Unit,
   ) {
     if (iconKey.isBlank()) return
-    val key = customKey(iconKey, sizePx, tintArgb)
+    val key = customKey(iconKey, sizePx, tintArgb) + (if (withPlate) "" else ":noplate")
     peek(key)?.let { onLoaded(it); return }
     val appContext = context.applicationContext
     scope.launch {
@@ -128,7 +129,7 @@ internal object WidgetCellIconLoader {
           key = iconKey,
           sizePx = sizePx,
           tintArgb = tintArgb,
-          withPlate = true,
+          withPlate = withPlate,
           action = action,
         )
       }.getOrNull() ?: return@launch
