@@ -122,6 +122,11 @@ internal object WidgetCellIconLoader {
     val key = customKey(iconKey, sizePx, tintArgb) + (if (withPlate) "" else ":noplate")
     peek(key)?.let { onLoaded(it); return }
     val appContext = context.applicationContext
+    android.util.Log.i(
+      "WidgetPanelIcon",
+      "loadCustom key=" + iconKey + " size=" + sizePx +
+        " tint=0x" + Integer.toHexString(tintArgb) + " withPlate=" + withPlate,
+    )
     scope.launch {
       val bitmap = runCatching {
         ActionIconBitmap.loadByKey(

@@ -175,6 +175,8 @@ class WidgetCardContainer(
               action = action,
               sizePx = iconSizePx,
               tintArgb = iconTint ?: android.graphics.Color.WHITE,
+              // 文字图标不画底板：只让字形着色（「只有 H 变红」）。
+              withPlate = !item.iconKey.startsWith("t:"),
             ) { bitmap ->
               if (tag == customKey) setImageDrawable(bitmap.toDrawable(resources))
             }
