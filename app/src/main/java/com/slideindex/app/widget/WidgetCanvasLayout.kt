@@ -672,11 +672,11 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     // 同步做的好处是窗口首帧就是完整面板，不会出现"小组件位置先空白一下"。
     // 真正影响呼出速度的是图标解析，那部分已经全部挪到后台线程。
     val hostView = if (item.itemType == ITEM_TYPE_WIDGET) {
-      WidgetPopupHost.obtainHostView(hostContext, item.appWidgetId)
+      WidgetPopupHost.obtainHostView(hostContext, item.appWidgetId, WidgetPopupHost.viewKey(canvasPage?.id ?: 0L, item.appWidgetId))
     } else {
       null
     }
-    val container = WidgetCardContainer(context, item, hostView).apply {
+    val container = WidgetCardContainer(context, item, hostView, pageId = canvasPage?.id ?: 0L).apply {
       onDelete = {
         val widgetId = this.item.appWidgetId
         removeWidgetCard(widgetId)

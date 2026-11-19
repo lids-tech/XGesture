@@ -137,6 +137,8 @@ object WidgetPopupOverlayWindow {
       .indexOfFirst { it.id.toString() == initialPageId }
       .takeIf { it >= 0 } ?: 0
     val initialPage = effectivePages[initialPageIndex]
+    // 页面被删过的话，释放那些页面残留的宿主视图缓存（按页隔离后每个页面各有各的视图）。
+    WidgetPopupHost.retainPages(effectivePages.map { it.id }.toSet())
     val initialBox = WidgetPanelLayoutMetrics.computePanelBox(
       screenWidthPx = screenWidthPx,
       page = initialPage,

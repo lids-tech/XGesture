@@ -31,9 +31,9 @@ import kotlin.math.sin
 class WidgetCardContainer(
   context: Context,
   initialItem: WidgetPanelItem,
-  hostView: AppWidgetHostView?,
+  private val hostView: AppWidgetHostView?,
+  private val pageId: Long = 0,
 ) : FrameLayout(context) {
-
   var item: WidgetPanelItem = initialItem
     private set
 
@@ -367,7 +367,7 @@ class WidgetCardContainer(
       // 同步做完反而让首帧就是完整面板。
       val selfHostView = runCatching {
         WidgetPopupHost.startListening(context)
-        WidgetPopupHost.obtainHostView(context, item.appWidgetId)
+    WidgetPopupHost.obtainHostView(context, item.appWidgetId, WidgetPopupHost.viewKey(pageId, item.appWidgetId))
       }.getOrNull()
       if (selfHostView != null && item.itemType == ITEM_TYPE_WIDGET) {
         scalableFrame.visibility = VISIBLE
@@ -588,10 +588,14 @@ class WidgetCardContainer(
   private fun ensureHostViewAttached() {
     if (scalableFrame.isNotEmpty()) return
     if (!hostEverBound) return
-    val hostView = WidgetPopupHost.obtainHostView(context, item.appWidgetId) ?: return
+    val host = hostView ?: WidgetPopupHost.obtainHostView(
+      context,
+      item.appWidgetId,
+      WidgetPopupHost.viewKey(pageId, item.appWidgetId),
+    ) ?: return
     loadingPlaceholder.visibility = GONE
     scalableFrame.visibility = VISIBLE
-    scalableFrame.bindWidget(hostView, item.appWidgetId, layoutSpanX(), layoutSpanY())
+    scalableFrame.bindWidget(host, item.appWidgetId, layoutSpanX(), layoutSpanY())
     updateHostLongClickHandling(editModeEnabled)
     updateScalableTargetFromContainer()
     scalableFrame.commitHostLayout(force = true)
