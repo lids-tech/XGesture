@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -42,7 +43,6 @@ import com.slideindex.app.external.AppLinks
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureActionType
 import com.slideindex.app.overlay.MagnifierPrefs
-import java.util.Locale
 import kotlin.math.round
 import com.slideindex.app.gesture.KeyEventPresets
 import com.slideindex.app.pagescroll.PageScrollPrefs
@@ -90,7 +90,11 @@ fun ActionDetailScreen(
     val clipboard = LocalClipboardManager.current
     val label = gestureActionLabel(action)
     val description = gestureActionDescription(action)
-    val permissionHint = gestureActionPermissionHint(action, context)
+    val permissionHint = gestureActionPermissionHint(
+        action,
+        context,
+        appCarouselSwitcher?.listSource,
+    )
     val specialHint = entry.special?.let { stringResource(it.hintRes) }
         ?: when (entry.type) {
             GestureActionType.FINGERTIP_RING -> stringResource(R.string.action_center_special_fingertip)
@@ -535,7 +539,7 @@ fun ActionDetailScreen(
                                     valueRange = MagnifierPrefs.MIN_SCALE..MagnifierPrefs.MAX_SCALE,
                                     steps = 14,
                                     enabled = true,
-                                    label = String.format(Locale.getDefault(), "%.2f×", magnifierFullscreenScale),
+                                    label = String.format(LocalConfiguration.current.locales[0], "%.2f×", magnifierFullscreenScale),
                                     commitOnFinish = true,
                                     onValueChange = { raw ->
                                         val step = 0.25f
@@ -558,7 +562,7 @@ fun ActionDetailScreen(
                                     valueRange = MagnifierPrefs.MIN_SCALE..MagnifierPrefs.MAX_SCALE,
                                     steps = 14,
                                     enabled = true,
-                                    label = String.format(Locale.getDefault(), "%.2f×", magnifierWindowScale),
+                                    label = String.format(LocalConfiguration.current.locales[0], "%.2f×", magnifierWindowScale),
                                     commitOnFinish = true,
                                     onValueChange = { raw ->
                                         val step = 0.25f

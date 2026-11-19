@@ -189,6 +189,8 @@ internal object SettingsPreferenceKeys {
     val APP_CAROUSEL_CANCEL_BOTH_DIRECTIONS = booleanPreferencesKey("app_carousel_cancel_both_directions")
     val APP_CAROUSEL_SLIDE_REVERSED = booleanPreferencesKey("app_carousel_slide_reversed")
     val APP_CAROUSEL_SLIDE_SENSITIVITY = intPreferencesKey("app_carousel_slide_sensitivity")
+    val APP_CAROUSEL_LIST_SOURCE = intPreferencesKey("app_carousel_list_source")
+    val APP_CAROUSEL_CLOSE_MODE = intPreferencesKey("app_carousel_close_mode")
     val FV_RING_LAUNCHER_CIRCLE_COUNT = intPreferencesKey("fv_ring_launcher_circle_count")
     val FV_RING_LAUNCHER_ICON_SIZE_DP = floatPreferencesKey("fv_ring_launcher_icon_size_dp")
     val FV_RING_LAUNCHER_ICON_SHAPE = stringPreferencesKey("fv_ring_launcher_icon_shape")
@@ -333,6 +335,9 @@ internal object SettingsPreferenceKeys {
     val ICON_PLATE_MODE = intPreferencesKey("icon_plate_mode_id")
     val UI_DENSITY_SCALE = floatPreferencesKey("ui_density_scale")
     val BOTTOM_NAV_STYLE = intPreferencesKey("bottom_nav_style_id")
+
+    /** 宽屏玻璃侧栏是否展开（记住上次状态，跨进程生效）。 */
+    val BOTTOM_NAV_RAIL_EXPANDED = booleanPreferencesKey("bottom_nav_rail_expanded")
     val BOTTOM_NAV_MODE = intPreferencesKey("bottom_nav_mode_id")
     val BOTTOM_NAV_CLASSIC_BLUR_RADIUS_DP = floatPreferencesKey("bottom_nav_classic_blur_radius_dp")
     val BOTTOM_NAV_LIQUID_GLASS_BLUR_RADIUS_DP = floatPreferencesKey("bottom_nav_liquid_glass_blur_radius_dp")

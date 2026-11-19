@@ -3,6 +3,7 @@ package com.slideindex.app.privilege.root
 
 
 import com.slideindex.app.shizuku.IOnMultiTouchGesture
+import com.slideindex.app.shizuku.IOnPhysicalKeyGesture
 import com.slideindex.app.shizuku.ITaskManagerService
 
 
@@ -237,6 +238,40 @@ internal class TaskManagerRpcClient(
     override fun getTouchDevices(): Array<String> =
         (TaskManagerDaemonRpc.execute(port, 106, emptyList()) as RpcValue.StrArr).value
 
+    /** 全局触发条件（旧守护进程没有 107，调用失败，行为退化为「任何地方 + 不判键盘」）。 */
+    override fun setMultiTouchTrigger(area: Int, keyboardBehavior: Int, borderPx: Int) {
+        TaskManagerDaemonRpc.execute(
+            port,
+            107,
+            listOf(area.toString(), keyboardBehavior.toString(), borderPx.toString()),
+        )
+    }
+
+    override fun startPhysicalKeyObservation(callback: IOnPhysicalKeyGesture?): Boolean = false
+
+    override fun stopPhysicalKeyObservation() = Unit
+
+    override fun isPhysicalKeyObservationRunning(): Boolean =
+        rpcBool(113, emptyList())
+
+    override fun startPhysicalKeyPolling(): Boolean =
+        rpcBool(110, emptyList())
+
+    override fun pollPhysicalKeyEvents(): Array<String> =
+        rpcStringArray(112, emptyList())
+
+    override fun stopPhysicalKeyPolling() {
+        runCatching { TaskManagerDaemonRpc.execute(port, 111, emptyList()) }
+    }
+
+    override fun getPhysicalKeyDiagnostics(): String =
+        (TaskManagerDaemonRpc.execute(port, 114, emptyList()) as? RpcValue.Str)?.value ?: ""
+
+    override fun updatePhysicalKeyTargets(mappedKeyCodes: IntArray?, doublePressKeyCodes: IntArray?) {
+        val mappedStr = mappedKeyCodes?.joinToString(",") ?: ""
+        val doublePressStr = doublePressKeyCodes?.joinToString(",") ?: ""
+        runCatching { TaskManagerDaemonRpc.execute(port, 115, listOf(mappedStr, doublePressStr)) }
+    }
 }
 
 

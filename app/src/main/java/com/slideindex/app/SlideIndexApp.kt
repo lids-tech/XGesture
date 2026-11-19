@@ -46,6 +46,24 @@ import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
+    /**
+     * 进程级权限状态：放在 Application 而不是 Activity。
+     *
+     * 之前它是 `MainActivity` 的字段，旋转/配置变更重建 Activity 时会重新初始化为 false，
+     * 首页的「待完成授权」红色卡片会先闪一下，等 `refreshPermissionState()` 回填后再消失。
+     * 提到进程级后，重建复用同一份已授权状态。
+     */
+    val permissionStates = com.slideindex.app.ui.navigation.NavPermissionStates(
+        overlayGranted = androidx.compose.runtime.mutableStateOf(false),
+        notificationGranted = androidx.compose.runtime.mutableStateOf(true),
+        usageAccessGranted = androidx.compose.runtime.mutableStateOf(false),
+        shizukuGranted = androidx.compose.runtime.mutableStateOf(false),
+        accessibilityGranted = androidx.compose.runtime.mutableStateOf(false),
+        batteryOptimizationExempt = androidx.compose.runtime.mutableStateOf(false),
+        writeSecureSettingsGranted = androidx.compose.runtime.mutableStateOf(false),
+        notificationListenerEnabled = androidx.compose.runtime.mutableStateOf(false),
+    )
+
     private companion object {
         /** 启动期重活延后时间，给前台服务 startForeground 留出窗口。 */
         const val STARTUP_HEAVY_TASK_DELAY_MS = 1_500L
@@ -86,6 +104,7 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
     @Inject lateinit var updatePreferencesStore: UpdatePreferencesStore
     @Inject lateinit var moduleHookConfigSync: ModuleHookConfigSync
     @Inject lateinit var multiTouchGestureCoordinator: MultiTouchGestureCoordinator
+    @Inject lateinit var physicalKeyGestureCoordinator: com.slideindex.app.physicalkey.PhysicalKeyGestureCoordinator
 
     override fun attachBaseContext(base: Context) {
         // 先把上次的应用语言从 SharedPreferences 同步镜像读回来（只读一个键，不碰 DataStore），
@@ -242,12 +261,6 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
             runCatching {
                 com.slideindex.app.util.TaskManagerUtil.refreshRecentTasks().map { it.identifier }
             }.getOrNull()
-        }
-        com.slideindex.app.overlay.panels.PanelRuntimeHooks.forceStopPackage = { pkg ->
-            com.slideindex.app.util.TaskManagerUtil.forceStopPackage(pkg)
-        }
-        com.slideindex.app.overlay.panels.PanelRuntimeHooks.removeRecentPackages = { packages ->
-            com.slideindex.app.util.RecentTasksLoader.removePackages(packages)
         }
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchFreeWindow = { ctx, pkg, settings, onEnd ->
             com.slideindex.app.util.TaskSwitcherMenuActions.launchFreeWindow(
@@ -1473,6 +1486,8 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         if (AppProcess.isMain) {
         // 多指手势（Shizuku evdev 观察）：只在主进程启动，避免子进程重复观察导致一次手势执行多次。
         multiTouchGestureCoordinator.start()
+        // 实体按键助手（Shizuku / Root evdev 观察）：底层硬件按键监听
+        physicalKeyGestureCoordinator.start()
         com.slideindex.app.ui.icon.AppIconTheme.ensureSelectedThemeEnabled(this)
         // 首帧后再做 OCR 校验与应用列表扫描，减轻装后首开卡顿
         // 延迟执行启动期重活：开机瞬间主线程若被 OCR 校验 / 应用列表扫描占住，

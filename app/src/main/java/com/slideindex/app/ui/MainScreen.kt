@@ -38,6 +38,8 @@ fun MainScreen(
     privilegeMode: PrivilegeMode,
     privilegedAccessGranted: Boolean,
     rootAccessGranted: Boolean,
+    /** ???????????????;??????????,??????????? */
+    privilegeStateKnown: Boolean = true,
     notificationGranted: Boolean,
     shizukuGranted: Boolean,
     accessibilityGranted: Boolean,
@@ -50,8 +52,7 @@ fun MainScreen(
     onRequestOverlay: () -> Unit,
     onRequestBatteryOptimization: () -> Unit = {},
     onGestureEnabledChange: (Boolean) -> Unit,
-    onOpenPrivilegeModeSettings: () -> Unit,
-    onOpenAppKeepAliveSettings: () -> Unit,
+    onOpenBackgroundPermissions: () -> Unit,
     onOpenFloatBallSettings: () -> Unit,
     onOpenPickSettings: () -> Unit,
     pickOcrFallbackEnabled: Boolean,
@@ -67,6 +68,7 @@ fun MainScreen(
     gestureAppProfileCount: Int = 0,
     onOpenCornerWheel: () -> Unit,
     onOpenMultiTouchGesture: () -> Unit,
+    onOpenPhysicalKeySettings: () -> Unit = {},
     onOpenGestureAngle: () -> Unit,
     onOpenSystemBackGestureWidth: () -> Unit,
     onOpenAnimationStyleSelect: () -> Unit,
@@ -120,7 +122,7 @@ fun MainScreen(
                 ),
             )
         }
-        if (privilegeMode == PrivilegeMode.SHIZUKU && !shizukuGranted) {
+        if (privilegeStateKnown && privilegeMode == PrivilegeMode.SHIZUKU && !shizukuGranted) {
             add(
                 PendingPermissionItem(
                     title = stringResource(R.string.permission_shizuku_title),
@@ -130,7 +132,7 @@ fun MainScreen(
                 ),
             )
         }
-        if (privilegeMode == PrivilegeMode.ROOT && !rootAccessGranted) {
+        if (privilegeStateKnown && privilegeMode == PrivilegeMode.ROOT && !rootAccessGranted) {
             add(
                 PendingPermissionItem(
                     title = stringResource(R.string.permission_root_title),
@@ -214,26 +216,16 @@ fun MainScreen(
                     },
                 )
                 add(
-                    settingsCardItem("privilege-mode") {
+                    settingsCardItem("background-permissions") {
                         SettingsCardScopeContent {
-                            PrivilegeModeEntryCard(
+                            BackgroundPermissionsEntryCard(
                                 privilegeMode = privilegeMode,
                                 privilegedAccessGranted = privilegedAccessGranted,
-                                outlinedLeadingIcons = true,
-                                onClick = onOpenPrivilegeModeSettings,
-                            )
-                        }
-                    },
-                )
-                add(
-                    settingsCardItem("app-keep-alive") {
-                        SettingsCardScopeContent {
-                            AppKeepAliveEntryCard(
                                 batteryOptimizationExempt = batteryOptimizationExempt,
                                 hideFromRecents = settings.hideFromRecents,
                                 accessibilityKeepAliveEnabled = settings.accessibilityKeepAliveEnabled,
                                 outlinedLeadingIcons = true,
-                                onClick = onOpenAppKeepAliveSettings,
+                                onClick = onOpenBackgroundPermissions,
                             )
                         }
                     },
@@ -397,6 +389,23 @@ fun MainScreen(
                                 title = stringResource(R.string.multitouch_title),
                                 subtitle = stringResource(R.string.multitouch_home_summary),
                                 onClick = onOpenMultiTouchGesture,
+                            )
+                        }
+                    },
+                )
+                add(
+                    settingsCardItem("physical-key") {
+                        SettingsCardScopeContent {
+                            SettingNavigationRow(
+                                icon = { label ->
+                                    Icon(
+                                        HomeLeadingIcons.physicalKey(true),
+                                        contentDescription = label,
+                                    )
+                                },
+                                title = stringResource(R.string.physical_key_title),
+                                subtitle = stringResource(R.string.physical_key_home_summary),
+                                onClick = onOpenPhysicalKeySettings,
                             )
                         }
                     },

@@ -4,9 +4,14 @@ import android.content.Context
 import android.util.Log
 import androidx.annotation.Keep
 import androidx.annotation.StringRes
+import com.slideindex.app.gesture.multitouch.CollectedPath
+import com.slideindex.app.gesture.multitouch.TouchAnchor
 import com.slideindex.app.gesture.multitouch.TouchDisplayTransform
 import com.slideindex.app.multitouch.EvdevTouchObserver
+import com.slideindex.app.multitouch.MultiTouchTriggerFilter
 import com.slideindex.app.multitouch.encodePathStrokes
+import com.slideindex.app.physicalkey.EvdevPhysicalKeyObserver
+import com.slideindex.app.physicalkey.PhysicalKeyGesture
 import java.util.concurrent.ConcurrentLinkedQueue
 
 class TaskManagerUserService() : ITaskManagerService.Stub() {
@@ -38,6 +43,27 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
     @Volatile
     private var touchDevices: Array<String> = emptyArray()
 
+    /** 全局触发条件（GMD 式）：0 任何地方 / 1 中 / 2 上半 / 3 下半。 */
+    @Volatile
+    private var triggerArea: Int = MultiTouchTriggerFilter.AREA_ANYWHERE
+
+    /** 键盘可见时的策略：0 禁用 / 1 键盘上方 / 2 所有区域。 */
+    @Volatile
+    private var keyboardBehavior: Int = MultiTouchTriggerFilter.KEYBOARD_ABOVE
+
+    /** 边缘带宽度（像素），由 app 按 5mm 换算后推过来。 */
+    @Volatile
+    private var triggerBorderPx: Int = 0
+
+    private val keyboardMonitorLazy = lazy {
+        KeyboardInsetsMonitor(
+            dumpsysReader = { shell.shellOutput("/system/bin/dumpsys", "window") },
+        )
+    }
+
+    private val keyboardMonitor: KeyboardInsetsMonitor
+        get() = keyboardMonitorLazy.value
+
     private val shell = TaskManagerShellExecutor
     private val shellRunner = ShellCommandRunner { args -> shell.shellCommand(*args) }
     private val tasks = TaskManagerTaskOperations(shellRunner)
@@ -47,6 +73,12 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
 
     private var touchObserver: EvdevTouchObserver? = null
 
+    private var keyObserver: EvdevPhysicalKeyObserver? = null
+    private var pollingKeyObserver: EvdevPhysicalKeyObserver? = null
+    private val pollingKeyEvents = ConcurrentLinkedQueue<String>()
+    @Volatile
+    private var physicalKeyDiagnostics: String = ""
+
     @Keep
     constructor(context: Context) : this() {
         appContext = context.applicationContext
@@ -54,6 +86,12 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
 
     override fun destroy() {
         stopMultiTouchObservation()
+        stopMultiTouchPolling()
+        stopPhysicalKeyObservation()
+        stopPhysicalKeyPolling()
+        if (keyboardMonitorLazy.isInitialized()) {
+            runCatching { keyboardMonitor.close() }
+        }
         System.exit(0)
     }
 
@@ -68,6 +106,72 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
     override fun setMultiTouchConfig(protocol: String?, devicePath: String?) {
         protocolOverride = protocol ?: "auto"
         devicePathOverride = devicePath ?: ""
+    }
+
+    /** 全局触发条件：区域 + 键盘策略 + 边缘带宽度（对齐 GMD，所有手势共用）。 */
+    override fun setMultiTouchTrigger(area: Int, keyboardBehavior: Int, borderPx: Int) {
+        triggerArea = area.coerceIn(
+            MultiTouchTriggerFilter.AREA_ANYWHERE,
+            MultiTouchTriggerFilter.AREA_BOTTOM,
+        )
+        this.keyboardBehavior = keyboardBehavior.coerceIn(
+            MultiTouchTriggerFilter.KEYBOARD_BLOCKED,
+            MultiTouchTriggerFilter.KEYBOARD_EVERYWHERE,
+        )
+        triggerBorderPx = borderPx.coerceAtLeast(0)
+    }
+
+    /**
+     * 触发条件判定：区域 + 键盘（对齐 GMD）。
+     *
+     * - 几何手势：区域与键盘都只看起点；
+     * - 绘制手势（[path] 非空）：区域按 GMD 语义看整条轨迹（任意点命中），键盘仍看起点。
+     */
+    private fun acceptsTrigger(start: TouchAnchor?, path: List<TouchAnchor>? = null): Boolean {
+        val transform = displayTransform
+        val keyboard = runCatching { keyboardMonitor.snapshot() }.getOrNull()
+        return MultiTouchTriggerFilter.accepts(
+            area = triggerArea,
+            keyboardBehavior = keyboardBehavior,
+            start = start,
+            path = path,
+            widthPx = transform.screenWidthPx,
+            heightPx = transform.screenHeightPx,
+            borderPx = triggerBorderPx,
+            keyboardVisible = keyboard?.visible == true,
+            keyboardHasBounds = keyboard?.hasBounds() == true,
+            keyboardBounds = MultiTouchTriggerFilter.KeyboardRect(
+                left = keyboard?.bounds?.left ?: 0,
+                top = keyboard?.bounds?.top ?: 0,
+                right = keyboard?.bounds?.right ?: 0,
+                bottom = keyboard?.bounds?.bottom ?: 0,
+            ),
+            displayWidth = keyboard?.displayBounds?.width() ?: 0,
+            displayHeight = keyboard?.displayBounds?.height() ?: 0,
+        )
+    }
+
+    /**
+     * 把路径手势的采样点换算成屏幕归一化锚点（u 按屏宽、v 按屏高）。
+     *
+     * 轨迹点与观察器里的触点用同一套归一化（x、y 都除以屏高），所以 `u = x · H / W`。
+     * 显示状态还没推过来（transform 无效）时返回 null：路径区域判定跳过，行为退回只看起点。
+     */
+    private fun pathAnchors(path: CollectedPath): List<TouchAnchor>? {
+        val transform = displayTransform
+        val width = transform.screenWidthPx.toFloat()
+        if (!transform.valid || width <= 0f) return null
+        val scale = transform.screenHeightPx.toFloat() / width
+        val anchors = ArrayList<TouchAnchor>(path.strokes.size * 8)
+        for (stroke in path.strokes) {
+            for (point in stroke.points) {
+                anchors += TouchAnchor(
+                    u = (point.x * scale).coerceIn(0f, 1f),
+                    v = point.y.coerceIn(0f, 1f),
+                )
+            }
+        }
+        return anchors.ifEmpty { null }
     }
 
     override fun getMultiTouchDiagnostics(): String = multitouchDiagnostics
@@ -85,41 +189,46 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
             devicePathOverride = { devicePathOverride },
             onDiagnostics = { multitouchDiagnostics = it },
             onDevices = { touchDevices = it.toTypedArray() },
-            onGesture = { gestures, eventTimeMs, anchor ->
-                runCatching {
-                    Log.i(
-                        "MultiTouchBridge",
-                        "batch: " + gestures.joinToString { "${it.gesture}x${it.fingerCount}" } +
-                            " anchor=(${anchor.u},${anchor.v})",
-                    )
-                    callback.onGestureBatch(
-                        gestures.map { it.gesture.ordinal }.toIntArray(),
-                        gestures.map { it.fingerCount }.toIntArray(),
-                        eventTimeMs,
-                        anchor.u,
-                        anchor.v,
-                    )
-                }
-            },
-            onPathGesture = { path, eventTimeMs, anchor ->
-                val coordinates = ArrayList<Float>()
-                val strokeLengths = IntArray(path.strokes.size)
-                path.strokes.forEachIndexed { index, stroke ->
-                    strokeLengths[index] = stroke.points.size
-                    for (point in stroke.points) {
-                        coordinates += point.x
-                        coordinates += point.y
+            onGesture = { gestures, eventTimeMs, anchor, startAnchor ->
+                if (acceptsTrigger(startAnchor)) {
+                    runCatching {
+                        Log.i(
+                            "MultiTouchBridge",
+                            "batch: " + gestures.joinToString { "${it.gesture}x${it.fingerCount}" } +
+                                " anchor=(${anchor.u},${anchor.v}) " +
+                                "start=(${startAnchor?.u},${startAnchor?.v})",
+                        )
+                        callback.onGestureBatch(
+                            gestures.map { it.gesture.ordinal }.toIntArray(),
+                            gestures.map { it.fingerCount }.toIntArray(),
+                            eventTimeMs,
+                            anchor.u,
+                            anchor.v,
+                        )
                     }
                 }
-                runCatching {
-                    callback.onPathGesture(
-                        path.fingerCount,
-                        coordinates.toFloatArray(),
-                        strokeLengths,
-                        eventTimeMs,
-                        anchor.u,
-                        anchor.v,
-                    )
+            },
+            onPathGesture = { path, eventTimeMs, anchor, startAnchor ->
+                if (acceptsTrigger(startAnchor, pathAnchors(path))) {
+                    val coordinates = ArrayList<Float>()
+                    val strokeLengths = IntArray(path.strokes.size)
+                    path.strokes.forEachIndexed { index, stroke ->
+                        strokeLengths[index] = stroke.points.size
+                        for (point in stroke.points) {
+                            coordinates += point.x
+                            coordinates += point.y
+                        }
+                    }
+                    runCatching {
+                        callback.onPathGesture(
+                            path.fingerCount,
+                            coordinates.toFloatArray(),
+                            strokeLengths,
+                            eventTimeMs,
+                            anchor.u,
+                            anchor.v,
+                        )
+                    }
                 }
             },
             onInputConflict = { devices ->
@@ -168,15 +277,19 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
             devicePathOverride = { devicePathOverride },
             onDiagnostics = { multitouchDiagnostics = it },
             onDevices = { touchDevices = it.toTypedArray() },
-            onGesture = { gestures, _, anchor ->
-                for (gesture in gestures) {
-                    pollingEvents += "g:${gesture.gesture.ordinal}:${gesture.fingerCount}:" +
-                        "${anchor.u}:${anchor.v}"
+            onGesture = { gestures, _, anchor, startAnchor ->
+                if (acceptsTrigger(startAnchor)) {
+                    for (gesture in gestures) {
+                        pollingEvents += "g:${gesture.gesture.ordinal}:${gesture.fingerCount}:" +
+                            "${anchor.u}:${anchor.v}"
+                    }
                 }
             },
-            onPathGesture = { path, _, anchor ->
-                pollingEvents += "p:${path.fingerCount}:${anchor.u}:${anchor.v}:" +
-                    encodePathStrokes(path.strokes)
+            onPathGesture = { path, _, anchor, startAnchor ->
+                if (acceptsTrigger(startAnchor, pathAnchors(path))) {
+                    pollingEvents += "p:${path.fingerCount}:${anchor.u}:${anchor.v}:" +
+                        encodePathStrokes(path.strokes)
+                }
             },
             onState = { _, detail ->
                 // 设备路径只取短名（event7），状态行不用完整的 /dev/input/...。
@@ -207,6 +320,90 @@ class TaskManagerUserService() : ITaskManagerService.Stub() {
         pollingObserver?.stop()
         pollingObserver = null
         pollingEvents.clear()
+    }
+
+    override fun startPhysicalKeyObservation(callback: IOnPhysicalKeyGesture?): Boolean {
+        callback ?: return false
+        stopPhysicalKeyObservation()
+        val observer = EvdevPhysicalKeyObserver(
+            onGesture = { gesture, eventTimeMs ->
+                runCatching {
+                    callback.onKeyGesture(gesture.ordinal, eventTimeMs)
+                }
+            },
+            onState = { running, detail ->
+                if (running || detail != "stopped") {
+                    runCatching { callback.onObserverState(running, detail) }
+                }
+            },
+            onDiagnostics = { physicalKeyDiagnostics = it },
+        )
+        observer.mappedKeyCodes = configuredMappedKeyCodes
+        observer.doublePressKeyCodes = configuredDoublePressKeyCodes
+        keyObserver = observer
+        return observer.start()
+    }
+
+    override fun stopPhysicalKeyObservation() {
+        keyObserver?.stop()
+        keyObserver = null
+    }
+
+    override fun isPhysicalKeyObservationRunning(): Boolean =
+        keyObserver?.isRunning() == true || pollingKeyObserver?.isRunning() == true
+
+    override fun startPhysicalKeyPolling(): Boolean {
+        stopPhysicalKeyPolling()
+        val observer = EvdevPhysicalKeyObserver(
+            onGesture = { gesture, eventTimeMs ->
+                pollingKeyEvents += "k:${gesture.ordinal}:$eventTimeMs"
+            },
+            onState = { running, detail ->
+                pollingKeyEvents += "s:${if (running) 1 else 0}:$detail"
+            },
+            onDiagnostics = { physicalKeyDiagnostics = it },
+        )
+        observer.mappedKeyCodes = configuredMappedKeyCodes
+        observer.doublePressKeyCodes = configuredDoublePressKeyCodes
+        val started = observer.start()
+        if (!started) return false
+        pollingKeyObserver = observer
+        return true
+    }
+
+    override fun pollPhysicalKeyEvents(): Array<String> {
+        val events = ArrayList<String>()
+        while (true) {
+            events += pollingKeyEvents.poll() ?: break
+        }
+        return events.toTypedArray()
+    }
+
+    override fun stopPhysicalKeyPolling() {
+        pollingKeyObserver?.stop()
+        pollingKeyObserver = null
+        pollingKeyEvents.clear()
+    }
+
+    override fun getPhysicalKeyDiagnostics(): String = physicalKeyDiagnostics
+
+    @Volatile
+    private var configuredMappedKeyCodes: Set<Int> = emptySet()
+
+    @Volatile
+    private var configuredDoublePressKeyCodes: Set<Int> = emptySet()
+
+    override fun updatePhysicalKeyTargets(mappedKeyCodes: IntArray?, doublePressKeyCodes: IntArray?) {
+        val mapped = mappedKeyCodes?.toSet() ?: emptySet()
+        val doublePress = doublePressKeyCodes?.toSet() ?: emptySet()
+        configuredMappedKeyCodes = mapped
+        configuredDoublePressKeyCodes = doublePress
+
+        keyObserver?.mappedKeyCodes = mapped
+        keyObserver?.doublePressKeyCodes = doublePress
+
+        pollingKeyObserver?.mappedKeyCodes = mapped
+        pollingKeyObserver?.doublePressKeyCodes = doublePress
     }
 
     override fun removeTaskById(taskIdStr: String?): Boolean =

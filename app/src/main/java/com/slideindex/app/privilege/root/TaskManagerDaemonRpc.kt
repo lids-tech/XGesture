@@ -163,6 +163,31 @@ internal object TaskManagerDaemonRpc {
 
             106 -> RpcValue.StrArr(service.getTouchDevices())
 
+            107 -> {
+                service.setMultiTouchTrigger(args.int(0), args.int(1), args.int(2))
+                RpcValue.Void
+            }
+
+            110 -> RpcValue.Bool(service.startPhysicalKeyPolling())
+
+            111 -> {
+                service.stopPhysicalKeyPolling()
+                RpcValue.Void
+            }
+
+            112 -> RpcValue.StrArr(service.pollPhysicalKeyEvents())
+
+            113 -> RpcValue.Bool(service.isPhysicalKeyObservationRunning())
+
+            114 -> RpcValue.Str(service.getPhysicalKeyDiagnostics())
+
+            115 -> {
+                val mapped = args.string(0).split(',').mapNotNull { it.toIntOrNull() }.toIntArray()
+                val doublePress = args.string(1).split(',').mapNotNull { it.toIntOrNull() }.toIntArray()
+                service.updatePhysicalKeyTargets(mapped, doublePress)
+                RpcValue.Void
+            }
+
             30 -> RpcValue.I32(service.getTetheringState())
 
             31 -> RpcValue.Bool(service.setTetheringEnabled(args.boolean(0)))

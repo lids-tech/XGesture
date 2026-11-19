@@ -16,7 +16,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import com.slideindex.app.ui.settings.components.MiuixNavigationRow
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.InvertColors
@@ -31,7 +30,7 @@ import com.slideindex.app.settings.HomeMainSettings
 import com.slideindex.app.settings.KeyboardTriggerBehavior
 import com.slideindex.app.settings.TopAppBarBlurStyle
 import com.slideindex.app.ui.HomeLeadingIcons
-import com.slideindex.app.ui.miuix.MiuixBackNavigationIcon
+import com.slideindex.app.ui.miuix.MiuixGlassBackNavigationIcon
 import com.slideindex.app.ui.miuix.MiuixListScaffold
 import com.slideindex.app.ui.miuix.MiuixListSettingsCard
 import top.yukonga.miuix.kmp.basic.SmallTitle
@@ -39,6 +38,7 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.miuix.appLanguageSettingsCardItems
 import com.slideindex.app.ui.miuix.themeAppearanceSettingsCardItems
+import com.slideindex.app.ui.miuix.MiuixGlassDropdownPreference
 import com.slideindex.app.ui.settings.components.SETTINGS_SLIDER_PERCENT_KEY_POINTS_100
 import com.slideindex.app.ui.settings.components.SettingExpandableDropdownRow
 import com.slideindex.app.ui.settings.components.SettingExpandableSwitchRow
@@ -150,7 +150,7 @@ fun InteractionAppearanceSettingsScreen(
         title = stringResource(R.string.interaction_appearance_settings_title),
         pageHint = stringResource(R.string.interaction_appearance_settings_entry_desc),
         showPageHintCard = true,
-        navigationIcon = { MiuixBackNavigationIcon(onBack) },
+        navigationIcon = { MiuixGlassBackNavigationIcon(onBack) },
     ) {
         item(key = "theme_section") {
             SmallTitle(
@@ -186,7 +186,7 @@ fun InteractionAppearanceSettingsScreen(
                     )
                 },
                 settingsCardScopeItem("icon-plate") {
-                    OverlayDropdownPreference(
+                    MiuixGlassDropdownPreference(
                         title = iconPlateSectionTitle,
                         items = iconPlateTabLabels,
                         selectedIndex = com.slideindex.app.settings.IconPlateMode

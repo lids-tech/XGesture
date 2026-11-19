@@ -47,6 +47,11 @@ import com.slideindex.app.ui.gesturepicker.gestureActionSearchAliases
 import com.slideindex.app.ui.settings.components.SettingsLazyScreenScaffoldWithExpandableSearch
 import com.slideindex.app.ui.settings.components.settingsLazySmallTitle
 import com.slideindex.app.util.PinyinHelper
+import com.slideindex.app.ui.miuix.LocalMiuixPageBackdrop
+import com.slideindex.app.ui.miuix.LocalMiuixScreenBackdrop
+import com.slideindex.app.ui.miuix.LocalMiuixContentUnderBar
+import top.yukonga.miuix.kmp.glass.GlassTabRow
+import top.yukonga.miuix.kmp.glass.GlassTabRowDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 内置动作浏览页：按动作类型全量列出，分类分段 + 特殊入口角标 + 筛选。 */
@@ -92,13 +97,13 @@ fun ActionCenterScreen(
         searchQuery = searchQuery,
         onSearchQueryChange = { searchQuery = it },
         onBack = onBack,
-    ) {
-        item(key = "action-center-filter") {
+        extraBottomContent = {
             ActionCenterFilterRow(
                 selected = filter,
                 onSelect = { filter = it },
             )
-        }
+        },
+    ) {
         sections.forEach { (section, items) ->
             settingsLazySmallTitle(
                 key = "action-center-section-${section.name}",
@@ -128,19 +133,41 @@ private fun ActionCenterFilterRow(
     selected: ActionCenterFilter,
     onSelect: (ActionCenterFilter) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        ActionCenterFilter.entries.forEach { filter ->
-            ActionCenterFilterPill(
-                label = stringResource(filter.labelRes),
-                selected = filter == selected,
-                onClick = { onSelect(filter) },
-            )
+    val tabs = ActionCenterFilter.entries.map { stringResource(it.labelRes) }
+    // 与通知滤盒同源：内容滚到栏下才升起玻璃；无背板（浮层窗口）时退回实色 pills。
+    val backdrop = LocalMiuixScreenBackdrop.current ?: LocalMiuixPageBackdrop.current
+    if (backdrop != null) {
+        // 静息态：未选中是灰色胶囊；内容滚到栏下（材质升起）才交给玻璃（miuix neutralColors 的设计意图）。
+        val contentUnderBar = LocalMiuixContentUnderBar.current.value
+        GlassTabRow(
+            tabs = tabs,
+            selectedIndex = ActionCenterFilter.entries.indexOf(selected).coerceAtLeast(0),
+            onSelect = { index -> ActionCenterFilter.entries.getOrNull(index)?.let(onSelect) },
+            backdrop = backdrop,
+            surfaceAlpha = if (contentUnderBar) 1f else 0f,
+            height = GlassTabRowDefaults.Height,
+            // 选中态用主题蓝（同开关），静息态未选中仍是灰色胶囊：取中性套的静息灰 + 换掉选中色。
+            colors = GlassTabRowDefaults.neutralColors().copy(
+                selectedContainerColor = MiuixTheme.colorScheme.primary,
+                selectedContentColor = androidx.compose.ui.graphics.Color.White,
+            ),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ActionCenterFilter.entries.forEach { filter ->
+                ActionCenterFilterPill(
+                    label = stringResource(filter.labelRes),
+                    selected = filter == selected,
+                    onClick = { onSelect(filter) },
+                )
+            }
         }
     }
 }

@@ -25,7 +25,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.slideindex.app.R
-import com.slideindex.app.ui.miuix.MiuixBackNavigationIcon
+import com.slideindex.app.ui.miuix.MiuixGlassBackNavigationIcon
 import com.slideindex.app.ui.miuix.MiuixExpandableSearchBottomContent
 import com.slideindex.app.ui.miuix.MiuixExpandableSearchIconAction
 import com.slideindex.app.ui.miuix.MiuixHintText
@@ -64,6 +64,8 @@ fun SettingsScreenScaffold(
     actions: @Composable RowScope.() -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
+    /** 顶栏下方的附加内容（可展开搜索条等）。 */
+    bottomContent: @Composable () -> Unit = {},
     embeddedContentPadding: PaddingValues = PaddingValues(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 12.dp),
     /** 悬浮按钮需要预留的底部空间，见 [com.slideindex.app.ui.miuix.MiuixSettingsFabInset]。 */
     fabInset: androidx.compose.ui.unit.Dp = 0.dp,
@@ -84,6 +86,7 @@ fun SettingsScreenScaffold(
         actions = actions,
         floatingActionButton = floatingActionButton,
         bottomBar = bottomBar,
+        bottomContent = bottomContent,
         fabInset = fabInset,
         content = content,
     )
@@ -113,7 +116,7 @@ fun SettingsLazyScreenScaffold(
         pageHint = pageHint,
         subtitle = subtitle,
         showPageHintCard = true,
-        navigationIcon = onBack?.let { { MiuixBackNavigationIcon(it) } },
+        navigationIcon = onBack?.let { { MiuixGlassBackNavigationIcon(it) } },
         actions = actions,
         floatingActionButton = floatingActionButton,
         bottomContent = bottomContent,
@@ -140,6 +143,8 @@ fun SettingsLazyScreenScaffoldWithExpandableSearch(
     floatingActionButton: @Composable () -> Unit = {},
     /** 悬浮按钮需要预留的底部空间，见 [com.slideindex.app.ui.miuix.MiuixSettingsFabInset]。 */
     fabInset: Dp = 0.dp,
+    /** 展开搜索条下方的附加内容（如内置动作的筛选条），与搜索条同处顶栏下方、不在列表层内。 */
+    extraBottomContent: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     var searchExpanded by remember { mutableStateOf(false) }
@@ -175,12 +180,14 @@ fun SettingsLazyScreenScaffoldWithExpandableSearch(
             extraActions()
         },
         bottomContent = {
+            // 搜索条与附加内容都交给同一个组件：顶栏 bottomContent 是单槽，兄弟节点会重叠。
             MiuixExpandableSearchBottomContent(
                 searchExpanded = searchExpanded,
                 searchQuery = searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
                 focusRequester = searchFocusRequester,
                 hintResId = hintResId,
+                extraContent = extraBottomContent,
             )
         },
         content = content,

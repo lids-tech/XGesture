@@ -8,6 +8,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -72,8 +73,7 @@ import com.slideindex.app.settings.withUpdatedTriggerHandleEdgeWidth
 import com.slideindex.app.settings.withUpdatedTriggerHandleEnabled
 import com.slideindex.app.ui.HapticSettingsScreen
 import com.slideindex.app.ui.InteractionAppearanceSettingsScreen
-import com.slideindex.app.ui.AppKeepAliveSettingsScreen
-import com.slideindex.app.ui.PrivilegeModeSettingsScreen
+import com.slideindex.app.ui.BackgroundPermissionsScreen
 import com.slideindex.app.ui.CornerGestureInteractionScreen
 import com.slideindex.app.ui.CornerGestureSettingsScreen
 import com.slideindex.app.ui.CornerGestureSlotsSettingsScreen
@@ -146,14 +146,29 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
         } else {
             gestureSettings.keyboardTriggerNarrowPercentPortrait
         }
-        var privilegedAccessGranted by remember { mutableStateOf(false) }
-        var rootAccessGranted by remember { mutableStateOf(false) }
+        // 用 rememberSaveable：旋转/配置变更重建 Activity 时保留上次判定结果，
+        // 否则 `remember { false }` 会先渲染一帧「Root 未就绪」红卡片，再等 IO 检查回填。
+        var privilegedAccessGranted by rememberSaveable { mutableStateOf(false) }
+        var rootAccessGranted by rememberSaveable { mutableStateOf(false) }
+        var privilegeStateKnown by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(appSettings.privilegeMode, permissions.shizukuGranted) {
             withContext(Dispatchers.IO) {
-                privilegedAccessGranted = com.slideindex.app.util.TaskManagerUtil.hasPrivilegedAccess()
+                // 重建 Activity 后第一次查询经常赶上 root 服务/守护进程重建，会瞬时返回 false。
+                // 这里重试几次，并且「已就绪」不因单次 false 回退，避免红卡片闪一下又消失。
+                var privileged = privilegedAccessGranted
+                if (!privileged) {
+                    repeat(3) { attempt ->
+                        if (com.slideindex.app.util.TaskManagerUtil.hasPrivilegedAccess()) {
+                            privileged = true
+                            return@repeat
+                        }
+                        if (attempt < 2) Thread.sleep(200)
+                    }
+                }
+                privilegedAccessGranted = privileged
+                privilegeStateKnown = true
                 rootAccessGranted = when (appSettings.privilegeMode) {
-                    com.slideindex.app.settings.PrivilegeMode.ROOT ->
-                        com.slideindex.app.util.TaskManagerUtil.hasPrivilegedAccess()
+                    com.slideindex.app.settings.PrivilegeMode.ROOT -> privileged
                     com.slideindex.app.settings.PrivilegeMode.SHIZUKU -> true
                 }
             }
@@ -164,6 +179,7 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
             privilegeMode = appSettings.privilegeMode,
             privilegedAccessGranted = privilegedAccessGranted,
             rootAccessGranted = rootAccessGranted,
+            privilegeStateKnown = privilegeStateKnown,
             notificationGranted = permissions.notificationGranted,
             shizukuGranted = permissions.shizukuGranted,
             accessibilityGranted = permissions.accessibilityGranted,
@@ -171,13 +187,12 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
             batteryOptimizationExempt = permissions.batteryOptimizationExempt,
             onRequestNotification = { viewModel.requestNotificationPermission() },
             onRequestShizuku = { viewModel.requestShizuku() },
-            onRequestRootAccess = { ctx.navigate(AppNavKey.HomePrivilegeMode) },
+            onRequestRootAccess = { ctx.navigate(AppNavKey.HomeBackgroundPermissions) },
             onRequestAccessibility = { viewModel.openAccessibilitySettings() },
             onRequestOverlay = { ctx.openOverlaySettings() },
             onRequestBatteryOptimization = { ctx.requestBatteryOptimization() },
             onGestureEnabledChange = { enabled -> viewModel.setServiceEnabled(enabled) },
-            onOpenPrivilegeModeSettings = { ctx.navigate(AppNavKey.HomePrivilegeMode) },
-            onOpenAppKeepAliveSettings = { ctx.navigate(AppNavKey.HomeAppKeepAlive) },
+            onOpenBackgroundPermissions = { ctx.navigate(AppNavKey.HomeBackgroundPermissions) },
             onOpenFloatBallSettings = { ctx.navigate(AppNavKey.FloatBall) },
             onOpenPickSettings = { ctx.navigate(AppNavKey.FloatBallPick) },
             pickOcrFallbackEnabled = appSettings.floatBallOcrFallbackEnabled,
@@ -193,6 +208,7 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
             gestureAppProfileCount = appSettings.gestureProfiles.size,
             onOpenCornerWheel = { ctx.navigate(AppNavKey.HomeCornerGesture) },
             onOpenMultiTouchGesture = { ctx.navigate(AppNavKey.ExtensionMultiTouchGesture) },
+            onOpenPhysicalKeySettings = { ctx.navigate(AppNavKey.PhysicalKeySettings) },
             onOpenGestureAngle = { ctx.navigate(AppNavKey.HomeGestureAngle) },
             onOpenSystemBackGestureWidth = { ctx.navigate(AppNavKey.HomeSystemBackGestureWidth) },
             onOpenAnimationStyleSelect = { ctx.navigate(AppNavKey.HomeAnimationStyleSelect) },
@@ -288,12 +304,20 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
         )
     }
 
-    hiltEntry<AppNavKey.HomePrivilegeMode> {
+    hiltEntry<AppNavKey.HomeBackgroundPermissions> {
         val homeEffects = remember(ctx) { MainNavHomeEffects(ctx) }
-        val viewModel: HomeViewModel = hiltViewModel<HomeViewModel, HomeViewModel.Factory> { factory ->
-            factory.create(homeEffects)
-        }
-        val appSettings by viewModel.settings.collectAsStateWithLifecycle()
+        val homeViewModel: HomeViewModel =
+            hiltViewModel<HomeViewModel, HomeViewModel.Factory> { factory ->
+                factory.create(homeEffects)
+            }
+        val keepAliveEffects = remember(ctx) { MainNavKeepAliveEffects(ctx) }
+        val keepAliveViewModel: KeepAliveSettingsViewModel =
+            hiltViewModel<KeepAliveSettingsViewModel, KeepAliveSettingsViewModel.Factory> { factory ->
+                factory.create(keepAliveEffects)
+            }
+        val appSettings by homeViewModel.settings.collectAsStateWithLifecycle()
+        val keepAliveSettings by keepAliveViewModel.keepAliveUiSettings.collectAsStateWithLifecycle()
+        val permissions = ctx.collectPermissions()
         var rootAvailable by remember { mutableStateOf(false) }
         var shizukuReady by remember { mutableStateOf(false) }
         LaunchedEffect(appSettings.privilegeMode) {
@@ -306,13 +330,23 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
                 }
             }
         }
-        PrivilegeModeSettingsScreen(
+        BackgroundPermissionsScreen(
             privilegeMode = appSettings.privilegeMode,
             shizukuGranted = shizukuReady,
             rootAvailable = rootAvailable,
+            permissions = permissions,
+            hideFromRecents = keepAliveSettings.hideFromRecents,
+            accessibilityKeepAliveEnabled = keepAliveSettings.accessibilityKeepAliveEnabled,
             onBack = { ctx.navigateBackTo(AppNavKey.HomeMain) },
-            onPrivilegeModeChange = viewModel::setPrivilegeMode,
+            onPrivilegeModeChange = homeViewModel::setPrivilegeMode,
             onRequestShizuku = { ctx.requestShizuku() },
+            onRequestNotification = { homeViewModel.requestNotificationPermission() },
+            onRequestBatteryOptimization = { ctx.requestBatteryOptimization() },
+            onRequestAutoStart = { ctx.openAutoStartSettings() },
+            onHideFromRecentsChange = keepAliveViewModel::setHideFromRecents,
+            onAccessibilityKeepAliveChange = keepAliveViewModel::setAccessibilityKeepAliveEnabled,
+            onRequestSecureSettingsGrant = { ctx.requestSecureSettingsGrant() },
+            onRequestReadLogsGrant = { ctx.requestReadLogsGrant() },
         )
     }
 
@@ -337,42 +371,6 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
             onHapticSlotAppEnabledChange = viewModel::setHapticSlotAppEnabled,
             onHapticConfirmLaunchEnabledChange = viewModel::setHapticConfirmLaunchEnabled,
             onHapticActionConfirmEnabledChange = viewModel::setHapticActionConfirmEnabled,
-        )
-    }
-
-    hiltEntry<AppNavKey.HomeAppKeepAlive> {
-        val keepAliveEffects = remember(ctx) { MainNavKeepAliveEffects(ctx) }
-        val viewModel: KeepAliveSettingsViewModel =
-            hiltViewModel<KeepAliveSettingsViewModel, KeepAliveSettingsViewModel.Factory> { factory ->
-                factory.create(keepAliveEffects)
-            }
-        val keepAliveSettings by viewModel.keepAliveUiSettings.collectAsStateWithLifecycle()
-        val permissions = ctx.collectPermissions()
-        var privilegedAccessGranted by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            withContext(Dispatchers.IO) {
-                privilegedAccessGranted = com.slideindex.app.util.TaskManagerUtil.hasPrivilegedAccess()
-            }
-        }
-        AppKeepAliveSettingsScreen(
-            hideFromRecents = keepAliveSettings.hideFromRecents,
-            batteryOptimizationExempt = permissions.batteryOptimizationExempt,
-            accessibilityKeepAliveEnabled = keepAliveSettings.accessibilityKeepAliveEnabled,
-            writeSecureSettingsGranted = permissions.writeSecureSettingsGranted,
-            privilegedAccessGranted = privilegedAccessGranted,
-            onBack = { ctx.navigateBackTo(AppNavKey.HomeMain) },
-            onRequestBatteryOptimization = { ctx.requestBatteryOptimization() },
-            // 与「剪贴板后台监听」页的「自启动与后台保护管理」一致：直接跳本应用的应用信息/权限详情。
-            onRequestAutoStart = {
-                runCatching {
-                    ctx.activity.startActivity(
-                        com.slideindex.app.util.PermissionHelper.appListSettingsIntent(ctx.activity),
-                    )
-                }
-            },
-            onHideFromRecentsChange = viewModel::setHideFromRecents,
-            onAccessibilityKeepAliveChange = viewModel::setAccessibilityKeepAliveEnabled,
-            onRequestSecureSettingsGrant = { ctx.requestSecureSettingsGrant() },
         )
     }
 
@@ -464,6 +462,7 @@ fun NavEntryBuilder.homeNavEntries(ctx: MainNavContext) {
     gestureAppProfileNavEntries(ctx)
 
     multiTouchNavEntries(ctx, AppNavKey.HomeMain)
+    physicalKeyNavEntries(ctx, AppNavKey.HomeMain)
 
     hiltEntry<AppNavKey.HomeCornerGesture> {
         val viewModel: HomeDetailSettingsViewModel = hiltViewModel()

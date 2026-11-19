@@ -10,8 +10,7 @@ sealed interface AppNavKey : NavKey {
     @Serializable data object HomeMain : AppNavKey
     @Serializable data object HomeInteractionAppearance : AppNavKey
 @Serializable data object HomeHapticSettings : AppNavKey
-    @Serializable data object HomeAppKeepAlive : AppNavKey
-    @Serializable data object HomePrivilegeMode : AppNavKey
+    @Serializable data object HomeBackgroundPermissions : AppNavKey
     @Serializable data object HomeLayout : AppNavKey
     @Serializable data object HomeHiddenApps : AppNavKey
     @Serializable data object HomePreviousAppBlacklist : AppNavKey
@@ -388,6 +387,20 @@ sealed interface AppNavKey : NavKey {
         val pendingStrokes: String = "",
         val initialCommand: String = "",
         val entryId: String = "",
+    ) : AppNavKey
+    /** 实体按键助手设置页。 */
+    @Serializable data object PhysicalKeySettings : AppNavKey
+    @Serializable data class PhysicalKeyActionPick(val gestureOrdinal: Int) : AppNavKey
+    @Serializable data class PhysicalKeyActionMyShortcuts(val gestureOrdinal: Int) : AppNavKey
+    @Serializable data class PhysicalKeyActionPresetShortcuts(val gestureOrdinal: Int) : AppNavKey
+    @Serializable data class PhysicalKeyActionPickApp(val gestureOrdinal: Int) : AppNavKey
+    @Serializable data class PhysicalKeyActionPickActivity(
+        val gestureOrdinal: Int,
+        val appPackageName: String = "",
+    ) : AppNavKey
+    @Serializable data class PhysicalKeyActionShellCommand(
+        val gestureOrdinal: Int,
+        val initialCommand: String = "",
     ) : AppNavKey
     // 手势宏（宏列表 / 新建-编辑 / 目标 App 选择）
     @Serializable data object MacroList : AppNavKey

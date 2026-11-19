@@ -41,6 +41,9 @@ class SettingsModuleRegistryTest {
         assertEquals(SettingsModule.QUICK_LAUNCHER, SettingsModuleRegistry.moduleOf("quick_launcher"))
         assertEquals(SettingsModule.FREE_WINDOW, SettingsModuleRegistry.moduleOf("app_launch_policy_id"))
         assertEquals(SettingsModule.QUICK_LAUNCHER, SettingsModuleRegistry.moduleOf("app_carousel_cancel_distance_dp"))
+        // 应用切换器的列表来源 / 关闭行为：同样落 QUICK_LAUNCHER（`app_carousel_` 前缀）。
+        assertEquals(SettingsModule.QUICK_LAUNCHER, SettingsModuleRegistry.moduleOf("app_carousel_list_source"))
+        assertEquals(SettingsModule.QUICK_LAUNCHER, SettingsModuleRegistry.moduleOf("app_carousel_close_mode"))
         assertEquals(SettingsModule.SEARCH, SettingsModuleRegistry.moduleOf("ocr_engine_id"))
         assertEquals(SettingsModule.SHAKE, SettingsModuleRegistry.moduleOf("back_tap_enabled"))
         assertEquals(SettingsModule.GENERAL, SettingsModuleRegistry.moduleOf("service_enabled"))
@@ -124,7 +127,10 @@ class SettingsModuleRegistryTest {
         // 704 = 701 + 3：悬浮指针「松手点击」模式 / 保持摇杆两个键（FLOATING_POINTER）
         //            + 取图点击动作 `pick_image_tap_action`（无匹配前缀，落 GENERAL）。
         // 705 = 704 + 1：任务切换器“X”按钮关闭模式 `task_switcher_close_mode`（无匹配前缀，落 GENERAL）。
-        const val EXPECTED_TOTAL_KEYS = 706
+        // 707 = 706 + 1：宽屏玻璃侧栏展开态 `bottom_nav_rail_expanded`（THEME_UI）。
+        // 709 = 707 + 2：应用切换器新增「列表来源」`app_carousel_list_source` 与
+        //            「关闭行为」`app_carousel_close_mode`（均落 QUICK_LAUNCHER）。
+        const val EXPECTED_TOTAL_KEYS = 709
 
         val EXPECTED_COUNTS: Map<SettingsModule, Int> = mapOf(
             SettingsModule.EDGE_GESTURE to 85,
@@ -133,7 +139,7 @@ class SettingsModuleRegistryTest {
             SettingsModule.FLOAT_BALL to 79,
             SettingsModule.FLOATING_POINTER to 54,
             SettingsModule.FINGERTIP_RING to 13,
-            SettingsModule.QUICK_LAUNCHER to 93,
+            SettingsModule.QUICK_LAUNCHER to 95,
             SettingsModule.WIDGET_PANEL to 8,
             SettingsModule.MESSAGE to 76,
             SettingsModule.OTP to 24,
@@ -146,7 +152,7 @@ class SettingsModuleRegistryTest {
             SettingsModule.FREEZER to 6,
             SettingsModule.SHELL to 1,
             SettingsModule.ACTIVITY_SHORTCUTS to 3,
-            SettingsModule.THEME_UI to 19,
+            SettingsModule.THEME_UI to 20,
             SettingsModule.GENERAL to 37,
         )
     }

@@ -5,6 +5,7 @@ import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.slideindex.app.ui.miuix.MiuixTopLayerRoot
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
@@ -39,6 +40,7 @@ class WidgetPickerTrampolineActivity : ComponentActivity() {
     var appSettings by mutableStateOf(deps.settingsRepository.readSnapshot())
 
     setContent {
+      MiuixTopLayerRoot {
       // WidgetPickerScreen 内部通过 rememberSettingsRepository/rememberAppRepository 取依赖，
       // 缺这层 provider 会在组合期直接抛 IllegalStateException（选器 Activity 一进就闪退）。
       CompositionLocalProvider(LocalAppDependencies provides deps) {
@@ -71,6 +73,7 @@ class WidgetPickerTrampolineActivity : ComponentActivity() {
             enableBackHandler = true
           )
         }
+      }
       }
     }
   }

@@ -12,6 +12,7 @@ enum class OverlaySuppressionScope {
     CORNER_WHEEL,
     FLOAT_BALL,
     MULTI_TOUCH,
+    PHYSICAL_KEY,
 }
 
 object OverlaySuppression {
@@ -22,7 +23,7 @@ object OverlaySuppression {
         scope: OverlaySuppressionScope,
     ): Boolean {
         if (OverlaySnoozeController.isActive()) return true
-        if (settings.hideTriggerOnLockScreen && isLockScreenActive(context)) return true
+        if (scope != OverlaySuppressionScope.PHYSICAL_KEY && settings.hideTriggerOnLockScreen && isLockScreenActive(context)) return true
         if (scope == OverlaySuppressionScope.TRIGGER) {
             if (settings.hideTriggerInLandscape && isLandscape(context)) return true
             if (settings.hideTriggerOnLauncher) {
@@ -70,4 +71,5 @@ private fun ExcludedAppScopes.suppresses(scope: OverlaySuppressionScope): Boolea
         OverlaySuppressionScope.CORNER_WHEEL -> suppressCornerWheel
         OverlaySuppressionScope.FLOAT_BALL -> suppressFloatBall
         OverlaySuppressionScope.MULTI_TOUCH -> suppressMultiTouch
+        OverlaySuppressionScope.PHYSICAL_KEY -> suppressPhysicalKey
     }

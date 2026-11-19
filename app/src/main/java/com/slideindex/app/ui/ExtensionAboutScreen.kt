@@ -77,11 +77,13 @@ import androidx.core.net.toUri
 import com.slideindex.app.BuildConfig
 import com.slideindex.app.R
 import com.slideindex.app.ui.icon.AppIconTheme
-import com.slideindex.app.ui.miuix.MiuixBackNavigationIcon
-import com.slideindex.app.ui.miuix.MiuixBlurredTopBar
+import com.slideindex.app.ui.miuix.MiuixGlassBackNavigationIcon
+import com.slideindex.app.ui.miuix.AdaptiveTopAppBar
+import com.slideindex.app.ui.miuix.MiuixGlassBackNavigationIcon
 import com.slideindex.app.ui.miuix.MiuixBottomSheet
 import com.slideindex.app.ui.miuix.effect.BgEffectBackground
 import com.slideindex.app.ui.miuix.groupedCardItems
+import com.slideindex.app.ui.miuix.miuixOverScrollVertical
 import com.slideindex.app.ui.miuix.rememberMiuixBlurBackdrop
 import com.slideindex.app.ui.onboarding.OnboardingPracticeSession
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
@@ -91,15 +93,14 @@ import java.util.Calendar
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -139,23 +140,21 @@ fun ExtensionAboutScreen(
 
     val backdrop = rememberMiuixBlurBackdrop()
     val blurActive = backdrop != null && heroCollapsed
-    val barColor = if (heroCollapsed && !blurActive) MiuixTheme.colorScheme.surface else Color.Transparent
 
     Scaffold(
         topBar = {
-            MiuixBlurredTopBar(
-                backdrop = backdrop,
-                enabled = blurActive,
-            ) {
-                SmallTopAppBar(
+            Box(Modifier.fillMaxWidth()) {
+                AdaptiveTopAppBar(
+                    modifier = Modifier.fillMaxWidth(),
                     title = stringResource(R.string.about_section_title),
-                    scrollBehavior = scrollBehavior,
-                    color = barColor,
-                    titleColor = MiuixTheme.colorScheme.onSurface.copy(alpha = titleAlpha),
+                    backdrop = if (blurActive) backdrop else null,
+                    expandable = false,
                     defaultWindowInsetsPadding = false,
+                    scrollBehavior = scrollBehavior,
+                    titleAlpha = { titleAlpha },
                     navigationIcon = {
-                        MiuixBackNavigationIcon(onBack)
-                    }
+                        MiuixGlassBackNavigationIcon(onBack)
+                    },
                 )
             }
         },
@@ -350,7 +349,7 @@ private fun AboutContent(
             modifier = Modifier
                 .fillMaxSize()
                 .scrollEndHaptic()
-                .overScrollVertical()
+                .miuixOverScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(
                 top = scrollPadding.calculateTopPadding(),
