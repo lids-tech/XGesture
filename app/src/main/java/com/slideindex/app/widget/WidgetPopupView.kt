@@ -464,14 +464,26 @@ class WidgetPopupCardLayout(
     }
 
     fun setEditMode(enabled: Boolean) {
-        if (editMode == enabled) return
-        editMode = enabled
-        if (enabled) {
-            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-        }
         updateHeader()
         fabContainer.visibility = if (enabled) View.VISIBLE else View.GONE
-        notifyAllPagesChanged()
+        // ⚠️ 这里**不能**整页 notifyItemRangeChanged：重绑会重新走"取宿主视图"流程，
+        // 而缓存里的宿主视图此刻还挂在旧卡片上 —— 新旧交替的瞬间会互相摘视图，
+        // 真机表现就是"进出编辑态后，滑到下一页就有组件空白"。
+        // 编辑态只需要就地刷新每个画布的编辑标记/网格，不需要重绑 RecyclerView。
+        applyEditModeInPlace(enabled)
+    }
+
+    /** 就地切换所有已绑定画布的编辑态（不触发 RecyclerView 重绑）。 */
+    private fun applyEditModeInPlace(enabled: Boolean) {
+        for (i in 0 until recyclerView.childCount) {
+            val holder = recyclerView.getChildViewHolder(recyclerView.getChildAt(i))
+            val canvas = (holder as? WidgetPageViewHolder)?.canvasLayout ?: continue
+            canvas.editMode = enabled
+            canvas.requestLayout()
+            canvas.invalidate()
+        }
+        // 当前可见页也要重算一次尺寸（编辑态多出缓冲行的滚动范围）。
+        applyPageMetrics(pages.getOrElse(currentPageIndex) { WidgetPanelPage() })
     }
 
     private fun notifyAllPagesChanged() {
