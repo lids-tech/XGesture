@@ -518,6 +518,8 @@ object WidgetPopupOverlayWindow {
       pageCount = pageCount,
       screenHeightPx = ctx.resources.displayMetrics.heightPixels,
     )
+    // 卡高被夹矮时同步下调滚动视口，否则内容底部被裁、滑不到底。
+    card.viewportHeightCapPx = box.maxViewportHeightPx
     val lp = card.layoutParams as? FrameLayout.LayoutParams ?: return
     val targetGravity = if (box.leftMarginPx > 0) {
       Gravity.TOP or Gravity.START
