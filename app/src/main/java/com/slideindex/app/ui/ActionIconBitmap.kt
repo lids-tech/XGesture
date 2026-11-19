@@ -110,7 +110,8 @@ object ActionIconBitmap {
                 else -> Color.BLACK
             }
             // 与内置图标一致：带底时占 0.54，裸图标占 0.75（见 GestureActionIconBitmap）
-            textSize = sizePx * (if (withPlate) 0.54f else 0.75f)
+            // 带底板占 0.54；无底板的文字图标原来 0.75 偏大，缩到 0.58（真机反馈"字体有点大"）。
+            textSize = sizePx * (if (withPlate) 0.54f else 0.58f)
             this.typeface = typeface
             textAlign = Paint.Align.CENTER
         }
