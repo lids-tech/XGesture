@@ -306,7 +306,7 @@ class WidgetCardContainer(
             getLocationOnScreen(location)
             val anchorX = location[0] + width / 2f
             val anchorY = location[1] + height / 2f
-            WidgetPanelShortcutAction.resolveAsync(context, item) { action ->
+            WidgetPanelShortcutAction.resolveAsync(context, item, settings.activityShortcuts) { action ->
               val decoded = action?.let { act ->
                 runCatching {
                   com.slideindex.app.gesture.GestureShortcutPayload.decode(act.payloadKey)
