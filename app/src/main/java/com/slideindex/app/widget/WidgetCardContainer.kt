@@ -143,8 +143,6 @@ class WidgetCardContainer(
             }
           }
         }.apply {
-          // 图标颜色（编辑器可设）：只作用于**文字 / 矢量**图标（图标库里的字、字形），
-          // 应用/快捷方式的真实位图图标保持原色、不整体染色。
           if (item.iconColorArgb != 0L &&
             (item.iconKey.isNotBlank() || item.itemType == ITEM_TYPE_ACTION)
           ) {
@@ -154,6 +152,9 @@ class WidgetCardContainer(
           // 原先动作图标（矢量渲染）、快捷方式图标（binder 往返）、自定义图标（可能解码图片）
           // 都在构造期同步解析：面板空着没事，放几张卡之后呼出/收回就"顿一下"。
           val iconSizePx = (44 * density).roundToInt()
+          // 图标颜色（编辑器可设）：只给文字 / 矢量图标的“字”着色 —— 渲染时传 tint，
+          // 而不是整张位图 SRC_IN（那会把底色也染掉，文字图标就看不见字了）。
+          val iconTint = item.iconColorArgb.takeIf { it != 0L }?.toInt()
           val action = if (item.itemType == ITEM_TYPE_ACTION) {
             com.slideindex.app.launcher.QuickLauncherItemCodec.parseActionPayload(item.intentUri)
           } else {
@@ -161,14 +162,20 @@ class WidgetCardContainer(
           }
           // 自定义图标优先：缓存命中就直接用，没命中后台加载后回填。
           if (item.iconKey.isNotBlank()) {
-            val customKey = WidgetCellIconLoader.customKey(item.iconKey, iconSizePx)
+            val customKey = WidgetCellIconLoader.customKey(item.iconKey, iconSizePx, iconTint ?: android.graphics.Color.WHITE)
             val cached = WidgetCellIconLoader.peek(customKey)
             if (cached != null) {
               setImageDrawable(cached.toDrawable(resources))
               return@apply
             }
             tag = customKey
-            WidgetCellIconLoader.loadCustomIcon(context, item.iconKey, action, iconSizePx) { bitmap ->
+            WidgetCellIconLoader.loadCustomIcon(
+              context = context,
+              iconKey = item.iconKey,
+              action = action,
+              sizePx = iconSizePx,
+              tintArgb = iconTint ?: android.graphics.Color.WHITE,
+            ) { bitmap ->
               if (tag == customKey) setImageDrawable(bitmap.toDrawable(resources))
             }
             return@apply

@@ -46,7 +46,7 @@ internal object WidgetCellIconLoader {
   fun shortcutKey(packageName: String, shortcutId: String): String = "s:$packageName/$shortcutId"
 
   /** 用户自定义图标（图标库 / 文字 / 图片）。 */
-  fun customKey(key: String, sizePx: Int): String = "c:$key:$sizePx"
+  fun customKey(key: String, sizePx: Int, tintArgb: Int = 0xFFFFFFFF.toInt()): String = "c:$key:$sizePx:$tintArgb"
 
   fun loadAction(
     context: Context,
@@ -114,10 +114,11 @@ internal object WidgetCellIconLoader {
     iconKey: String,
     action: GestureAction?,
     sizePx: Int,
+    tintArgb: Int = android.graphics.Color.WHITE,
     onLoaded: (Bitmap) -> Unit,
   ) {
     if (iconKey.isBlank()) return
-    val key = customKey(iconKey, sizePx)
+    val key = customKey(iconKey, sizePx, tintArgb)
     peek(key)?.let { onLoaded(it); return }
     val appContext = context.applicationContext
     scope.launch {
@@ -126,7 +127,7 @@ internal object WidgetCellIconLoader {
           context = appContext,
           key = iconKey,
           sizePx = sizePx,
-          tintArgb = android.graphics.Color.WHITE,
+          tintArgb = tintArgb,
           withPlate = true,
           action = action,
         )
