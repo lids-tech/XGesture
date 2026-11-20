@@ -33,13 +33,14 @@ object ActionIconStorage {
      * 之前固定文件名 → 重新选图后路径不变 → 缓存命中旧图，
      * 表现就是「编辑器里预览不更新、面板要重启 App 才变」。换名后路径变，各处自然刷新。
      */
-    private fun rotatedFileName(baseName: String): String =
-        baseName.removeSuffix(".png") + "-" +
-            System.currentTimeMillis().toString(16) + ".png"
+    private fun rotatedFileName(baseName: String, extension: String = "png"): String =
+        baseName.substringBeforeLast(".") + "-" +
+            System.currentTimeMillis().toString(16) + "." + extension
 
     /** 删掉同一 key 的旧图标文件（老的固定名 + 历史轮换名）。 */
     private fun deleteOldFiles(folder: java.io.File, baseName: String) {
-        val prefix = baseName.removeSuffix(".png") + "-"
+        val stem = baseName.substringBeforeLast(".")
+        val prefix = stem + "-"
         runCatching {
             folder.listFiles()?.forEach { file ->
                 if (file.isFile && (file.name == baseName || file.name.startsWith(prefix))) {
@@ -48,7 +49,6 @@ object ActionIconStorage {
             }
         }
     }
-
     private fun fileNameOf(context: Context, action: GestureAction): String =
         ActionDisplayNameStore.actionKey(action).hashCode().toUInt().toString(16) + ".png"
 
@@ -57,16 +57,43 @@ object ActionIconStorage {
      *
      * @return 存好的本地文件路径（存进 [ActionDisplayNameStore.setIcon]）；失败返回 null。
      */
-    fun saveFromUri(context: Context, action: GestureAction, uri: Uri): String? {
+    fun saveFromUri(context: Context, action: GestureAction, uri: Uri): String? =
+        saveUriToStorage(context, uri, fileNameOf(context, action))
+
+    /**
+     * 把相册 Uri 落成图标文件。
+     *
+     * ⚠️ 动图（GIF / 动画 WebP）必须**原样拷贝字节**：
+     * 走 Bitmap 解码再压 PNG 只剩第一帧，动图就"不动"了。
+     * 静图仍然缩放后压 PNG（体积小、尺寸统一）。
+     */
+    private fun saveUriToStorage(context: Context, uri: Uri, baseName: String): String? {
+        val folder = dir(context)
+        val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+        val animatedExtension = when (mime) {
+            "image/gif" -> "gif"
+            "image/webp" -> "webp"
+            "image/apng" -> "apng"
+            else -> null
+        }
+        if (animatedExtension != null) {
+            deleteOldFiles(folder, baseName)
+            val target = File(folder, rotatedFileName(baseName, animatedExtension))
+            val copied = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(target).use { output -> input.copyTo(output) }
+                } != null
+            }.getOrDefault(false)
+            return if (copied) target.absolutePath else null
+        }
         val bitmap = ImageDecodeGuard.decodeUri(
             context = context,
             uri = uri,
             maxSidePx = MAX_SIZE_PX,
         ) ?: return null
         val scaled = scaleDown(bitmap)
-        val baseName = fileNameOf(context, action)
-        deleteOldFiles(dir(context), baseName)
-        val target = File(dir(context), rotatedFileName(baseName))
+        deleteOldFiles(folder, baseName)
+        val target = File(folder, rotatedFileName(baseName))
         val ok = runCatching {
             FileOutputStream(target).use { out ->
                 scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -102,25 +129,8 @@ object ActionIconStorage {
     }
 
     /** 全局图标：按任意 key（如 `global:action:OPEN_INDEX`）存图片。 */
-    fun saveFromUriForGlobalKey(context: Context, key: String, uri: android.net.Uri): String? {
-        val bitmap = ImageDecodeGuard.decodeUri(
-            context = context,
-            uri = uri,
-            maxSidePx = MAX_SIZE_PX,
-        ) ?: return null
-        val scaled = scaleDown(bitmap)
-        val baseName = globalFileName(key)
-        deleteOldFiles(dir(context), baseName)
-        val target = File(dir(context), rotatedFileName(baseName))
-        val ok = runCatching {
-            FileOutputStream(target).use { out ->
-                scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-        }.isSuccess
-        if (scaled !== bitmap) scaled.recycle()
-        if (bitmap !== scaled) bitmap.recycle()
-        return if (ok) target.absolutePath else null
-    }
+    fun saveFromUriForGlobalKey(context: Context, key: String, uri: android.net.Uri): String? =
+        saveUriToStorage(context, uri, globalFileName(key))
 
     /** 全局图标：按任意 key 删除图片文件。 */
     fun deleteForGlobalKey(context: Context, key: String) {

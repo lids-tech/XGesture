@@ -162,6 +162,22 @@ class WidgetCardContainer(
           }
           // 自定义图标优先：缓存命中就直接用，没命中后台加载后回填。
           if (item.iconKey.isNotBlank()) {
+            // 动图图标（GIF / 动态 WebP）：用 Drawable 呈现，才能真正动起来。
+            val animatedPath = item.iconKey
+              .takeIf { com.slideindex.app.ui.ActionIconKeyCodec.isFile(it) }
+              ?.removePrefix("file:")
+              ?.takeIf { com.slideindex.app.ui.AnimatedIconSupport.looksAnimated(it) }
+            if (animatedPath != null) {
+              val animatedTag = "anim:${animatedPath}:$iconSizePx"
+              tag = animatedTag
+              WidgetCellIconLoader.loadAnimatedIcon(context, animatedPath) { drawable ->
+                if (tag == animatedTag) {
+                  scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                  setImageDrawable(drawable)
+                }
+              }
+              return@apply
+            }
             val customKey = WidgetCellIconLoader.customKey(item.iconKey, iconSizePx, iconTint ?: android.graphics.Color.WHITE)
             val cached = WidgetCellIconLoader.peek(customKey)
             if (cached != null) {

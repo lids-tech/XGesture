@@ -126,17 +126,59 @@ object ActionIconKeyCodec {
     private const val TEXT = "t"
     private const val FILE = "file"
 
+    /** 文字图标字号默认百分比。 */
+    const val DEFAULT_TEXT_SCALE = 100
+    const val MIN_TEXT_SCALE = 40
+    const val MAX_TEXT_SCALE = 200
+
     fun text(value: String): String = "$TEXT:$value"
+
+    /**
+     * 文字图标（可带字号）。
+     *
+     * 编码：字号为默认 100% 时保持老格式 `t:文字`（兼容旧数据）；
+     * 非默认时用 `t:字号:文字`。字号只在 40..200 之间才会被识别，
+     * 所以老数据里以数字+冒号开头的文字（极罕见）不会被误判。
+     */
+    fun text(value: String, scalePercent: Int = DEFAULT_TEXT_SCALE): String {
+        val scale = scalePercent.coerceIn(MIN_TEXT_SCALE, MAX_TEXT_SCALE)
+        return if (scale == DEFAULT_TEXT_SCALE) "$TEXT:$value" else "$TEXT:$scale:$value"
+    }
+
     fun file(path: String): String = "$FILE:$path"
 
     fun isFile(key: String?): Boolean = key?.startsWith("$FILE:") == true
 
-    fun textOf(key: String?): String? =
-        if (key != null && key.startsWith("$TEXT:")) {
-            key.removePrefix("$TEXT:").takeIf { it.isNotBlank() }
+    /** 取文字图标里的文字（自动去掉可选的字号前缀）。 */
+    fun textOf(key: String?): String? {
+        if (key == null || !key.startsWith("$TEXT:")) return null
+        val body = key.removePrefix("$TEXT:")
+        val parts = body.split(":", limit = 2)
+        val first = parts.firstOrNull().orEmpty()
+        val scale = first.toIntOrNull()
+        val value = if (scale != null &&
+            scale in MIN_TEXT_SCALE..MAX_TEXT_SCALE &&
+            parts.size == 2
+        ) {
+            parts[1]
         } else {
-            null
+            body
         }
+        return value.takeIf { it.isNotBlank() }
+    }
+
+    /** 取文字图标的字号百分比（老数据 / 非文字图标 → 100）。 */
+    fun textScaleOf(key: String?): Int {
+        if (key == null || !key.startsWith("$TEXT:")) return DEFAULT_TEXT_SCALE
+        val body = key.removePrefix("$TEXT:")
+        val parts = body.split(":", limit = 2)
+        val scale = parts.firstOrNull()?.toIntOrNull() ?: return DEFAULT_TEXT_SCALE
+        return if (parts.size == 2 && scale in MIN_TEXT_SCALE..MAX_TEXT_SCALE) {
+            scale
+        } else {
+            DEFAULT_TEXT_SCALE
+        }
+    }
 
     /** 字体库图标（Lucide / Remix / Tabler）。 */
     fun fontLibrary(key: String?): IconFontLibrary? = IconFontLibrary.fromKey(key)

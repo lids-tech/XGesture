@@ -5319,4 +5319,5 @@ adb 模式应返回 uid=2000。
     <string name="widget_panel_open_animation_translate">上浮距离</string>
     <string name="widget_panel_open_animation_translate_desc">面板出现的竖直位移（dp），0 为纯淡入</string>
     <string name="widget_panel_duplicate_page">复制当前面板</string>
+    <string name="action_icon_text_size">文字大小</string>
 </resources>

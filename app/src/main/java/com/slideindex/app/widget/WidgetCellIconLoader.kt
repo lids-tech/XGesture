@@ -187,6 +187,26 @@ internal object WidgetCellIconLoader {
    *
    * 非应用 / 快捷方式的动作回落到矢量动作图标，行为与之前一致。
    */
+  /**
+   * 动图图标：解成 Drawable（AnimatedImageDrawable 自动播放）。
+   *
+   * 不做缓存：动图 Drawable 是**有状态的**（播放位置），多个 ImageView 共用同一个实例会
+   * 互相影响，所以每个格子各解一份（解码很快，且在后台线程）。
+   */
+  fun loadAnimatedIcon(
+    context: Context,
+    path: String,
+    onLoaded: (android.graphics.drawable.Drawable) -> Unit,
+  ) {
+    if (path.isBlank()) return
+    val appContext = context.applicationContext
+    scope.launch {
+      val drawable = runCatching {
+        com.slideindex.app.ui.AnimatedIconSupport.decode(appContext, path)
+      }.getOrNull() ?: return@launch
+      mainHandler.post { onLoaded(drawable) }
+    }
+  }
   fun loadWheelIcon(
     context: Context,
     action: GestureAction,

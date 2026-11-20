@@ -89,17 +89,41 @@ internal fun ActionIconView(
 
     val fontIcon = remember(iconKey) { IconFontCatalog.resolve(context, iconKey) }
     val textIcon = ActionIconKeyCodec.textOf(iconKey)
+    val textScale = remember(iconKey) { ActionIconKeyCodec.textScaleOf(iconKey) } / 100f
     val filePath = remember(iconKey) {
         iconKey?.takeIf { ActionIconKeyCodec.isFile(it) }?.removePrefix("file:")
     }
+    val animatedFile = remember(filePath) {
+        filePath?.takeIf { AnimatedIconSupport.looksAnimated(it) }
+    }
     val bitmap = remember(filePath) {
-        filePath?.let { path ->
+        filePath?.takeIf { animatedFile == null }?.let { path ->
             if (File(path).exists()) {
                 ImageDecodeGuard.decodeFile(path, ImageDecodeGuard.MAX_ICON_SIDE_PX)
             } else {
                 null
             }
         }
+    }
+
+    // 文字图标：放开字数后靠「自动缩小」保证完整显示；用户设的字号作为基准。
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val textFontSizeSp = remember(textIcon, sizeDp, textScale, density) {
+        if (textIcon == null) return@remember 0f
+        val maxWidthPx = with(density) { (sizeDp * 0.92f).dp.toPx() }
+        var sp = sizeDp * 0.55f * textScale
+        while (sp > 4f) {
+            val measured = textMeasurer.measure(
+                text = textIcon,
+                style = androidx.compose.ui.text.TextStyle(
+                    fontSize = sp.sp,
+                ),
+            )
+            if (measured.size.width <= maxWidthPx) break
+            sp -= 0.5f
+        }
+        sp
     }
 
     Box(
@@ -119,10 +143,21 @@ internal fun ActionIconView(
             )
             textIcon != null -> Text(
                 text = textIcon,
-                fontSize = (sizeDp * 0.42f).sp,
+                fontSize = textFontSizeSp.sp,
                 color = MiuixTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
+                softWrap = false,
+            )
+            animatedFile != null -> androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx -> android.widget.ImageView(ctx) },
+                modifier = Modifier
+                    .size(sizeDp.dp)
+                    .clip(shape),
+                update = { imageView ->
+                    imageView.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    AnimatedIconSupport.applyTo(imageView, imageView.context, animatedFile)
+                },
             )
             bitmap != null -> Image(
                 bitmap = bitmap.asImageBitmap(),
@@ -448,19 +483,49 @@ internal fun ActionTextIconDialog(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf(ActionIconKeyCodec.textOf(initial).orEmpty()) }
+    // 放开字数限制：最多 8 个字符（够写"录音""截图"这类词，长文本靠自动缩小完整显示）。
+    var scalePercent by remember { mutableStateOf(ActionIconKeyCodec.textScaleOf(initial)) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.action_icon_text_title)) },
         text = {
-            MiuixLabeledTextField(
-                value = text,
-                onValueChange = { text = it.take(2) },
-                label = stringResource(R.string.action_icon_text_hint),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            androidx.compose.foundation.layout.Column {
+                MiuixLabeledTextField(
+                    value = text,
+                    onValueChange = { text = it.take(8) },
+                    label = stringResource(R.string.action_icon_text_hint),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                QuickWheelSliderRow(
+                    title = stringResource(R.string.action_icon_text_size),
+                    value = scalePercent.toFloat(),
+                    range = 40f..200f,
+                    unit = "%",
+                    onValueChange = { scalePercent = it.toInt() },
+                )
+                // 实时预览：改文字/字号立刻能看到效果
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    ActionIconView(
+                        action = GestureAction.None,
+                        iconKey = text.takeIf { it.isNotBlank() }?.let {
+                            ActionIconKeyCodec.text(it.trim(), scalePercent)
+                        },
+                        sizeDp = 44,
+                    )
+                }
+            }
         },
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onPick(ActionIconKeyCodec.text(text.trim())) }) {
+            TextButton(onClick = {
+                if (text.isNotBlank()) {
+                    onPick(ActionIconKeyCodec.text(text.trim(), scalePercent))
+                }
+            }) {
                 Text(stringResource(R.string.confirm))
             }
         },

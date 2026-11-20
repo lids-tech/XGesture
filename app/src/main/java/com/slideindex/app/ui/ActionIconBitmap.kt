@@ -51,7 +51,16 @@ object ActionIconBitmap {
         }
         // 2) 文字图标
         if (key.startsWith("t:")) {
-            return renderText(key.removePrefix("t:"), sizePx, null, tintArgb, withPlate, action, darkPlate)
+            return renderText(
+                text = ActionIconKeyCodec.textOf(key).orEmpty(),
+                sizePx = sizePx,
+                typeface = null,
+                tintArgb = tintArgb,
+                withPlate = withPlate,
+                action = action,
+                darkPlate = darkPlate,
+                scalePercent = ActionIconKeyCodec.textScaleOf(key),
+            )
         }
         // 3) 字体图标
         val library = IconFontLibrary.fromKey(key) ?: return null
@@ -79,6 +88,7 @@ object ActionIconBitmap {
         withPlate: Boolean,
         action: GestureAction?,
         darkPlate: Boolean = true,
+        scalePercent: Int = ActionIconKeyCodec.DEFAULT_TEXT_SCALE,
     ): Bitmap? {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -111,9 +121,16 @@ object ActionIconBitmap {
             }
             // 与内置图标一致：带底时占 0.54，裸图标占 0.75（见 GestureActionIconBitmap）
             // 带底板占 0.54；无底板的文字图标原来 0.75 偏大，缩到 0.58（真机反馈"字体有点大"）。
-            textSize = sizePx * (if (withPlate) 0.54f else 0.58f)
+            textSize = sizePx * (if (withPlate) 0.54f else 0.58f) * (scalePercent / 100f)
+            // 多字自动缩小：宽出图标框就往下调（文字图标已放开字数，长文本靠自动缩小完整显示）。
             this.typeface = typeface
             textAlign = Paint.Align.CENTER
+        }
+        val maxWidth = sizePx * 0.92f
+        var fitSize = paint.textSize
+        while (fitSize > sizePx * 0.12f && paint.measureText(text) > maxWidth) {
+            fitSize -= sizePx * 0.02f
+            paint.textSize = fitSize
         }
         val baseline = sizePx / 2f - (paint.descent() + paint.ascent()) / 2f
         canvas.drawText(text, sizePx / 2f, baseline, paint)

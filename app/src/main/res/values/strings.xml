@@ -5306,4 +5306,5 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="widget_panel_open_animation_translate">Slide-up distance</string>
     <string name="widget_panel_open_animation_translate_desc">Vertical distance in dp, 0 = pure fade</string>
     <string name="widget_panel_duplicate_page">Duplicate panel</string>
+    <string name="action_icon_text_size">Text size</string>
 </resources>
