@@ -26,6 +26,29 @@ object ActionIconStorage {
     private fun dir(context: Context): File =
         File(context.filesDir, DIR_NAME).apply { if (!exists()) mkdirs() }
 
+    /**
+     * 每次保存用**新文件名**（带时间戳），并删掉这个 key 的旧图。
+     *
+     * 为什么必须换名：图标预览、面板卡片、图标缓存全都按「文件路径 / iconKey」做键。
+     * 之前固定文件名 → 重新选图后路径不变 → 缓存命中旧图，
+     * 表现就是「编辑器里预览不更新、面板要重启 App 才变」。换名后路径变，各处自然刷新。
+     */
+    private fun rotatedFileName(baseName: String): String =
+        baseName.removeSuffix(".png") + "-" +
+            System.currentTimeMillis().toString(16) + ".png"
+
+    /** 删掉同一 key 的旧图标文件（老的固定名 + 历史轮换名）。 */
+    private fun deleteOldFiles(folder: java.io.File, baseName: String) {
+        val prefix = baseName.removeSuffix(".png") + "-"
+        runCatching {
+            folder.listFiles()?.forEach { file ->
+                if (file.isFile && (file.name == baseName || file.name.startsWith(prefix))) {
+                    file.delete()
+                }
+            }
+        }
+    }
+
     private fun fileNameOf(context: Context, action: GestureAction): String =
         ActionDisplayNameStore.actionKey(action).hashCode().toUInt().toString(16) + ".png"
 
@@ -41,7 +64,9 @@ object ActionIconStorage {
             maxSidePx = MAX_SIZE_PX,
         ) ?: return null
         val scaled = scaleDown(bitmap)
-        val target = File(dir(context), fileNameOf(context, action))
+        val baseName = fileNameOf(context, action)
+        deleteOldFiles(dir(context), baseName)
+        val target = File(dir(context), rotatedFileName(baseName))
         val ok = runCatching {
             FileOutputStream(target).use { out ->
                 scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -61,7 +86,7 @@ object ActionIconStorage {
 
     /** 删掉这个动作的自定义图标文件（恢复默认时调用）。 */
     fun delete(context: Context, action: GestureAction) {
-        runCatching { File(dir(context), fileNameOf(context, action)).delete() }
+        deleteOldFiles(dir(context), fileNameOf(context, action))
     }
 
     private fun scaleDown(bitmap: Bitmap): Bitmap {
@@ -84,7 +109,9 @@ object ActionIconStorage {
             maxSidePx = MAX_SIZE_PX,
         ) ?: return null
         val scaled = scaleDown(bitmap)
-        val target = File(dir(context), globalFileName(key))
+        val baseName = globalFileName(key)
+        deleteOldFiles(dir(context), baseName)
+        val target = File(dir(context), rotatedFileName(baseName))
         val ok = runCatching {
             FileOutputStream(target).use { out ->
                 scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -97,7 +124,7 @@ object ActionIconStorage {
 
     /** 全局图标：按任意 key 删除图片文件。 */
     fun deleteForGlobalKey(context: Context, key: String) {
-        runCatching { File(dir(context), globalFileName(key)).delete() }
+        deleteOldFiles(dir(context), globalFileName(key))
     }
 
     private fun globalFileName(key: String): String =
@@ -105,7 +132,9 @@ object ActionIconStorage {
 
     /** 全局图标：把 Bitmap（如应用图标）按任意 key 落盘。 */
     fun saveBitmapForGlobalKey(context: Context, key: String, bitmap: Bitmap): String? {
-        val target = File(dir(context), globalFileName(key))
+        val baseName = globalFileName(key)
+        deleteOldFiles(dir(context), baseName)
+        val target = File(dir(context), rotatedFileName(baseName))
         val ok = runCatching {
             FileOutputStream(target).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
