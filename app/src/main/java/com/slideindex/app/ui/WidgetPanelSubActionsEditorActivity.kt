@@ -45,6 +45,11 @@ class WidgetPanelSubActionsEditorActivity : ComponentActivity() {
             // 动作选择器要靠 LocalAppDependencies 列应用；缺了它一进选择器就崩。
             CompositionLocalProvider(LocalAppDependencies provides deps) {
                 SlideIndexTheme {
+                    // ⚠️ Miuix 玻璃层必须有 MiuixTopLayerRoot 宿主：
+                    // 编辑器里的「容器图标 / 每项图标」选择器是 MiuixGlassDropdownMenu
+                    //（玻璃下拉），没有 TopLayerRoot 时点击没有任何反应
+                    //（上游 0.9.5 玻璃化后所有弹玻璃下拉的 Activity 都套了这层）。
+                    com.slideindex.app.ui.miuix.MiuixTopLayerRoot {
                     WidgetPanelSubActionsEditorContent(
                         item = item,
                         onDismiss = { finish() },
@@ -55,6 +60,7 @@ class WidgetPanelSubActionsEditorActivity : ComponentActivity() {
                             }
                         },
                     )
+                    }
                 }
             }
         }
