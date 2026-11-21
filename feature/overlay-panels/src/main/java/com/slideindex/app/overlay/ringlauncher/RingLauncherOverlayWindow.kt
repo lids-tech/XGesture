@@ -3,6 +3,7 @@ package com.slideindex.app.overlay.ringlauncher
 import com.slideindex.app.overlay.overlayHostContext
 
 import android.annotation.SuppressLint
+import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -325,10 +326,9 @@ object RingLauncherOverlayWindow {
                 HoneycombIconLoader.warmAppIcons(appRepository, resolvedItems, iconSizePx)
             }
             com.slideindex.app.overlay.panels.PanelRuntimeHooks.refreshRecentTasks
-            ?.invoke(appRepository) { recentEntries ->
-                if (recentEntries.isNotEmpty()) {
-                    refreshFromSettings()
-                }
+            ?.invoke(appRepository) {
+                // 后台静默刷新并更新 TaskSwitcherRepository 内存缓存，供后续展示快速直出；
+                // 严禁在此处调用 refreshFromSettings()，避免在用户注视与操作中途跳变槽位造成误触。
             }
         }
 
@@ -528,14 +528,8 @@ object RingLauncherOverlayWindow {
                 shellCommands = settings.shellCommands,
                 onIconsReady = {
                     if (controller === overlayController && overlayController.isVisible()) {
-                        val refreshedTargets = resolveSessionTargets(
-                            hostContext,
-                            fvSettings,
-                            appsByPackage,
-                            appRepository,
-                            settings,
-                        )
-                        overlayController.refreshTargets(fvSettings, refreshedTargets, appsByPackage, appRepository)
+                        hydrateTargetIcons(targets, appRepository)
+                        overlayController.refreshTargets(fvSettings, targets, appsByPackage, appRepository)
                     }
                 },
             )
@@ -713,9 +707,40 @@ object RingLauncherOverlayWindow {
         }
 
         val autoFillQueue = ArrayDeque<AppInfo>()
+
+        // 1. 使用情况统计（UsageStatsManager）：系统级实时 API，毫秒级最新使用时间戳，首帧直接同步直出。
+        if (PermissionHelper.hasUsageAccess(context)) {
+            val usageStatsManager = context.getSystemService(UsageStatsManager::class.java)
+            if (usageStatsManager != null) {
+                val end = System.currentTimeMillis()
+                val start = end - 1000L * 60 * 60 * 24 * 7
+                val stats = runCatching {
+                    usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_BEST, start, end)
+                }.getOrNull()
+                if (!stats.isNullOrEmpty()) {
+                    val sortedPackages = stats.asSequence()
+                        .filter { it.lastTimeUsed > 0 }
+                        .sortedByDescending { it.lastTimeUsed }
+                        .map { it.packageName }
+                        .distinct()
+                    for (pkg in sortedPackages) {
+                        if (pkg != context.packageName &&
+                            pkg in appsByPackage &&
+                            pkg !in usedPackages &&
+                            !isSystemInternalPackage(pkg)
+                        ) {
+                            appsByPackage[pkg]?.let { app ->
+                                autoFillQueue.add(app)
+                                usedPackages.add(pkg)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. 最近任务缓存（Shizuku / Root）：补充当前系统后台任务（如分身应用、未被使用统计记录的任务）。
         if (appRepository != null) {
-            // 强类型直取。历史上这里用 `getMethod("getApp")` 反射读：release 的 R8 会改名/内联
-            // getter，反射恒失败且被 runCatching 吞掉，于是最近应用恒为空、空白位退化成全量应用。
             val cachedRecents = (com.slideindex.app.overlay.panels.PanelRuntimeHooks.cachedRecentTasks
                 ?.invoke().orEmpty())
                 .map { it.app }
@@ -733,15 +758,14 @@ object RingLauncherOverlayWindow {
                 }
             }
         }
-        for (app in appsByPackage.values) {
-            val pkg = app.packageName
-            if (pkg.isNotBlank() &&
-                pkg !in usedPackages &&
-                !isSystemInternalPackage(pkg)
-            ) {
-                autoFillQueue.add(app)
-                usedPackages.add(pkg)
-            }
+
+        // 3. 全量应用兜底：若槽位仍未填满，优先非系统应用（用户安装的应用），均按拼音排序。
+        val fallbackApps = appsByPackage.values
+            .filter { it.packageName !in usedPackages && !isSystemInternalPackage(it.packageName) }
+            .sortedWith(compareBy<AppInfo> { it.isSystem }.thenBy { it.pinyinKey })
+        for (app in fallbackApps) {
+            autoFillQueue.add(app)
+            usedPackages.add(app.packageName)
         }
 
         return List(slotCount) { index ->

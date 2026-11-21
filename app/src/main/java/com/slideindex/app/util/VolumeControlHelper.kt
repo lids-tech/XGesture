@@ -9,6 +9,7 @@ import android.util.Log
 import com.slideindex.app.gesture.RingerMode
 import com.slideindex.app.gesture.ToggleMode
 import com.slideindex.app.gesture.resolve
+import com.slideindex.app.gesture.resolveRinger
 import com.slideindex.app.privilege.PrivilegeGateway
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -47,8 +48,11 @@ object VolumeControlHelper {
     }
 
     /**
-     * 设置铃声模式。[RingerMode.TOGGLE] 走既有的三模式循环（与快捷工具磁贴一致），
-     * 其余三档是幂等目标态：已经是该档时直接成功。
+     * 应用铃声模式（旧「声音模式」档位绑定走这里）。
+     *
+     * [RingerMode.TOGGLE] 走三档循环；[RingerMode.RING] / [RingerMode.VIBRATE] / [RingerMode.SILENT]
+     * 是旧数据里的"档位开关"：不在该档时切到该档，已在该档时再触发一次就退出
+     * （见 [RingerMode.resolve]）。
      */
     fun applyRingerMode(context: Context, mode: RingerMode): Boolean {
         if (!hasAccess(context)) {
@@ -57,25 +61,45 @@ object VolumeControlHelper {
             return false
         }
         val manager = audioManager(context) ?: return false
-        val current = manager.ringerMode
-        val target = when (mode) {
-            RingerMode.TOGGLE -> when (current) {
-                AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
-                AudioManager.RINGER_MODE_VIBRATE -> AudioManager.RINGER_MODE_SILENT
-                else -> AudioManager.RINGER_MODE_NORMAL
-            }
-            RingerMode.RING -> AudioManager.RINGER_MODE_NORMAL
-            RingerMode.VIBRATE -> AudioManager.RINGER_MODE_VIBRATE
-            RingerMode.SILENT -> AudioManager.RINGER_MODE_SILENT
+        val target = mode.resolve(manager.ringerMode.toActionRingerMode())
+        return writeRingerMode(manager, target, "mode=$mode")
+    }
+
+    /**
+     * 「响铃 / 振动 / 静音」三个独立动作：按 [toggle] 决定进入 / 退出 / 翻转该档。
+     *
+     * 已经满足目标（比如"打开振动"而当前就是振动，"关闭静音"而当前本来就不静音）时不写系统，
+     * 直接返回成功。
+     */
+    fun applyRingerTarget(context: Context, target: RingerMode, toggle: ToggleMode): Boolean {
+        if (!hasAccess(context)) {
+            PermissionHelper.requestNotificationPolicyAccess(context)
+            return false
         }
-        if (mode != RingerMode.TOGGLE && current == target) return true
-        return runCatching {
-            manager.ringerMode = target
-            true
+        val manager = audioManager(context) ?: return false
+        val resolved = toggle.resolveRinger(manager.ringerMode.toActionRingerMode(), target)
+            ?: return true
+        return writeRingerMode(manager, resolved, "target=$target toggle=$toggle")
+    }
+
+    /**
+     * 写铃声模式并回读校验：部分 ROM 会静默忽略写入（与 [applyStreamLevel] 记录的绝对音量
+     * 设置同类：不抛异常、值也不变），成败只能靠回读判断。
+     */
+    private fun writeRingerMode(manager: AudioManager, target: RingerMode, label: String): Boolean {
+        val sdkTarget = target.toAudioManagerRingerMode()
+        val applied = runCatching {
+            manager.ringerMode = sdkTarget
+            manager.ringerMode
         }.getOrElse { error ->
-            Log.w(TAG, "apply ringer mode failed: $mode", error)
-            false
+            Log.w(TAG, "apply ringer mode failed: $label", error)
+            return false
         }
+        if (applied != sdkTarget) {
+            Log.w(TAG, "ringer mode not applied: $label target=$sdkTarget actual=$applied")
+            return false
+        }
+        return true
     }
 
     /**
@@ -353,6 +377,20 @@ object VolumeControlHelper {
         Stream.RING -> AudioManager.STREAM_RING
         Stream.NOTIFICATION -> AudioManager.STREAM_NOTIFICATION
         Stream.ALARM -> AudioManager.STREAM_ALARM
+    }
+
+    /** `AudioManager.RINGER_MODE_*` → 动作层档位；未知值按「响铃」（与 [readRingerMode] 的兜底一致）。 */
+    private fun Int.toActionRingerMode(): RingerMode = when (this) {
+        AudioManager.RINGER_MODE_VIBRATE -> RingerMode.VIBRATE
+        AudioManager.RINGER_MODE_SILENT -> RingerMode.SILENT
+        else -> RingerMode.RING
+    }
+
+    /** 动作层档位 → `AudioManager.RINGER_MODE_*`；[RingerMode.TOGGLE] 不该走到这里，按响铃兜底。 */
+    private fun RingerMode.toAudioManagerRingerMode(): Int = when (this) {
+        RingerMode.TOGGLE, RingerMode.RING -> AudioManager.RINGER_MODE_NORMAL
+        RingerMode.VIBRATE -> AudioManager.RINGER_MODE_VIBRATE
+        RingerMode.SILENT -> AudioManager.RINGER_MODE_SILENT
     }
 
     private fun Stream.requiresPolicyAccess(): Boolean =

@@ -58,6 +58,8 @@ import com.slideindex.app.ui.picker.rememberLoadedShortcutCatalog
 import com.slideindex.app.ui.PickerTrailingMode
 import com.slideindex.app.ui.gestureActionIcon
 import com.slideindex.app.ui.pickerListSegmentedGap
+import androidx.compose.ui.unit.dp
+import com.slideindex.app.ui.gesturepicker.calculateActionGridColumns
 import com.slideindex.app.ui.quicklauncher.QuickLauncherEditorAddTab
 import com.slideindex.app.ui.quicklauncher.quickLauncherAddPickerActionItems
 import com.slideindex.app.ui.quicklauncher.quickLauncherAddPickerAppItems
@@ -121,7 +123,9 @@ fun RingSlotPickScreen(
 
     val isAppsTabActive = tabs[selectedTab] == QuickLauncherEditorAddTab.APPS
     val isShortcutsTabActive = tabs[selectedTab] == QuickLauncherEditorAddTab.SHORTCUTS
-    val filteredActions = rememberQuickLauncherFilteredActions(searchQuery)
+    // 槽位可以「无」：快捷启动器目录不含 None（多选添加页不需要），在这里补进动作列表，
+    // 与边角轮盘/指尖环等槽位页一致。
+    val filteredActions = rememberQuickLauncherFilteredActions(searchQuery, pinNoneAtTop = true)
     val filteredApps = rememberQuickLauncherFilteredApps(
         apps = apps,
         searchQuery = searchQuery,
@@ -163,6 +167,10 @@ fun RingSlotPickScreen(
     }
     val configuredAppPackages = remember(currentItem) {
         if (currentItem?.type == QuickLauncherItemType.APP) setOf(currentItem.payload) else emptySet()
+    }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val gridColumns = remember(configuration.screenWidthDp) {
+        calculateActionGridColumns(configuration.screenWidthDp.dp)
     }
     val configuredShortcutKeys = remember(currentItem) {
         if (currentItem?.type == QuickLauncherItemType.SHORTCUT) {
@@ -293,6 +301,7 @@ fun RingSlotPickScreen(
                             noneSelected = currentItem == null,
                             onSelectNone = { onSelectItem(null) },
                             searchQuery = searchQuery,
+                            columns = gridColumns,
                         )
                     }
                     QuickLauncherEditorAddTab.APPS -> {
@@ -305,6 +314,7 @@ fun RingSlotPickScreen(
                                 )
                             },
                             singleSelect = true,
+                            columns = gridColumns,
                         )
                     }
                     QuickLauncherEditorAddTab.SHORTCUTS -> {
