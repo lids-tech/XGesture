@@ -83,16 +83,20 @@ object WidgetPanelFieldCodec {
  */
 data class WidgetPanelSubMenuConfig(
     val columns: Int = 3,
-    val rows: Int = 2,
-    val offsetXDp: Int = 0,
-    val offsetYDp: Int = 0,
+    val rows: Int = 3,
+    val offsetXDp: Int = -52,
+    val offsetYDp: Int = -128,
     val showLabels: Boolean = true,
-    /** 相邻容器之间的净间距（dp），口径与轮盘的「容器间距」一致。 */
-    val itemGapDp: Int = 8,
+    /** 相邻容器之间的**横向**净间距（dp）。 */
+    val itemGapXDp: Int = 5,
+    /** 相邻容器之间的**纵向**净间距（dp）。 */
+    val itemGapYDp: Int = 20,
+    /** 旧版统一间距（仅用于解析旧数据，新数据用横/纵两项）。 */
+    val itemGapDp: Int = -1,
     /** 容器尺寸（dp，正方形边长）；圆形时即直径。 */
-    val containerSizeDp: Int = 44,
+    val containerSizeDp: Int = 45,
     /** 容器圆角（dp）：等于容器尺寸一半时是圆形。 */
-    val containerCornerDp: Int = 22,
+    val containerCornerDp: Int = 0,
     /** 容器背景色（ARGB）。 */
     val containerColorArgb: Long = DEFAULT_CONTAINER_COLOR_ARGB,
     /**
@@ -105,18 +109,19 @@ data class WidgetPanelSubMenuConfig(
     /** 图标颜色（ARGB）；0 = 按容器背景自动反色（白底深色图标、深底白色图标）。 */
     val iconColorArgb: Long = DEFAULT_ICON_COLOR_ARGB,
     /** 图标占容器尺寸的百分比。 */
-    val iconSizePercent: Int = 55,
+    val iconSizePercent: Int = 90,
     /** 名称文字大小百分比（100 = 基准 11sp）。 */
     val labelSizePercent: Int = 100,
     /** 容器背景不透明度（0 = 全透明，100 = 不透明）。 */
-    val backgroundAlphaPercent: Int = 100,
+    val backgroundAlphaPercent: Int = 0,
 ) {
     fun normalized(): WidgetPanelSubMenuConfig = copy(
         columns = columns.coerceIn(MIN_COLUMNS, MAX_COLUMNS),
         rows = rows.coerceIn(MIN_ROWS, MAX_ROWS),
         offsetXDp = offsetXDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
         offsetYDp = offsetYDp.coerceIn(MIN_OFFSET_DP, MAX_OFFSET_DP),
-        itemGapDp = itemGapDp.coerceIn(MIN_ITEM_GAP_DP, MAX_ITEM_GAP_DP),
+        itemGapXDp = itemGapXDp.coerceIn(MIN_ITEM_GAP_DP, MAX_ITEM_GAP_DP),
+        itemGapYDp = itemGapYDp.coerceIn(MIN_ITEM_GAP_DP, MAX_ITEM_GAP_DP),
         containerSizeDp = containerSizeDp.coerceIn(MIN_CONTAINER_SIZE_DP, MAX_CONTAINER_SIZE_DP),
         containerCornerDp = containerCornerDp.coerceIn(0, containerSizeDp.coerceIn(MIN_CONTAINER_SIZE_DP, MAX_CONTAINER_SIZE_DP) / 2),
         iconSizePercent = iconSizePercent.coerceIn(MIN_ICON_PERCENT, MAX_ICON_PERCENT),
@@ -162,6 +167,8 @@ data class WidgetPanelSubMenuConfig(
                 showLabels = parts[4] != "0",
                 // 下面几段都是后加的：旧记录没有 → 用默认值（向后兼容）。
                 itemGapDp = parts.getOrNull(5)?.toIntOrNull() ?: base.itemGapDp,
+                itemGapXDp = parts.getOrNull(14)?.toIntOrNull() ?: parts.getOrNull(5)?.toIntOrNull() ?: base.itemGapXDp,
+                itemGapYDp = parts.getOrNull(15)?.toIntOrNull() ?: parts.getOrNull(5)?.toIntOrNull() ?: base.itemGapYDp,
                 iconSizePercent = parts.getOrNull(6)?.toIntOrNull() ?: base.iconSizePercent,
                 labelSizePercent = parts.getOrNull(7)?.toIntOrNull() ?: base.labelSizePercent,
                 backgroundAlphaPercent = parts.getOrNull(8)?.toIntOrNull() ?: base.backgroundAlphaPercent,
@@ -189,6 +196,8 @@ data class WidgetPanelSubMenuConfig(
         containerColorArgb,
         labelColorArgb,
         iconColorArgb,
+        itemGapXDp,
+        itemGapYDp,
     ).joinToString(SUB_MENU_CONFIG_SEP)
 }
 

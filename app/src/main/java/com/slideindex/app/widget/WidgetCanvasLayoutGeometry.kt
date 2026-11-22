@@ -19,8 +19,29 @@ internal object WidgetCanvasLayoutGeometry {
     fun itemsSignature(page: WidgetPanelPage): String =
         page.items
             .sortedBy { it.appWidgetId }
-            .joinToString("|") {
-                "${it.appWidgetId}:${it.x},${it.y},${it.spanX},${it.spanY}"
+            .joinToString("|") { item ->
+                // ⚠️ 必须包含**内容**字段，不能只有位置：
+                // 编辑器里改图标 / 名称 / 二级菜单后，页面数据变了但位置没变，
+                // 只看几何的话 planBind 会判定"没变化"，画布不重新同步 →
+                // 面板上的图标要重开面板才更新（真机反馈）。
+                buildString {
+                    append(item.appWidgetId).append(':')
+                    append(item.x).append(',').append(item.y).append(',')
+                    append(item.spanX).append(',').append(item.spanY).append(':')
+                    append(item.label).append(':')
+                    append(item.itemType).append(':')
+                    append(item.packageName).append(':')
+                    append(item.className).append(':')
+                    append(item.intentUri).append(':')
+                    append(item.shortcutId).append(':')
+                    append(item.cloneUserId).append(':')
+                    append(item.iconKey).append(':')
+                    append(item.containerColorArgb).append(',')
+                    append(item.iconColorArgb).append(',')
+                    append(item.labelColorArgb).append(':')
+                    append(item.subActions.joinToString(",")).append(':')
+                    append(item.subMenu.encode())
+                }
             }
 
     fun syncItemsFromPage(layout: WidgetCanvasLayout, page: WidgetPanelPage) {

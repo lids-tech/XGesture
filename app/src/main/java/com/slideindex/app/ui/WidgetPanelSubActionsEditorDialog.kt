@@ -208,73 +208,147 @@ fun WidgetPanelSubActionsEditorContent(
                             argb = cellLabelColor,
                         ) { cellLabelColor = it }
                     }
-                    // ── 布局与容器外观：全部复用快捷轮盘的滑条 / 颜色行 ──
                     item(key = "layout") {
-                        // 列数 / 行数 / 偏移是**全局**设置（所有容器共用一套），
-                        // 这里不再重复放控件：以前放在这里时，调了也不生效
-                        // （被全局值覆盖），看起来像"布局设置失效"。
-                        Text(
-                            "列数 / 行数 / 左右偏移 / 上下偏移 已改为全局设置：\n" +
-                                "设置 → 小组件面板 → 二级菜单布局",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                        )
+                    // ── 布局与容器外观：全部复用快捷轮盘的滑条 / 颜色行 ──
+                        // 布局回到**本格设置**（含默认值；每项右侧「默认」一键恢复）。
+                        val defaultConfig = WidgetPanelSubMenuConfig()
+                        Text("布局", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelIntRow(
+                                title = "列数",
+                                description = "网格每行放几个",
+                                value = config.columns,
+                                range = WidgetPanelSubMenuConfig.MIN_COLUMNS..WidgetPanelSubMenuConfig.MAX_COLUMNS,
+                                modifier = Modifier.weight(1f),
+                                onValueChange = { config = config.copy(columns = it) },
+                            )
+                            DefaultResetButton { config = config.copy(columns = defaultConfig.columns) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelIntRow(
+                                title = "行数",
+                                description = "网格放几行（不足时整块居中）",
+                                value = config.rows,
+                                range = WidgetPanelSubMenuConfig.MIN_ROWS..WidgetPanelSubMenuConfig.MAX_ROWS,
+                                modifier = Modifier.weight(1f),
+                                onValueChange = { config = config.copy(rows = it) },
+                            )
+                            DefaultResetButton { config = config.copy(rows = defaultConfig.rows) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "左右偏移",
+                                description = "整块网格相对格子的水平位移",
+                                value = config.offsetXDp.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_OFFSET_DP.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_OFFSET_DP.toFloat(),
+                                unit = "dp",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(offsetXDp = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(offsetXDp = defaultConfig.offsetXDp) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "上下偏移",
+                                description = "整块网格相对格子的垂直位移",
+                                value = config.offsetYDp.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_OFFSET_DP.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_OFFSET_DP.toFloat(),
+                                unit = "dp",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(offsetYDp = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(offsetYDp = defaultConfig.offsetYDp) }
+                        }
 
                         Text("容器外观", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                        QuickWheelSliderRow(
-                            title = "容器间距",
-                            description = "相邻容器之间的净间距",
-                            value = config.itemGapDp.toFloat(),
-                            range = WidgetPanelSubMenuConfig.MIN_ITEM_GAP_DP.toFloat()..
-                                WidgetPanelSubMenuConfig.MAX_ITEM_GAP_DP.toFloat(),
-                            unit = "dp",
-                        ) { config = config.copy(itemGapDp = it.roundToInt()) }
-                        QuickWheelSliderRow(
-                            title = "容器尺寸",
-                            description = "容器正方形边长",
-                            value = config.containerSizeDp.toFloat(),
-                            range = WidgetPanelSubMenuConfig.MIN_CONTAINER_SIZE_DP.toFloat()..
-                                WidgetPanelSubMenuConfig.MAX_CONTAINER_SIZE_DP.toFloat(),
-                            unit = "dp",
-                        ) {
-                            val size = it.roundToInt()
-                            config = config.copy(
-                                containerSizeDp = size,
-                                // 圆角不能超过半边长（超过就是圆形，没必要存更大值）。
-                                containerCornerDp = config.containerCornerDp.coerceAtMost(size / 2),
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "横向间距",
+                                description = "相邻容器之间的水平净间距",
+                                value = config.itemGapXDp.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_ITEM_GAP_DP.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_ITEM_GAP_DP.toFloat(),
+                                unit = "dp",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(itemGapXDp = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(itemGapXDp = defaultConfig.itemGapXDp) }
                         }
-                        QuickWheelSliderRow(
-                            title = "容器圆角",
-                            description = "0 = 直角，等于半边长时是圆形",
-                            value = config.containerCornerDp.toFloat(),
-                            range = 0f..(config.containerSizeDp / 2).toFloat().coerceAtLeast(1f),
-                            unit = "dp",
-                        ) { config = config.copy(containerCornerDp = it.roundToInt()) }
-                        QuickWheelSliderRow(
-                            title = "图标大小",
-                            description = "图标占容器尺寸的百分比",
-                            value = config.iconSizePercent.toFloat(),
-                            range = WidgetPanelSubMenuConfig.MIN_ICON_PERCENT.toFloat()..
-                                WidgetPanelSubMenuConfig.MAX_ICON_PERCENT.toFloat(),
-                            unit = "%",
-                        ) { config = config.copy(iconSizePercent = it.roundToInt()) }
-                        QuickWheelSliderRow(
-                            title = "文字大小",
-                            description = "名称文字大小（100% = 基准）",
-                            value = config.labelSizePercent.toFloat(),
-                            range = WidgetPanelSubMenuConfig.MIN_LABEL_PERCENT.toFloat()..
-                                WidgetPanelSubMenuConfig.MAX_LABEL_PERCENT.toFloat(),
-                            unit = "%",
-                        ) { config = config.copy(labelSizePercent = it.roundToInt()) }
-                        QuickWheelSliderRow(
-                            title = "背景不透明度",
-                            description = "0% = 容器完全透明，100% = 不透明",
-                            value = config.backgroundAlphaPercent.toFloat(),
-                            range = 0f..100f,
-                            unit = "%",
-                        ) { config = config.copy(backgroundAlphaPercent = it.roundToInt()) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "纵向间距",
+                                description = "相邻容器之间的垂直净间距",
+                                value = config.itemGapYDp.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_ITEM_GAP_DP.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_ITEM_GAP_DP.toFloat(),
+                                unit = "dp",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(itemGapYDp = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(itemGapYDp = defaultConfig.itemGapYDp) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "容器尺寸",
+                                description = "容器正方形边长",
+                                value = config.containerSizeDp.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_CONTAINER_SIZE_DP.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_CONTAINER_SIZE_DP.toFloat(),
+                                unit = "dp",
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                val size = it.roundToInt()
+                                config = config.copy(
+                                    containerSizeDp = size,
+                                    containerCornerDp = config.containerCornerDp.coerceAtMost(size / 2),
+                                )
+                            }
+                            DefaultResetButton { config = config.copy(containerSizeDp = defaultConfig.containerSizeDp) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "容器圆角",
+                                description = "0 = 直角，等于半边长时是圆形",
+                                value = config.containerCornerDp.toFloat(),
+                                range = 0f..(config.containerSizeDp / 2).toFloat().coerceAtLeast(1f),
+                                unit = "dp",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(containerCornerDp = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(containerCornerDp = defaultConfig.containerCornerDp) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "图标大小",
+                                description = "图标占容器尺寸的百分比",
+                                value = config.iconSizePercent.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_ICON_PERCENT.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_ICON_PERCENT.toFloat(),
+                                unit = "%",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(iconSizePercent = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(iconSizePercent = defaultConfig.iconSizePercent) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "文字大小",
+                                description = "名称文字大小（100% = 基准）",
+                                value = config.labelSizePercent.toFloat(),
+                                range = WidgetPanelSubMenuConfig.MIN_LABEL_PERCENT.toFloat()..
+                                    WidgetPanelSubMenuConfig.MAX_LABEL_PERCENT.toFloat(),
+                                unit = "%",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(labelSizePercent = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(labelSizePercent = defaultConfig.labelSizePercent) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            QuickWheelSliderRow(
+                                title = "背景不透明度",
+                                description = "0% = 容器完全透明，100% = 不透明",
+                                value = config.backgroundAlphaPercent.toFloat(),
+                                range = 0f..100f,
+                                unit = "%",
+                                modifier = Modifier.weight(1f),
+                            ) { config = config.copy(backgroundAlphaPercent = it.roundToInt()) }
+                            DefaultResetButton { config = config.copy(backgroundAlphaPercent = defaultConfig.backgroundAlphaPercent) }
+                        }
                         QuickWheelColorRow(
                             title = "容器颜色",
                             description = "所有菜单项的默认底色",
@@ -303,8 +377,8 @@ fun WidgetPanelSubActionsEditorContent(
                                 onCheckedChange = { config = config.copy(showLabels = it) },
                             )
                         }
-                    }
 
+                    }
                     item(key = "items-header") {
                         Text(
                             if (drafts.isEmpty()) "还没有动作：长按不弹菜单" else "菜单项",
@@ -518,3 +592,15 @@ private fun WidgetPanelSubAction.encode(): String =
         iconTintArgb = iconTintArgb,
         labelColorArgb = labelColorArgb,
     )
+
+/** 每项设置右侧的「默认」按钮：一键恢复该项默认值。 */
+@Composable
+private fun DefaultResetButton(onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text(
+            "默认",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}

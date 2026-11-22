@@ -151,8 +151,10 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val items: List<WidgetPanelSubAction>,
     val icons: List<android.graphics.Bitmap?>,
     val itemRadiusPx: Float,
-    /** 网格步长（项直径 + 间距）。 */
-    val stepPx: Float,
+    /** 横向步长（项直径 + 横向间距）。 */
+    val stepXPx: Float,
+    /** 纵向步长（项直径 + 纵向间距）。 */
+    val stepYPx: Float,
     val columns: Int,
     val rows: Int,
     val offsetXPx: Float,
@@ -237,12 +239,12 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val column = state.columns - 1 - columnFromRight
     val layoutRows = state.rows.coerceAtLeast(state.usedRows)
     val row = layoutRows - 1 - rowFromBottom
-    val gridWidth = state.columns * state.stepPx
-    val gridHeight = layoutRows * state.stepPx
+    val gridWidth = state.columns * state.stepXPx
+    val gridHeight = layoutRows * state.stepYPx
     val left = state.anchorX - gridWidth / 2f + state.offsetXPx
     val top = state.anchorY - gridHeight / 2f + state.offsetYPx
-    val cx = left + state.stepPx / 2f + column * state.stepPx
-    val cy = top + state.stepPx / 2f + row * state.stepPx
+    val cx = left + state.stepXPx / 2f + column * state.stepXPx
+    val cy = top + state.stepYPx / 2f + row * state.stepYPx
     return cx to cy
   }
 
@@ -346,18 +348,8 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       return
     }
     // 布局（列/行/偏移）优先用**全局设置**，外观（尺寸/圆角/颜色等）仍逐项生效。
-    val itemConfig = child.item.subMenu.normalized()
-    val globalLayout = globalSubMenuLayout
-    val config = if (globalLayout != null) {
-      itemConfig.copy(
-        columns = globalLayout.columns,
-        rows = globalLayout.rows,
-        offsetXDp = globalLayout.offsetXDp,
-        offsetYDp = globalLayout.offsetYDp,
-      )
-    } else {
-      itemConfig
-    }
+    // 布局（列/行/偏移/间距）是**每格自己**的设置（编辑器里可改，含默认值一键恢复）。
+    val config = child.item.subMenu.normalized()
     val dm = resources.displayMetrics
     // 容器尺寸 / 圆角 / 间距 / 图标占比 / 文字大小 / 背景不透明度全部来自配置，
     // 口径与快捷轮盘的容器外观参数一致。
@@ -392,7 +384,8 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         WidgetPanelSubActions.icon(context, item, iconPx, tint, currentShellCommands())
       },
       itemRadiusPx = itemRadius,
-      stepPx = itemDiameter + config.itemGapDp * dm.density,
+      stepXPx = itemDiameter + config.itemGapXDp * dm.density,
+      stepYPx = itemDiameter + config.itemGapYDp * dm.density,
       columns = config.columns,
       rows = config.rows,
       offsetXPx = config.offsetXDp * dm.density,

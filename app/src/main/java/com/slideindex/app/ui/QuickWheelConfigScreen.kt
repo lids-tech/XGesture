@@ -1327,9 +1327,11 @@ internal fun QuickWheelSliderRow(
     range: ClosedFloatingPointRange<Float>,
     unit: String,
     enabled: Boolean = true,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
     onValueChange: (Float) -> Unit,
 ) {
     MiuixSliderRow(
+        modifier = modifier,
         title = title,
         summary = description,
         value = value,
@@ -1362,8 +1364,10 @@ internal fun QuickWheelIntRow(
     value: Int,
     range: IntRange,
     onValueChange: (Int) -> Unit,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
 ) {
     MiuixSliderRow(
+        modifier = modifier,
         title = title,
         summary = description,
         value = value.toFloat(),
