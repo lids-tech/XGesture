@@ -24,6 +24,7 @@ import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.ImageSearch
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
@@ -51,6 +52,7 @@ import com.slideindex.app.overlay.OverlayWindowTypes
 import com.slideindex.app.overlay.PickResultContentOrigin
 import com.slideindex.app.overlay.PickResultTextSource
 import com.slideindex.app.overlay.pickresult.PickResultTextMode
+import com.slideindex.app.overlay.screenshot.ScreenshotStorage
 import com.slideindex.app.overlay.share.ShareSheetLauncher
 import com.slideindex.app.overlay.share.ShareSheetPayload
 import com.slideindex.app.settings.AppSettings
@@ -109,6 +111,8 @@ class DragDropFlowController(
     private var composeOwner: OverlayComposeOwner? = null
     private var anchorParams: WindowManager.LayoutParams? = null
     private var fullParams: WindowManager.LayoutParams? = null
+    private var previewComposeView: ComposeView? = null
+    private var previewComposeOwner: OverlayComposeOwner? = null
 
     private var settingsJob: Job? = null
     private var isExpanded = false
@@ -118,7 +122,12 @@ class DragDropFlowController(
     private val hapticEnabledState = mutableStateOf(true)
     private val itemsState = mutableStateOf<List<DragDropFlowItem>>(emptyList())
     private val dragPositionState = mutableStateOf<Offset?>(null)
+    private val hoveredIdState = mutableStateOf<String?>(null)
     private var currentHoveredId: String? = null
+        set(value) {
+            field = value
+            hoveredIdState.value = value
+        }
 
     /** 当前这次拖拽的「收起态」列表（操作枢纽 + 用户配置的目标）。 */
     private var dockItems: List<DragDropFlowItem> = emptyList()
@@ -137,6 +146,12 @@ class DragDropFlowController(
 
     private var latestSettings: AppSettings = AppSettings()
     private var isHandlingDrop = false
+    private var internalDragClip: ClipData? = null
+    var onContentConverted: ((ClipData, Bitmap?) -> Unit)? = null
+    private var conversionHoverJob: Job? = null
+    private var isConverting = false
+    private var conversionLockedUntilExit = false
+    private var conversionCooldownUntil = 0L
 
     fun start() {
         settingsJob?.cancel()
@@ -164,6 +179,124 @@ class DragDropFlowController(
         }
     }
 
+    /**
+     * 由全局长按触摸监听等外部源主动唤起拖拽流转。
+     */
+    fun beginContentDrag(
+        clip: ClipData,
+        x: Float,
+        y: Float,
+        stillCurrent: () -> Boolean,
+        onReady: () -> Unit,
+        onFailed: (String) -> Unit,
+    ): Boolean {
+        if (!stillCurrent() || clip.itemCount == 0) {
+            onFailed("content_unavailable")
+            return false
+        }
+        ensureAnchorAttached()
+        val desc = clip.description ?: return false
+        val hasImage = desc.hasMimeType("image/*")
+        val hasAudio = desc.hasMimeType("audio/*") || desc.hasMimeType("audio/mp4")
+        val hasFile = hasAudio || desc.hasMimeType("application/*") || desc.hasMimeType("video/*")
+        val hasText = desc.hasMimeType("text/*") ||
+            desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
+            desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)
+
+        if (!hasImage && !hasText && !hasFile) {
+            onFailed("unsupported_mime")
+            return false
+        }
+
+        internalDragClip = clip
+        actionItems = if (hasImage || hasText) {
+            buildActionItems(hasImage = hasImage, allowConvert = true)
+        } else {
+            emptyList()
+        }
+        dockItems = buildDockItems(
+            hasImage = hasImage,
+            hasText = hasText,
+            hasFile = hasFile,
+            actions = actionItems,
+            allowConvert = true,
+        )
+        cancelDwell()
+        hubExpandedState.value = false
+        itemsState.value = dockItems
+        currentHoveredId = null
+        isHandlingDrop = false
+
+        expandToActiveRegion()
+        visibleState.value = true
+        onReady()
+        updateContentDrag(x, y, release = false)
+        return true
+    }
+
+    fun updateContentDrag(x: Float, y: Float, release: Boolean = false) {
+        val clip = internalDragClip ?: return
+        val view = composeView ?: return
+        if (!isExpanded || !visibleState.value) {
+            if (release) cancelContentDrag()
+            return
+        }
+
+        val loc = IntArray(2)
+        view.getLocationOnScreen(loc)
+        val localX = x - loc[0]
+        val localY = y - loc[1]
+
+        val inBounds = localX >= 0 && localY >= 0 && localX < view.width && localY < view.height
+        if (inBounds) {
+            dragPositionState.value = Offset(localX, localY)
+        } else {
+            dragPositionState.value = null
+            collapseHub()
+        }
+
+        if (release) {
+            val targetId = currentHoveredId
+            if (targetId != null && targetId != DRAG_DROP_FLOW_HUB_ID) {
+                isHandlingDrop = true
+                when (targetId) {
+                    "__cancel__" -> {
+                        Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_cancelled), Toast.LENGTH_SHORT).show()
+                    }
+                    "__restore__" -> {
+                        Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_restored), Toast.LENGTH_SHORT).show()
+                    }
+                    else -> {
+                        processDrop(targetId, clip)
+                    }
+                }
+            }
+            cancelContentDrag()
+        }
+    }
+
+    fun cancelContentDrag() {
+        if (internalDragClip == null) return
+        internalDragClip = null
+        dragPositionState.value = null
+        cancelDwell()
+        conversionHoverJob?.cancel()
+        conversionHoverJob = null
+        conversionLockedUntilExit = false
+        conversionCooldownUntil = 0L
+        cancelSourceWatchdog()
+        hubExpandedState.value = false
+        dockItems = emptyList()
+        actionItems = emptyList()
+        currentHoveredId = null
+        visibleState.value = false
+        mainHandler.postDelayed({
+            if (!visibleState.value) {
+                collapseToAnchor()
+            }
+        }, 180)
+    }
+
     private fun ensureAnchorAttached(): Boolean {
         if (composeView != null) return true
 
@@ -186,7 +319,10 @@ class DragDropFlowController(
                         hapticEnabled = hapticEnabledState.value,
                         hubExpanded = hubExpandedState.value,
                         canRestore = restoreAvailableState.value,
-                        onHoverChanged = { currentHoveredId = it },
+                        onHoverChanged = { id ->
+                            currentHoveredId = id
+                            handleConversionHover(id)
+                        },
                         onHubHoverChanged = { active -> handleHubHover(active) },
                         onLeavePanel = { collapseHub() },
                         onSelectTarget = { /* handled on drop */ },
@@ -324,33 +460,13 @@ class DragDropFlowController(
                     return false
                 }
 
-                // 准备候选项目列表：收起态默认是「操作枢纽 + 用户目标」，展开态是动作菜单。
-                // 动作菜单在两处都要用（枢纽展开后 / 开关打开时直接平铺），所以先构建它。
-                actionItems = if (hasImage || hasText) {
-                    buildActionItems(hasImage = hasImage)
-                } else {
-                    emptyList()
-                }
-                dockItems = buildDockItems(
-                    hasImage = hasImage,
-                    hasText = hasText,
-                    hasFile = hasFile,
-                    actions = actionItems,
-                )
-                cancelDwell()
-                hubExpandedState.value = false
-                itemsState.value = dockItems
-                currentHoveredId = null
-                isHandlingDrop = false
-                EdgeDiag.log(
-                    DIAG_TAG,
-                    "started mimes=$mimes items=${dockItems.joinToString(",") { it.id }}",
-                )
-
-                // 本应用注册过拖拽源就认领这次拖拽：之后源只负责藏好自己，
-                // "结束后恢复还是关掉"由下面 DROP / DRAG_ENDED 统一决定。
+                // 系统原生 Drag & Drop（含第三方应用与本应用面板的 startDragAndDrop）统一不显示「图文转换」按钮，
+                // 仅在 beginContentDrag（全局长按强行拖放）时显示。
                 cancelSourceWatchdog()
                 claimedSource = DragFlowSession.claim()
+                internalDragClip = null
+                conversionLockedUntilExit = false
+                conversionCooldownUntil = 0L
                 restoreAvailableState.value = claimedSource != null
                 claimedSource?.let { source ->
                     val runnable = Runnable {
@@ -365,6 +481,30 @@ class DragDropFlowController(
                     mainHandler.postDelayed(runnable, SOURCE_WATCHDOG_MS)
                 }
 
+                // 准备候选项目列表：收起态默认是「操作枢纽 + 用户目标」，展开态是动作菜单。
+                // 动作菜单在两处都要用（枢纽展开后 / 开关打开时直接平铺），所以先构建它。
+                actionItems = if (hasImage || hasText) {
+                    buildActionItems(hasImage = hasImage, allowConvert = false)
+                } else {
+                    emptyList()
+                }
+                dockItems = buildDockItems(
+                    hasImage = hasImage,
+                    hasText = hasText,
+                    hasFile = hasFile,
+                    actions = actionItems,
+                    allowConvert = false,
+                )
+                cancelDwell()
+                hubExpandedState.value = false
+                itemsState.value = dockItems
+                currentHoveredId = null
+                isHandlingDrop = false
+                EdgeDiag.log(
+                    DIAG_TAG,
+                    "started mimes=$mimes items=${dockItems.joinToString(",") { it.id }}",
+                )
+
                 // 瞬时展开为边缘带状窗并展示流转栏
                 expandToActiveRegion()
                 visibleState.value = true
@@ -378,7 +518,7 @@ class DragDropFlowController(
 
             DragEvent.ACTION_DROP -> {
                 val targetId = currentHoveredId
-                val clipData = event.clipData
+                val clipData = internalDragClip ?: event.clipData
                 val droppedTextLength = runCatching {
                     clipData?.getItemAt(0)?.text?.length ?: -1
                 }.getOrDefault(-1)
@@ -428,6 +568,11 @@ class DragDropFlowController(
 
             DragEvent.ACTION_DRAG_ENDED -> {
                 dragPositionState.value = null
+                internalDragClip = null
+                conversionHoverJob?.cancel()
+                conversionHoverJob = null
+                conversionLockedUntilExit = false
+                conversionCooldownUntil = 0L
                 cancelDwell()
                 cancelSourceWatchdog()
                 hubExpandedState.value = false
@@ -477,15 +622,111 @@ class DragDropFlowController(
         val view = composeView ?: return
         val activeParams = getActiveLayoutParams(positionState.value)
         runCatching { windowManager.updateViewLayout(view, activeParams) }
+        attachOrUpdatePreviewWindow(positionState.value)
         isExpanded = true
     }
 
     private fun collapseToAnchor() {
+        detachPreviewWindow()
         val view = composeView ?: return
         val anchor = anchorParams ?: return
         if (isExpanded) {
             runCatching { windowManager.updateViewLayout(view, anchor) }
             isExpanded = false
+        }
+    }
+
+    @android.annotation.SuppressLint("RtlHardcoded")
+    private fun getPreviewLayoutParams(position: DragDropFlowPosition): WindowManager.LayoutParams {
+        val metrics = context.resources.displayMetrics
+        val density = metrics.density
+        val sizePx = (116 * density).toInt()
+        val screenWidth = metrics.widthPixels.coerceAtLeast(sizePx)
+        val screenHeight = metrics.heightPixels.coerceAtLeast(sizePx)
+        val horizontalFraction = when (position) {
+            DragDropFlowPosition.LEFT -> 0.70f
+            DragDropFlowPosition.RIGHT -> 0.30f
+            else -> 0.50f
+        }
+        val verticalFraction = when (position) {
+            DragDropFlowPosition.LEFT, DragDropFlowPosition.RIGHT -> 0.25f
+            else -> 0.33f
+        }
+        val targetX = (screenWidth * horizontalFraction - sizePx / 2f).toInt()
+            .coerceIn(0, (screenWidth - sizePx).coerceAtLeast(0))
+        val targetY = (screenHeight * verticalFraction - sizePx / 2f).toInt()
+            .coerceIn(0, (screenHeight - sizePx).coerceAtLeast(0))
+
+        return WindowManager.LayoutParams(
+            sizePx,
+            sizePx,
+            OverlayWindowTypes.overlayWindowType(context),
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            title = "XG:drag-action-preview"
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = targetX
+            y = targetY
+        }
+    }
+
+    private fun attachOrUpdatePreviewWindow(position: DragDropFlowPosition) {
+        if (position == DragDropFlowPosition.RING) {
+            detachPreviewWindow()
+            return
+        }
+        val params = getPreviewLayoutParams(position)
+        val existing = previewComposeView
+        if (existing != null) {
+            runCatching { windowManager.updateViewLayout(existing, params) }
+            return
+        }
+        val overlayContext = OverlayCompose.themedContext(context)
+        val owner = OverlayComposeOwner()
+        val view = OverlayCompose.createComposeView(overlayContext, owner).apply {
+            visibility = View.VISIBLE
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            setContent {
+                OverlayAwareModuleTheme {
+                    val activeHoveredItem = if (visibleState.value && positionState.value != DragDropFlowPosition.RING) {
+                        val id = hoveredIdState.value
+                        if (id != null && id != "__cancel__" && id != "__restore__") {
+                            itemsState.value.firstOrNull { it.id == id }
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                    DragActionPreviewBubble(item = activeHoveredItem)
+                }
+            }
+        }
+        val added = runCatching { windowManager.addView(view, params) }.isSuccess
+        if (!added) {
+            OverlayCompose.clearViewTreeOwners(view)
+            owner.destroy()
+            return
+        }
+        previewComposeView = view
+        previewComposeOwner = owner
+    }
+
+    private fun detachPreviewWindow() {
+        val view = previewComposeView
+        val owner = previewComposeOwner
+        previewComposeView = null
+        previewComposeOwner = null
+        if (view != null) {
+            runCatching { windowManager.removeView(view) }
+            OverlayCompose.teardownOverlayCompose(view, owner)
         }
     }
 
@@ -545,6 +786,107 @@ class DragDropFlowController(
         iconTintColor = tint,
     )
 
+    private fun actionDrawableItem(
+        id: String,
+        titleRes: Int,
+        iconRes: Int,
+        tint: Color,
+    ) = DragDropFlowItem(
+        id = id,
+        title = context.getString(titleRes),
+        iconDrawableRes = iconRes,
+        iconTintColor = tint,
+    )
+
+    private fun handleConversionHover(targetId: String?) {
+        if (targetId != "convert_to_image" && targetId != "convert_to_text") {
+            conversionHoverJob?.cancel()
+            conversionHoverJob = null
+            if (!isConverting) {
+                conversionLockedUntilExit = false
+            }
+            return
+        }
+        if (isConverting || conversionLockedUntilExit) return
+        if (conversionHoverJob != null) return
+        conversionHoverJob = scope.launch(Dispatchers.Main) {
+            try {
+                delay(500)
+                if (currentHoveredId == targetId && !isConverting && !conversionLockedUntilExit) {
+                    conversionLockedUntilExit = true
+                    performContentConversion(targetId)
+                }
+            } finally {
+                conversionHoverJob = null
+            }
+        }
+    }
+
+    private suspend fun performContentConversion(targetId: String) {
+        val clip = internalDragClip ?: return
+        isConverting = true
+        try {
+            when (targetId) {
+                "convert_to_image" -> {
+                    val text = withContext(Dispatchers.IO) {
+                        (0 until clip.itemCount).mapNotNull {
+                            clip.getItemAt(it).coerceToText(context)?.toString()
+                        }.filter { it.isNotBlank() }.joinToString("\n")
+                    }
+                    if (text.isBlank()) return
+                    val bitmap = withContext(Dispatchers.IO) { DragTextImageRenderer.render(text) } ?: return
+                    val uri = ScreenshotStorage.createShareUri(context, bitmap) ?: return
+                    val newClip = ClipData.newUri(context.contentResolver, "image", uri)
+                    internalDragClip = newClip
+                    conversionCooldownUntil = android.os.SystemClock.uptimeMillis() + 650L
+                    val newActions = buildActionItems(hasImage = true, allowConvert = true)
+                    actionItems = newActions
+                    dockItems = buildDockItems(hasImage = true, hasText = false, hasFile = false, actions = newActions, allowConvert = true)
+                    itemsState.value = if (hubExpandedState.value) newActions else dockItems
+                    triggerConversionHaptic()
+                    Toast.makeText(context, R.string.drag_drop_flow_toast_image_generated, Toast.LENGTH_SHORT).show()
+                    DragFlowSession.updateDragShadow(newClip, bitmap)
+                    onContentConverted?.invoke(newClip, bitmap)
+                }
+                "convert_to_text" -> {
+                    val uri = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }.firstOrNull() ?: return
+                    val bitmap = decodeBitmapFromUri(uri) ?: return
+                    val recognizedText = withContext(Dispatchers.IO) {
+                        runCatching { com.slideindex.app.ocr.MlKitTextRecognizer.recognize(bitmap) }.getOrNull()
+                    }
+                    if (recognizedText.isNullOrBlank()) {
+                        Toast.makeText(context, R.string.drag_drop_flow_convert_empty, Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    val newClip = ClipData.newPlainText("text", recognizedText)
+                    internalDragClip = newClip
+                    conversionCooldownUntil = android.os.SystemClock.uptimeMillis() + 650L
+                    val newActions = buildActionItems(hasImage = false, allowConvert = true)
+                    actionItems = newActions
+                    dockItems = buildDockItems(hasImage = false, hasText = true, hasFile = false, actions = newActions, allowConvert = true)
+                    itemsState.value = if (hubExpandedState.value) newActions else dockItems
+                    triggerConversionHaptic()
+                    Toast.makeText(context, R.string.drag_drop_flow_toast_text_copied, Toast.LENGTH_SHORT).show()
+                    DragFlowSession.updateDragShadow(newClip, null)
+                    onContentConverted?.invoke(newClip, null)
+                }
+            }
+        } finally {
+            isConverting = false
+        }
+    }
+
+    private fun triggerConversionHaptic() {
+        if (!hapticEnabledState.value) return
+        val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v?.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            v?.vibrate(50)
+        }
+    }
+
     /**
      * 收起态列表。
      *
@@ -557,12 +899,22 @@ class DragDropFlowController(
         hasText: Boolean,
         hasFile: Boolean,
         actions: List<DragDropFlowItem>,
+        allowConvert: Boolean = false,
     ): List<DragDropFlowItem> {
         val targets = buildTargetItems(hasImage = hasImage, hasText = hasText, hasFile = hasFile)
+        val convertItem = if (!allowConvert) {
+            null
+        } else if (hasText) {
+            actionDrawableItem("convert_to_image", R.string.drag_drop_flow_action_text_to_image, R.drawable.ic_text_image_convert_24, Color(0xFF009688))
+        } else if (hasImage) {
+            actionDrawableItem("convert_to_text", R.string.drag_drop_flow_action_convert_to_text, R.drawable.ic_text_image_convert_24, Color(0xFF009688))
+        } else null
+
         if (!DragDropFlowLayoutPolicy.shouldKeepHub(hasImage, hasText, latestSettings.dragDropFlowActionsInline)) {
             return actions + targets
         }
-        return listOf(
+        return listOfNotNull(
+            convertItem,
             DragDropFlowItem(
                 id = DRAG_DROP_FLOW_HUB_ID,
                 title = context.getString(R.string.drag_drop_flow_hub),
@@ -578,9 +930,10 @@ class DragDropFlowController(
      * 开关打开时整列会直接平铺到流转栏上：底栏一屏大约只放得下 5 格，
      * 所以把「分词 / 钉住」这两个别处没有入口的动作排在最前，别让它们落进滚动区。
      */
-    private fun buildActionItems(hasImage: Boolean): List<DragDropFlowItem> =
+    private fun buildActionItems(hasImage: Boolean, allowConvert: Boolean = false): List<DragDropFlowItem> =
         if (hasImage) {
-            listOf(
+            listOfNotNull(
+                if (allowConvert) actionDrawableItem("convert_to_text", R.string.drag_drop_flow_action_convert_to_text, R.drawable.ic_text_image_convert_24, Color(0xFF009688)) else null,
                 actionItem("segment_image", R.string.drag_drop_flow_action_segment, Icons.Outlined.TextFields, Color(0xFF3F51B5)),
                 actionItem("copy_image", R.string.drag_drop_flow_target_copy_image, Icons.Outlined.ContentCopy, Color(0xFF4CAF50)),
                 actionItem("search_image", R.string.drag_drop_flow_action_search, Icons.Outlined.ImageSearch, Color(0xFF2196F3)),
@@ -588,7 +941,8 @@ class DragDropFlowController(
                 actionItem("pin_image", R.string.drag_drop_flow_action_pin, Icons.Outlined.PushPin, Color(0xFFE91E63)),
             )
         } else {
-            listOf(
+            listOfNotNull(
+                if (allowConvert) actionDrawableItem("convert_to_image", R.string.drag_drop_flow_action_text_to_image, R.drawable.ic_text_image_convert_24, Color(0xFF009688)) else null,
                 actionItem("segment_text", R.string.drag_drop_flow_action_segment, Icons.Outlined.TextFields, Color(0xFF3F51B5)),
                 actionItem("pin_text", R.string.drag_drop_flow_action_pin, Icons.Outlined.PushPin, Color(0xFFE91E63)),
                 actionItem("search_text", R.string.drag_drop_flow_action_search, Icons.Outlined.Search, Color(0xFF2196F3)),
@@ -856,6 +1210,38 @@ class DragDropFlowController(
                             payload = ShareSheetPayload.Text(text),
                             dismissSource = { collapseToAnchor() },
                         )
+                    }
+                    (targetId == "convert_to_image" || targetId == "text_to_image") && !text.isNullOrBlank() -> {
+                        val bitmap = DragTextImageRenderer.render(text)
+                        if (bitmap != null) {
+                            val uri = ScreenshotStorage.createShareUri(context, bitmap)
+                            if (uri != null) {
+                                ShareSheetLauncher.share(
+                                    context = context,
+                                    payload = ShareSheetPayload.Image(uri = uri, mimeType = "image/png"),
+                                    dismissSource = { collapseToAnchor() },
+                                )
+                                Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_generated), Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_generate_failed), Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_image_generate_failed), Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    targetId == "convert_to_text" && uri != null -> {
+                        val bitmap = decodeBitmapFromUri(uri)
+                        if (bitmap != null) {
+                            val recognized = com.slideindex.app.ocr.MlKitTextRecognizer.recognize(bitmap)
+                            if (!recognized.isNullOrBlank()) {
+                                com.slideindex.app.overlay.panels.PanelStashWriteHooks.copyText?.invoke(context, recognized)
+                                Toast.makeText(context, context.getString(R.string.drag_drop_flow_toast_text_copied), Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, R.string.drag_drop_flow_convert_empty, Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            handleImageDecodeFailure { processDrop(targetId, clipData) }
+                        }
                     }
                 }
             }
@@ -1126,6 +1512,7 @@ class DragDropFlowController(
     }
 
     private fun destroyWindow() {
+        detachPreviewWindow()
         val view = composeView
         val owner = composeOwner
         composeView = null
