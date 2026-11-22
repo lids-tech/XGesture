@@ -114,6 +114,20 @@ class WidgetCardContainer(
     if (item.itemType == ITEM_TYPE_APP || item.itemType == ITEM_TYPE_SHORTCUT || item.itemType == ITEM_TYPE_ACTION) {
       loadingPlaceholder.visibility = GONE
       scalableFrame.visibility = GONE
+      // 动作是 Shell 命令时，先回查「命令面板」里的条目：
+      // 这样格子的**名称和图标**都和命令面板一致（面板按命令文本回查，见 ShellCommandDisplayResolver）。
+      val shellCommand = if (item.itemType == ITEM_TYPE_ACTION) {
+        val parsedAction = com.slideindex.app.launcher.QuickLauncherItemCodec
+          .parseActionPayload(item.intentUri)
+        val commandText = (parsedAction as? com.slideindex.app.gesture.GestureAction.ExecuteShellCommand)
+          ?.command
+        val shellCommands = com.slideindex.app.overlay.panels.PanelRuntimeHooks
+          .settingsSnapshot?.invoke(context)?.shellCommands.orEmpty()
+        if (commandText.isNullOrBlank()) null
+        else com.slideindex.app.shell.ShellCommandDisplayResolver.resolve(commandText, shellCommands)
+      } else {
+        null
+      }
       val appView = android.widget.LinearLayout(context).apply {
         orientation = android.widget.LinearLayout.VERTICAL
         gravity = Gravity.CENTER
@@ -202,6 +216,17 @@ class WidgetCardContainer(
           //（QuickWheelIconResolver）：快捷方式会按「应用内直达目录」查真实图标，
           // 查不到才回落宿主应用图标；非这两类动作才用矢量动作图标。
           // 单一路径 → 不会出现「应用图标 ↔ 右上箭头」来回跳。
+          // Shell 命令：用命令面板里配置的图标（图片 / 文字图标）。
+          if (shellCommand != null) {
+            val shellBitmap = runCatching {
+              com.slideindex.app.shell.ShellCommandIconResolver
+                .resolveBitmap(context, shellCommand, iconSizePx)
+            }.getOrNull()
+            if (shellBitmap != null) {
+              setImageDrawable(shellBitmap.toDrawable(resources))
+              return@apply
+            }
+          }
           val wheelAction = when {
             item.itemType == ITEM_TYPE_ACTION -> action
             // 面板存的是「快速启动器条目」的 payload（包名\u001C快捷id / i: / is: / c:），
@@ -233,7 +258,7 @@ class WidgetCardContainer(
         addView(iconView, LayoutParams(iconSize, iconSize))
 
         val labelView = android.widget.TextView(context).apply {
-          text = item.label
+          text = shellCommand?.label?.takeIf { it.isNotBlank() } ?: item.label
           setTextColor(if (item.labelColorArgb != 0L) item.labelColorArgb.toInt() else Color.WHITE)
           setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
           gravity = Gravity.CENTER

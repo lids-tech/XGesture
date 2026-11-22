@@ -84,12 +84,18 @@ object WidgetPanelSubActions {
             .toList()
 
     /** 显示名称：自定义优先，否则用动作的本地化文案。 */
-    fun displayName(context: Context, item: WidgetPanelSubAction): String =
-        item.customName.ifBlank {
-            runCatching { gestureActionLabelText(context, item.action) }.getOrNull()
+    /** 显示名（@param shellCommands Shell 命令面板的命令表，按命令文本回查用户自定义名）。 */
+    fun displayName(
+        context: Context,
+        item: WidgetPanelSubAction,
+        shellCommands: List<com.slideindex.app.shell.ShellCommand> = emptyList(),
+    ): String = item.customName.ifBlank {
+        (item.action as? GestureAction.ExecuteShellCommand)
+            ?.let { com.slideindex.app.shell.ShellCommandLabelResolver.customLabelFor(it.command, shellCommands) }
+            ?: runCatching { gestureActionLabelText(context, item.action) }.getOrNull()
                 ?.takeIf { it.isNotBlank() }
-                ?: fallbackLabel(item.action)
-        }
+            ?: fallbackLabel(item.action)
+    }
 
     fun encode(
         action: GestureAction,
@@ -126,6 +132,7 @@ object WidgetPanelSubActions {
         item: WidgetPanelSubAction,
         sizePx: Int,
         tintArgb: Int = DEFAULT_ICON_TINT_ARGB,
+        shellCommands: List<com.slideindex.app.shell.ShellCommand> = emptyList(),
     ): Bitmap? {
         if (item.iconKey.isNotBlank()) {
             runCatching {
@@ -138,6 +145,16 @@ object WidgetPanelSubActions {
                     action = item.action,
                 )
             }.getOrNull()?.let { return it }
+        }
+        // Shell 命令：优先用命令面板里给这条命令配置的图标（图片 / 文字图标）。
+        (item.action as? GestureAction.ExecuteShellCommand)?.let { shellAction ->
+            val saved = com.slideindex.app.shell.ShellCommandDisplayResolver
+                .resolve(shellAction.command, shellCommands)
+            if (saved != null) {
+                runCatching {
+                    com.slideindex.app.shell.ShellCommandIconResolver.resolveBitmap(context, saved, sizePx)
+                }.getOrNull()?.let { return it }
+            }
         }
         return runCatching {
             CornerSlotIconBitmap.get(

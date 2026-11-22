@@ -222,10 +222,21 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
    * 项目按行优先排列，整块以格子中心为基准居中；配置行数大于实际行数时，
    * 按配置行数的高度居中，这样"少放几个也不会跳位置"。
    */
+  /** 当前 Shell 命令表（面板里回查命令名称/图标用；取不到就空表，退回默认文案）。 */
+  private fun currentShellCommands(): List<com.slideindex.app.shell.ShellCommand> =
+    runCatching {
+      com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsSnapshot
+        ?.invoke(context)
+        ?.shellCommands
+    }.getOrNull().orEmpty()
   internal fun subMenuItemCenter(state: SubMenuState, index: Int): Pair<Float, Float> {
-    val row = index / state.columns
-    val column = index % state.columns
+    // 排列顺序：**从右往左、从下往上**（第一个动作在右下角，往左铺满一行后向上换行）。
+    // 与快捷轮盘的阅读方向一致：手指从格子中心弹出后，最近的通常是第一项。
+    val rowFromBottom = index / state.columns
+    val columnFromRight = index % state.columns
+    val column = state.columns - 1 - columnFromRight
     val layoutRows = state.rows.coerceAtLeast(state.usedRows)
+    val row = layoutRows - 1 - rowFromBottom
     val gridWidth = state.columns * state.stepPx
     val gridHeight = layoutRows * state.stepPx
     val left = state.anchorX - gridWidth / 2f + state.offsetXPx
@@ -254,7 +265,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     val item = state.items.getOrNull(hovered) ?: return WidgetPanelHud.clear()
     WidgetPanelHud.show(
       WidgetPanelHudState(
-        title = WidgetPanelSubActions.displayName(context, item),
+        title = WidgetPanelSubActions.displayName(context, item, currentShellCommands()),
         subtitle = if (state.longPressConsumed) "长按已就绪，松手以小窗打开" else "松手执行 · 停住不放转小窗",
         icon = state.icons.getOrNull(hovered),
         progressKey = "sub:$hoverToken:$hovered",
@@ -378,7 +389,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         val tint = iconTints[index].takeIf { it != 0 }
           ?: config.iconColorArgb.toInt().takeIf { it != 0 }
           ?: autoIconTintFor(index)
-        WidgetPanelSubActions.icon(context, item, iconPx, tint)
+        WidgetPanelSubActions.icon(context, item, iconPx, tint, currentShellCommands())
       },
       itemRadiusPx = itemRadius,
       stepPx = itemDiameter + config.itemGapDp * dm.density,
@@ -488,7 +499,7 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       // 名称：开了「显示名称」就每项都画（与轮盘一致）；否则只在指着的那项画，
       // 避免一排小圆点猜不出是什么。
       if (state.showLabels || hovered) {
-        val label = WidgetPanelSubActions.displayName(context, state.items[index])
+        val label = WidgetPanelSubActions.displayName(context, state.items[index], currentShellCommands())
         if (label.isNotBlank()) {
           subMenuLabelPaint.color = labelColor
           canvas.drawText(label, cx, cy + state.itemRadiusPx + textSize * 1.15f, subMenuLabelPaint)

@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -182,6 +183,8 @@ fun WidgetPanelSubActionsEditorContent(
                                 style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.weight(1f),
                             )
+                            // key(cellIconKey)：换图标时整块重建，杜绝预览停在上一张图。
+                            key(cellIconKey) {
                             ActionIconPickerHost(
                                 action = item.toGestureAction(),
                                 iconKey = cellIconKey.takeIf { it.isNotBlank() },
@@ -190,6 +193,7 @@ fun WidgetPanelSubActionsEditorContent(
                                 onIconChange = { key -> cellIconKey = key.orEmpty() },
                                 onReset = { cellIconKey = "" },
                             )
+                            }
                         }
                         QuickWheelSlotColorRow(
                             title = "容器颜色",
@@ -309,7 +313,7 @@ fun WidgetPanelSubActionsEditorContent(
                         )
                     }
 
-                    itemsIndexed(drafts) { index, entry ->
+itemsIndexed(drafts, key = { index, entry -> "$index:$entry" }) { index, entry ->
                         val parsed = WidgetPanelSubActions.parse(listOf(entry)).firstOrNull()
                         if (parsed == null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,9 +325,31 @@ fun WidgetPanelSubActionsEditorContent(
                         } else {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Shell 命令没有自定义图标时，预览用命令面板里配的图标（文字/图片）。
+                                    val shellCommandPreviewKey = remember(parsed.action, settings.shellCommands) {
+                                        val shellAction = parsed.action as? com.slideindex.app.gesture.GestureAction.ExecuteShellCommand
+                                        val saved = shellAction?.let {
+                                            com.slideindex.app.shell.ShellCommandDisplayResolver
+                                                .resolve(it.command, settings.shellCommands)
+                                        }
+                                        when {
+                                            saved == null -> null
+                                            saved.iconType == com.slideindex.app.shell.ShellCommandIconType.TEXT ->
+                                                saved.textIcon?.takeIf { it.isNotBlank() }?.let {
+                                                    com.slideindex.app.ui.ActionIconKeyCodec.text(it)
+                                                }
+                                            saved.iconType == com.slideindex.app.shell.ShellCommandIconType.URI ->
+                                                saved.iconPath?.takeIf { it.isNotBlank() }?.let { path ->
+                                                    com.slideindex.app.ui.ActionIconKeyCodec.file(
+                                                        java.io.File(context.filesDir, path).absolutePath,
+                                                    )
+                                                }
+                                            else -> null
+                                        }
+                                    }
                                     ActionIconPickerHost(
                                         action = parsed.action,
-                                        iconKey = parsed.iconKey.takeIf { it.isNotBlank() },
+                                        iconKey = parsed.iconKey.takeIf { it.isNotBlank() } ?: shellCommandPreviewKey,
                                         sizeDp = 40,
                                         storageKey = "widget-panel-sub:${item.appWidgetId}:$index",
                                         onIconChange = { key ->
@@ -337,7 +363,7 @@ fun WidgetPanelSubActionsEditorContent(
                                             replace(index, parsed.copy(customName = name).encode())
                                         },
                                         placeholder = {
-                                            Text(WidgetPanelSubActions.displayName(context, parsed.copy(customName = "")))
+                                            Text(WidgetPanelSubActions.displayName(context, parsed.copy(customName = ""), settings.shellCommands))
                                         },
                                         singleLine = true,
                                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
