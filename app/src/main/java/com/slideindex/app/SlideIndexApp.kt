@@ -179,6 +179,29 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.updateQuickWheels = { wheels ->
             deps.settingsRepository.setQuickWheels(wheels)
         }
+        // 一次性迁移：把现有所有「二级菜单」配置重置为用户指定的新默认值。
+        // 用标记文件保证只跑一次；新添加的格子本身就用默认值（见 WidgetPanelSubMenuConfig）。
+        deps.applicationScope.launch {
+            runCatching {
+                val marker = java.io.File(filesDir, ".panel_submenu_defaults_v2")
+                if (marker.exists()) return@runCatching
+                val snapshot = deps.settingsRepository.readSnapshot()
+                val pages = com.slideindex.app.widget.WidgetPanelDefaults
+                    .effectivePages(snapshot.widgetPanelPages)
+                    .map { page ->
+                        page.copy(
+                            items = page.items.map { item ->
+                                item.copy(
+                                    subMenu = com.slideindex.app.widget.WidgetPanelSubMenuConfig(),
+                                )
+                            },
+                        )
+                    }
+                deps.settingsRepository.setWidgetPanelPages(pages)
+                marker.createNewFile()
+            }
+        }
+
         com.slideindex.app.util.LocalCrashHandler.install(this)
         HiddenApiBootstrap.install()
         NativeEngineRuntime.coordinator = nativeEnginePackCoordinator

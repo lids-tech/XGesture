@@ -153,7 +153,9 @@ object WidgetPopupOverlayWindow {
       settings = settings,
       initialPageIndex = initialPageIndex,
       onDismiss = { dismiss() },
-      onSavePages = { pages -> savePages(pages) }
+      onSavePages = { pages -> savePages(pages) },
+      // 从左边缘呼出时格子/二级菜单镜像（右边缘呼出是原样）。
+      isMirrored = side == PanelSide.LEFT,
     )
     root.cardView = card
     // 各页的列数/单元宽度/可见行数/上边距可以不同，切页或改设置时按当前页重算整卡尺寸。

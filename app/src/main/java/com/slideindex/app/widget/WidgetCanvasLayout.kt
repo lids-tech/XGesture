@@ -73,6 +73,20 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
    */
   var globalSubMenuLayout: com.slideindex.app.widget.WidgetPanelSubMenuConfig? = null
 
+  /**
+   * 从左边缘呼出时镜像布局（主格子 / 二级菜单都与右边缘呼出时左右对称）。
+   *
+   * 实现：布局/命中都按「画布坐标」镜像 —— 触摸事件在入口处做一次 x 翻转，
+   * 之后所有逻辑（拖动、命中、二级菜单坐标）都在镜像后的坐标系里，天然对称。
+   */
+  var isMirroredLayout: Boolean = false
+    set(value) {
+      if (field == value) return
+      field = value
+      requestLayout()
+      invalidate()
+    }
+
   var appLabelsVisible: Boolean = true
     set(value) {
       if (field == value) return
@@ -236,12 +250,13 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
     // 与快捷轮盘的阅读方向一致：手指从格子中心弹出后，最近的通常是第一项。
     val rowFromBottom = index / state.columns
     val columnFromRight = index % state.columns
-    val column = state.columns - 1 - columnFromRight
+    val column = if (isMirroredLayout) columnFromRight else state.columns - 1 - columnFromRight
     val layoutRows = state.rows.coerceAtLeast(state.usedRows)
     val row = layoutRows - 1 - rowFromBottom
     val gridWidth = state.columns * state.stepXPx
     val gridHeight = layoutRows * state.stepYPx
-    val left = state.anchorX - gridWidth / 2f + state.offsetXPx
+    val effectiveOffsetX = if (isMirroredLayout) -state.offsetXPx else state.offsetXPx
+    val left = state.anchorX - gridWidth / 2f + effectiveOffsetX
     val top = state.anchorY - gridHeight / 2f + state.offsetYPx
     val cx = left + state.stepXPx / 2f + column * state.stepXPx
     val cy = top + state.stepYPx / 2f + row * state.stepYPx
@@ -372,6 +387,30 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         0xFFFFFFFF.toInt()
       }
     }
+      // ── 二级菜单不许越出屏幕：先按「网格尺寸 + 偏移」算出整块位置，
+      //    再把偏移收敛到画布范围内（无论行列数/偏移怎么调都不会跑出屏幕）。
+      //    这样锚点仍指向格子中心，只是把整块往里挪。
+      val stepX = itemDiameter + config.itemGapXDp * dm.density
+      val stepY = itemDiameter + config.itemGapYDp * dm.density
+      val usedRowCount = ((actions.size + config.columns - 1) / config.columns).coerceAtLeast(1)
+      val layoutRowCount = config.rows.coerceAtLeast(usedRowCount)
+      val gridWidthPx = config.columns * stepX
+      val gridHeightPx = layoutRowCount * stepY
+      val edgeMarginPx = 4f * dm.density
+      var resolvedOffsetX = config.offsetXDp * dm.density
+      var resolvedOffsetY = config.offsetYDp * dm.density
+      val rawLeft = anchorX - gridWidthPx / 2f + resolvedOffsetX
+      if (rawLeft < edgeMarginPx) {
+        resolvedOffsetX += edgeMarginPx - rawLeft
+      } else if (rawLeft + gridWidthPx > width - edgeMarginPx) {
+        resolvedOffsetX -= (rawLeft + gridWidthPx) - (width - edgeMarginPx)
+      }
+      val rawTop = anchorY - gridHeightPx / 2f + resolvedOffsetY
+      if (rawTop < edgeMarginPx) {
+        resolvedOffsetY += edgeMarginPx - rawTop
+      } else if (rawTop + gridHeightPx > height - edgeMarginPx) {
+        resolvedOffsetY -= (rawTop + gridHeightPx) - (height - edgeMarginPx)
+      }
     subMenu = SubMenuState(
       anchorX = anchorX,
       anchorY = anchorY,
@@ -384,12 +423,12 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
         WidgetPanelSubActions.icon(context, item, iconPx, tint, currentShellCommands())
       },
       itemRadiusPx = itemRadius,
-      stepXPx = itemDiameter + config.itemGapXDp * dm.density,
-      stepYPx = itemDiameter + config.itemGapYDp * dm.density,
+      stepXPx = stepX,
+      stepYPx = stepY,
       columns = config.columns,
       rows = config.rows,
-      offsetXPx = config.offsetXDp * dm.density,
-      offsetYPx = config.offsetYDp * dm.density,
+      offsetXPx = resolvedOffsetX,
+      offsetYPx = resolvedOffsetY,
       showLabels = config.showLabels,
       iconRadiusPx = iconPx / 2f,
       labelTextSizePx = 11f * config.labelSizePercent / 100f * dm.density,
@@ -932,7 +971,12 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
       val child = getChildAt(i) as? WidgetCardContainer ?: continue
       if (child == draggingChild) continue
       val item = child.item
-      val left = paddingLeft + item.x * currentGridStepPx
+      val visualColumn = if (isMirroredLayout) {
+        (pageColumnCount - item.x - item.spanX).coerceAtLeast(0)
+      } else {
+        item.x
+      }
+      val left = paddingLeft + visualColumn * currentGridStepPx
       val top = paddingTop + item.y * currentGridStepPx
       child.layout(left, top, left + child.measuredWidth, top + child.measuredHeight)
     }
@@ -945,8 +989,25 @@ class WidgetCanvasLayout(context: Context) : ViewGroup(context) {
   }
 
   override fun dispatchTouchEvent(event: MotionEvent): Boolean =
-    touchHandler.dispatchTouchEvent(event)
+    return dispatchWithMirror(event)
 
+
+  /** 镜像模式：把触摸坐标按画布宽度翻转后再交给手势处理器（多指也正确）。 */
+  private fun dispatchWithMirror(event: MotionEvent): Boolean {
+    if (!isMirroredLayout) return touchHandler.dispatchTouchEvent(event)
+    val mirrored = MotionEvent.obtain(event)
+    mirrored.transform(
+      android.graphics.Matrix().apply {
+        setScale(-1f, 1f)
+        postTranslate(width.toFloat(), 0f)
+      },
+    )
+    return try {
+      touchHandler.dispatchTouchEvent(mirrored)
+    } finally {
+      mirrored.recycle()
+    }
+  }
   override fun onDetachedFromWindow() {
     // 页被重建/摘除时，长按计时器还挂在主线程上：不撤销的话，它会把重建后的新画布直接带进编辑态。
     touchHandler.cancelPendingTimers()

@@ -135,6 +135,10 @@ fun WidgetPanelSubActionsEditorContent(
     /** 替换第 [index] 项（改名称 / 改图标都走这里）。 */
     fun replace(index: Int, entry: String) {
         drafts = drafts.toMutableList().also { it[index] = entry }
+        android.util.Log.i(
+            "PanelIconDebug",
+            "replace idx=" + index + " old=" + (drafts.getOrNull(index)?.take(80)) + " new=" + entry.take(80),
+        )
     }
 
     when (val current = page) {

@@ -106,9 +106,24 @@ internal fun ActionIconView(
         }
     }
 
+
+
     // 文字图标：放开字数后靠「自动缩小」保证完整显示；用户设的字号作为基准。
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     val density = androidx.compose.ui.platform.LocalDensity.current
+
+    // 没有自定义图标时，应用 / 快捷方式显示**真实图标**（之前落在通用箭头，
+    // 表现为「二级菜单编辑器里容器图标显示错误」）。
+    val actionBitmap = remember(action, iconKey, sizeDp) {
+        if (!iconKey.isNullOrBlank()) return@remember null
+        if (action !is GestureAction.LaunchApp && action !is GestureAction.LaunchShortcut) return@remember null
+        val px = with(density) { sizeDp.dp.toPx().toInt() }
+        runCatching {
+            com.slideindex.app.overlay.quickwheel.QuickWheelIconResolver
+                .actionBitmapFor(context, action, px)
+        }.getOrNull()
+    }
+
     val textFontSizeSp = remember(textIcon, sizeDp, textScale, density) {
         if (textIcon == null) return@remember 0f
         val maxWidthPx = with(density) { (sizeDp * 0.92f).dp.toPx() }
@@ -148,6 +163,13 @@ internal fun ActionIconView(
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 softWrap = false,
+            )
+            actionBitmap != null -> Image(
+                bitmap = actionBitmap,
+                contentDescription = null,
+                modifier = Modifier
+                    .size((sizeDp * 0.8f).dp)
+                    .clip(shape),
             )
             animatedFile != null -> androidx.compose.ui.viewinterop.AndroidView(
                 factory = { ctx -> android.widget.ImageView(ctx) },
@@ -211,7 +233,10 @@ internal fun ActionIconPickerHost(
             val picked = result.data?.getStringExtra(
                 com.slideindex.app.service.IconLibraryPickerTrampolineActivity.EXTRA_PICKED_KEY,
             )
-            if (!picked.isNullOrBlank()) onIconChange(picked)
+            if (!picked.isNullOrBlank()) {
+                android.util.Log.i("PanelIconDebug", "library pick -> " + picked.take(80))
+                onIconChange(picked)
+            }
         }
     }
 
@@ -224,7 +249,10 @@ internal fun ActionIconPickerHost(
             } else {
                 ActionIconStorage.saveFromUri(context, action, uri)
             }
-            if (savedPath != null) onIconChange(ActionIconKeyCodec.file(savedPath))
+            if (savedPath != null) {
+                android.util.Log.i("PanelIconDebug", "gallery pick -> " + savedPath.take(80))
+                onIconChange(ActionIconKeyCodec.file(savedPath))
+            }
         }
     }
 

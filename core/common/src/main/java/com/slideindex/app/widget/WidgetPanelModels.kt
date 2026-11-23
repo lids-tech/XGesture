@@ -84,19 +84,19 @@ object WidgetPanelFieldCodec {
 data class WidgetPanelSubMenuConfig(
     val columns: Int = 3,
     val rows: Int = 3,
-    val offsetXDp: Int = -52,
+    val offsetXDp: Int = 0,
     val offsetYDp: Int = -128,
     val showLabels: Boolean = true,
     /** 相邻容器之间的**横向**净间距（dp）。 */
     val itemGapXDp: Int = 5,
     /** 相邻容器之间的**纵向**净间距（dp）。 */
-    val itemGapYDp: Int = 20,
+    val itemGapYDp: Int = 23,
     /** 旧版统一间距（仅用于解析旧数据，新数据用横/纵两项）。 */
     val itemGapDp: Int = -1,
     /** 容器尺寸（dp，正方形边长）；圆形时即直径。 */
     val containerSizeDp: Int = 45,
     /** 容器圆角（dp）：等于容器尺寸一半时是圆形。 */
-    val containerCornerDp: Int = 0,
+    val containerCornerDp: Int = 10,
     /** 容器背景色（ARGB）。 */
     val containerColorArgb: Long = DEFAULT_CONTAINER_COLOR_ARGB,
     /**
@@ -113,7 +113,7 @@ data class WidgetPanelSubMenuConfig(
     /** 名称文字大小百分比（100 = 基准 11sp）。 */
     val labelSizePercent: Int = 100,
     /** 容器背景不透明度（0 = 全透明，100 = 不透明）。 */
-    val backgroundAlphaPercent: Int = 0,
+    val backgroundAlphaPercent: Int = 50,
 ) {
     fun normalized(): WidgetPanelSubMenuConfig = copy(
         columns = columns.coerceIn(MIN_COLUMNS, MAX_COLUMNS),

@@ -173,6 +173,8 @@ class WidgetPopupCardLayout(
     /** 打开时停在哪一页（动作里指定的页 index）；越界按第 0 页处理。 */
     initialPageIndex: Int = 0,
     private val onDismiss: () -> Unit,
+    /** 从左边缘呼出 → 主格子 / 二级菜单镜像布局。 */
+    private val isMirrored: Boolean = false,
     private val onSavePages: (List<WidgetPanelPage>) -> Unit,
 ) : FrameLayout(context) {
 
@@ -757,6 +759,8 @@ class WidgetPopupCardLayout(
               offsetYDp = settings.widgetSubmenuOffsetYDp,
             )
             canvas.editMode = editMode
+            // 从左边缘呼出时镜像：格子与二级菜单左右对称。
+            canvas.isMirroredLayout = isMirrored
             canvas.bind(page, hostContext)
         }
     }
