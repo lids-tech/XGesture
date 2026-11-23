@@ -23,8 +23,10 @@ import com.slideindex.app.ui.ActivityShortcutEditImageScreen
 import com.slideindex.app.ui.ActivityShortcutEditScreen
 import com.slideindex.app.ui.ActivityShortcutPresetsScreen
 import com.slideindex.app.ui.ActivityShortcutScreen
-import com.slideindex.app.ui.DynamicShortcutImportScreen
 import com.slideindex.app.ui.LinkDispatchSettingsScreen
+import com.slideindex.app.ui.link.EditLinkRuleScreen
+import com.slideindex.app.ui.link.LinkDispatchHistoryScreen
+import com.slideindex.app.ui.link.LinkRulesScreen
 import com.slideindex.app.ui.picker.ActivityShortcutPickActivityScreen
 import com.slideindex.app.ui.picker.ActivityShortcutPickAppScreen
 import com.slideindex.app.ui.picker.ActivityShortcutPickAppShortcutScreen
@@ -49,7 +51,6 @@ fun NavEntryBuilder.activityShortcutNavEntries(ctx: MainNavContext) {
             onAddShellCommand = { ctx.navigate(AppNavKey.ActivityShortcutPickShell) },
             onAddImage = { ctx.navigate(AppNavKey.ActivityShortcutAddImage) },
             onAddFile = { ctx.navigate(AppNavKey.ActivityShortcutAddFile) },
-            onImportDynamicShortcuts = { ctx.navigate(AppNavKey.DynamicShortcutImport) },
             onOpenPresets = { ctx.navigate(AppNavKey.ActivityShortcutPresets) },
             onEdit = { shortcut ->
                 pickerViewModel.consume()
@@ -376,23 +377,46 @@ fun NavEntryBuilder.activityShortcutNavEntries(ctx: MainNavContext) {
         )
     }
 
-    hiltEntry<AppNavKey.DynamicShortcutImport> {
-        val viewModel: ExtensionSettingsViewModel = hiltViewModel()
-        val gestureSettings by viewModel.gestureSettings.collectAsStateWithLifecycle()
-        val settings = gestureSettings.toMinimalAppSettings()
-        DynamicShortcutImportScreen(
-            settings = settings,
-            onBack = { ctx.navigateBackTo(AppNavKey.ActivityShortcuts) },
-            onSaveShortcuts = viewModel::setActivityShortcuts,
-        )
-    }
-
     hiltEntry<AppNavKey.LinkDispatchSettings> {
         val viewModel: ExtensionSettingsViewModel = hiltViewModel()
         val gestureSettings by viewModel.gestureSettings.collectAsStateWithLifecycle()
         val settings = gestureSettings.toMinimalAppSettings()
         LinkDispatchSettingsScreen(
             settings = settings,
+            onBack = { ctx.backStack.removeLastOrNull() },
+            onNavigateToRules = {
+                ctx.navigate(AppNavKey.LinkRules)
+            },
+            onNavigateToEditRule = { ruleId ->
+                ctx.navigate(AppNavKey.EditLinkRule(ruleId))
+            },
+            onNavigateToHistory = {
+                ctx.navigate(AppNavKey.LinkDispatchHistory)
+            },
+        )
+    }
+
+    hiltEntry<AppNavKey.LinkRules> {
+        LinkRulesScreen(
+            onBack = { ctx.backStack.removeLastOrNull() },
+            onNavigateToEditRule = { ruleId ->
+                ctx.navigate(AppNavKey.EditLinkRule(ruleId))
+            },
+            onNavigateToHistory = {
+                ctx.navigate(AppNavKey.LinkDispatchHistory)
+            },
+        )
+    }
+
+    hiltEntry<AppNavKey.LinkDispatchHistory> {
+        LinkDispatchHistoryScreen(
+            onBack = { ctx.backStack.removeLastOrNull() },
+        )
+    }
+
+    hiltEntry<AppNavKey.EditLinkRule> { key ->
+        EditLinkRuleScreen(
+            ruleId = key.ruleId,
             onBack = { ctx.backStack.removeLastOrNull() },
         )
     }

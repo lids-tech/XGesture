@@ -546,8 +546,10 @@ sealed interface AppNavKey : NavKey {
     @Serializable data object ActivityShortcutPickApp : AppNavKey
     @Serializable data class ActivityShortcutPickActivity(val packageName: String) : AppNavKey
     @Serializable data object ActivityShortcutPickAppShortcut : AppNavKey
-    @Serializable data object DynamicShortcutImport : AppNavKey
     @Serializable data object LinkDispatchSettings : AppNavKey
+    @Serializable data object LinkRules : AppNavKey
+    @Serializable data object LinkDispatchHistory : AppNavKey
+    @Serializable data class EditLinkRule(val ruleId: String? = null) : AppNavKey
     @Serializable data object ActivityShortcutPickAppShortcutPresets : AppNavKey
     @Serializable data object ActivityShortcutPickShell : AppNavKey
     @Serializable data object ActivityShortcutAddImage : AppNavKey
@@ -639,6 +641,13 @@ sealed interface AppNavKey : NavKey {
     @Serializable data object FloatBallSearchEngine : AppNavKey
     @Serializable data object FloatBallSearchEnginePresetPicker : AppNavKey
     @Serializable data class FloatBallSearchEngineEditor(val engineId: String = "") : AppNavKey
+    @Serializable data class FloatBallSearchGroupEditor(
+        val groupId: String = "",
+        val kind: String = "TEXT",
+    ) : AppNavKey
+    @Serializable data class FloatBallSearchGroupMemberPicker(
+        val kind: String = "TEXT",
+    ) : AppNavKey
     @Serializable data object FloatBallSearchEnginePreviewSort : AppNavKey
     @Serializable data object FloatBallImageSearchEngine : AppNavKey
     @Serializable data class FloatBallImageSearchEngineEditor(val engineId: String = "") : AppNavKey

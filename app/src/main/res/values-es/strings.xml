@@ -449,7 +449,7 @@
     <string name="permissions_section_vendor">Mantenimiento en segundo plano</string>
     <string name="permissions_section_optional">Permisos opcionales</string>
     <string name="permissions_section_manifest">Permisos del manifiesto</string>
-    <string name="permissions_manifest_hint">La consulta de todas las apps y el aviso de arranque se declaran al instalar; no hace falta concederlos a mano.</string>
+    <string name="permissions_manifest_hint">El aviso de arranque y el servicio en primer plano se declaran al instalar; no hace falta concederlos a mano. En algunos sistemas, la lista de apps requiere permiso manual.</string>
     <string name="permission_state_granted">Concedido</string>
     <string name="permission_state_missing">No concedido</string>
     <string name="permissions_optional_hint">Concédelos cuando uses la función correspondiente; dejarlos desactivados no afecta a los gestos ni a los paneles.</string>
@@ -2835,7 +2835,7 @@
     <string name="trigger_copy_portrait">Copiar configuración del retrato</string>
     <string name="trigger_copy_portrait_open">Copiar configuración del retrato</string>
     <string name="trigger_copy_portrait_confirm_title">Copiar la configuración del retrato al paisaje?</string>
-    <string name="trigger_copy_portrait_confirm_message">Los gestos y gatillos de la manija del retrato serán copiados al paisaje. Mangos solo para el paisaje se mantienen. Las posiciones de la manija son re-laid hacia fuera para la pantalla del paisaje y no coincidirá con el retrato exactamente. Esto no puede ser deshecho.</string>
+    <string name="trigger_copy_portrait_confirm_message">Se sustituirán todos los ajustes de los controles horizontales por los verticales, incluidos apariencia, posición, tamaño, gestos y modos de activación. Se eliminarán los controles exclusivos del modo horizontal. La posición y la longitud se copian como proporciones de la pantalla. Esta acción no se puede deshacer.</string>
     <string name="trigger_collection_back_portrait">Vertical</string>
     <string name="hide_trigger_landscape">Horizontal</string>
     <string name="hide_trigger_lock_screen">Pantalla de bloqueo</string>

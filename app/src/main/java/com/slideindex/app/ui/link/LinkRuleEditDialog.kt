@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -24,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +49,7 @@ import com.slideindex.app.R
 import com.slideindex.app.link.LinkDispatchRule
 import com.slideindex.app.link.LinkMatchType
 import com.slideindex.app.link.LinkResolveStrategy
+import com.slideindex.app.link.LinkRuleIconStorage
 import com.slideindex.app.shortcut.port.ApkTools
 import com.slideindex.app.ui.SegmentedControl
 import com.slideindex.app.ui.miuix.CardSegment
@@ -59,6 +63,8 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.glass.ImageOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -70,6 +76,8 @@ internal val linkAppNameCache = ConcurrentHashMap<String, String>()
 internal fun LinkAppIcon(
     packageName: String,
     size: Dp = 40.dp,
+    shape: Shape = RoundedCornerShape(10.dp),
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -98,24 +106,95 @@ internal fun LinkAppIcon(
         Image(
             bitmap = image,
             contentDescription = null,
-            modifier = Modifier
+            modifier = modifier
                 .size(size)
-                .clip(RoundedCornerShape(10.dp)),
+                .clip(shape),
             contentScale = ContentScale.Crop,
         )
     } else {
         Box(
-            modifier = Modifier
-                .size(size)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MiuixTheme.colorScheme.surfaceContainer),
+            modifier = modifier.size(size),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Default.Apps,
+                painter = painterResource(id = R.drawable.ic_hub_primary),
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(size),
+                tint = MiuixTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+/**
+ * 链接规则头像视图，解耦规则头像与目标应用：
+ * 1. 自定义图片：优先从私有沙盒加载；
+ * 2. 指定应用图标：显示指定包名的图标；
+ * 3. 默认联动：目标应用有配置则显示目标应用图标，否则显示 Miuix 玻璃占位图标。
+ */
+@Composable
+internal fun LinkRuleIcon(
+    iconType: String = LinkDispatchRule.ICON_TYPE_DEFAULT,
+    iconValue: String = "",
+    targetPackage: String = "",
+    size: Dp = 56.dp,
+    shape: Shape = RoundedCornerShape(14.dp),
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val sizePx = with(density) { size.roundToPx() }.coerceAtLeast(1)
+
+    if (iconType == LinkDispatchRule.ICON_TYPE_CUSTOM && iconValue.isNotBlank()) {
+        var customBitmap by remember(iconValue, sizePx) {
+            mutableStateOf(LinkRuleIconStorage.loadBitmap(context, iconValue, sizePx)?.asImageBitmap())
+        }
+        LaunchedEffect(iconValue, sizePx) {
+            if (customBitmap == null) {
+                val loaded = withContext(Dispatchers.IO) {
+                    LinkRuleIconStorage.loadBitmap(context, iconValue, sizePx)?.asImageBitmap()
+                }
+                if (loaded != null) {
+                    customBitmap = loaded
+                }
+            }
+        }
+        val bmp = customBitmap
+        if (bmp != null) {
+            Image(
+                bitmap = bmp,
+                contentDescription = "规则图标",
+                modifier = modifier
+                    .size(size)
+                    .clip(shape),
+                contentScale = ContentScale.Crop,
+            )
+            return
+        }
+    }
+
+    val resolvedPackage = when {
+        iconType == LinkDispatchRule.ICON_TYPE_APP && iconValue.isNotBlank() -> iconValue
+        else -> targetPackage
+    }
+
+    if (resolvedPackage.isNotBlank()) {
+        LinkAppIcon(
+            packageName = resolvedPackage,
+            size = size,
+            shape = shape,
+            modifier = modifier,
+        )
+    } else {
+        Box(
+            modifier = modifier.size(size),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_hub_primary),
+                contentDescription = "规则默认图标",
+                tint = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.size(size),
             )
         }
     }
@@ -496,21 +575,21 @@ fun LinkRuleEditDialog(
 }
 
 @Composable
-private fun LinkTargetAppPickerBottomSheet(
+internal fun LinkTargetAppPickerBottomSheet(
     show: Boolean,
     selectedPackage: String,
+    title: String = "选择目标应用",
     allowClearForRedispatch: Boolean = false,
     onDismissRequest: () -> Unit,
     onSelectApp: (packageName: String, label: String) -> Unit,
 ) {
-    if (!show) return
-
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
     var apps by remember { mutableStateOf<List<InstalledAppOption>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(show) {
+        if (!show) return@LaunchedEffect
         isLoading = true
         withContext(Dispatchers.IO) {
             val pm = context.packageManager
@@ -540,8 +619,8 @@ private fun LinkTargetAppPickerBottomSheet(
     }
 
     MiuixBottomSheet(
-        show = true,
-        title = "选择目标应用",
+        show = show,
+        title = title,
         onDismissRequest = onDismissRequest,
     ) {
         Column(
@@ -584,7 +663,7 @@ private fun LinkTargetAppPickerBottomSheet(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 380.dp),
+                            .fillMaxHeight(0.85f),
                     ) {
                         items(filteredApps, key = { it.packageName }) { app ->
                             val isCurrent = app.packageName == selectedPackage

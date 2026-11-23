@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -108,6 +109,7 @@ fun SettingsLazyScreenScaffold(
     fabInset: androidx.compose.ui.unit.Dp = 0.dp,
     /** 外部持有的滚动状态（例如「打开时定位到当前已绑定的那一项」需要给出初始下标）。 */
     listState: LazyListState? = null,
+    bottomBar: @Composable () -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
     MiuixListScaffold(
@@ -119,6 +121,7 @@ fun SettingsLazyScreenScaffold(
         navigationIcon = onBack?.let { { MiuixGlassBackNavigationIcon(it) } },
         actions = actions,
         floatingActionButton = floatingActionButton,
+        bottomBar = bottomBar,
         bottomContent = bottomContent,
         userScrollEnabled = userScrollEnabled,
         fabInset = fabInset,
@@ -143,6 +146,8 @@ fun SettingsLazyScreenScaffoldWithExpandableSearch(
     floatingActionButton: @Composable () -> Unit = {},
     /** 悬浮按钮需要预留的底部空间，见 [com.slideindex.app.ui.miuix.MiuixSettingsFabInset]。 */
     fabInset: Dp = 0.dp,
+    bottomBar: @Composable () -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
     /** 展开搜索条下方的附加内容（如内置动作的筛选条），与搜索条同处顶栏下方、不在列表层内。 */
     extraBottomContent: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
@@ -170,6 +175,8 @@ fun SettingsLazyScreenScaffoldWithExpandableSearch(
         enableBackHandler = enableBackHandler,
         floatingActionButton = floatingActionButton,
         fabInset = fabInset,
+        bottomBar = bottomBar,
+        listState = listState,
         actions = {
             MiuixExpandableSearchIconAction(
                 expanded = searchExpanded,
