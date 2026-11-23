@@ -179,45 +179,6 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
         com.slideindex.app.overlay.panels.PanelRuntimeHooks.updateQuickWheels = { wheels ->
             deps.settingsRepository.setQuickWheels(wheels)
         }
-        // 一次性迁移：把现有「二级菜单」配置重置为新默认值。
-        // ⚠️ 安全前提（血泪教训）：
-        // 1) 面板页数据为空时**绝不写入**（启动早期设置可能还没加载完，写默认页会把用户面板清空）；
-        // 2) 写之前先把当前页数据备份到文件，出问题可找回；
-        // 3) 只有真正写入成功才落标记，避免"标记在了但数据没改"。
-        deps.applicationScope.launch {
-            runCatching {
-                val marker = java.io.File(filesDir, ".panel_submenu_defaults_v2")
-                if (marker.exists()) return@runCatching
-                val snapshot = deps.settingsRepository.readSnapshot()
-                val currentPages = snapshot.widgetPanelPages
-                if (currentPages.isEmpty()) return@runCatching
-                // 备份（JSON 形式便于人工查看/恢复）
-                runCatching {
-                    val backup = java.io.File(
-                        filesDir,
-                        "panel_pages_backup_" + System.currentTimeMillis() + ".txt",
-                    )
-                    backup.writeText(
-                        com.slideindex.app.widget.WidgetPanelCodec
-                            .encodeAll(currentPages)
-                            .joinToString("\n"),
-                    )
-                }
-                val pages = com.slideindex.app.widget.WidgetPanelDefaults
-                    .effectivePages(currentPages)
-                    .map { page ->
-                        page.copy(
-                            items = page.items.map { item ->
-                                item.copy(
-                                    subMenu = com.slideindex.app.widget.WidgetPanelSubMenuConfig(),
-                                )
-                            },
-                        )
-                    }
-                deps.settingsRepository.setWidgetPanelPages(pages)
-                marker.createNewFile()
-            }
-        }
 
         com.slideindex.app.util.LocalCrashHandler.install(this)
         HiddenApiBootstrap.install()
