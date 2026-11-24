@@ -27,7 +27,7 @@ const val SUB_ACTION_FIELD_SEP = "\u0005"
 const val SUB_MENU_CONFIG_SEP = "\u0006"
 
 /** 单个格子的二级菜单最多几项：再多弹出来就盖满整页了。 */
-const val MAX_SUB_ACTIONS = 8
+  const val MAX_SUB_ACTIONS = 16
 
 /**
  * 快捷方式 payload 的"落盘转义"。
@@ -339,7 +339,11 @@ object WidgetPanelCodec {
             item.intentUri,
             item.shortcutId,
             item.cloneUserId.toString(),
-            item.subActions.joinToString(SUB_ACTION_SEP),
+            // ⚠️ 必须转义：快捷方式动作的 payload 里带 \u001D（LABEL_SEP）/\u001F（LIST_SEP），
+            // 和页面的 ITEM_SEP / PAGE_SEP 撞字符 → 存盘再读出来时动作被切断、
+            // 名称变成"启动快捷方式"、多个快捷方式只剩最后一个（真机反馈）。
+            // WidgetPanelFieldCodec 命中控制字符时转成 b64:<hex>，无损往返。
+            WidgetPanelFieldCodec.encode(item.subActions.joinToString(SUB_ACTION_SEP)),
             item.subMenu.encode(),
             item.iconKey,
             item.containerColorArgb.toString(),
@@ -362,8 +366,7 @@ object WidgetPanelCodec {
         val intentUri = parts.getOrNull(9).orEmpty()
         val shortcutId = parts.getOrNull(10).orEmpty()
         val cloneUserId = parts.getOrNull(11)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        val subActions = parts.getOrNull(12)
-            .orEmpty()
+        val subActions = WidgetPanelFieldCodec.decode(parts.getOrNull(12).orEmpty())
             .split(SUB_ACTION_SEP)
             .filter { it.isNotBlank() }
             .take(MAX_SUB_ACTIONS)
