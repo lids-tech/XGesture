@@ -223,78 +223,110 @@ object CalendarTodoSync {
             return 0
         }
 
-        // 已有来源的条目不重复导入（含此前导入过、以及用户自己写进日历的待办）。
-        val knownSources = meta.store.value.sources // entryId -> source
-
-        // ── ① 完成态对账（B/小米日历里改了完成 → 闪念跟上）──
-        // B（万象待办）与 A（小米日历）都用「标题前缀 [已完成]」表示完成，
-        // 所以这里按事件标题把它们已有的完成状态同步回闪念。
-        // 顺带把「已映射事件」的 (标题, 日期) 收下来，给下一步跨日历去重用。
-        val mappedDayTitles = reconcileMappedEvents(context, meta, resolver, knownSources)
-
         val beginMs = startOfTodayMs()
         val endMs = beginMs + IMPORT_DAYS * DAY_MS
-        val events = queryInstances(resolver, calendarIds, beginMs, endMs)
-        CalendarSyncDebug.log(
-            context,
-            "import: calendars=${calendarIds.size} events=${events.size} known=${knownSources.size}",
-        )
+        val instances = queryInstances(resolver, calendarIds, beginMs, endMs)
+        // 实例索引：标题 → 实例列表。用途：某条映射的事件被删掉后，
+        // 如果同标题还有另一份（B 常把一条待办同时写进两个日历），就"改映射"过去，
+        // 而不是删掉本地待办再重新导入一条（那就是用户看到的"重复"）。
+        val instancesByTitle = HashMap<String, MutableList<EventRef>>()
+        instances.forEach { ev ->
+            val title = ev.title.orEmpty().trim().removePrefix(DONE_PREFIX).trim()
+            if (title.isEmpty()) return@forEach
+            instancesByTitle.getOrPut(title) { ArrayList() } += ev
+        }
+
+        val sources = meta.store.value.sources.toMutableMap() // entryId -> source
+        val claimedSources = HashSet<String>()
+        val claimedDayTitles = HashSet<Pair<String, Long>>()
+        val entriesById = repo.entries.value.associateBy { it.id }
+
+        var doneSynced = 0
+        var deleted = 0
+        var remapped = 0
+
+        val aliveByEventId = queryEventsByIds(resolver, sources.values.toList())
+
+        sources.entries.toList().forEach { (entryId, source) ->
+            if (!source.startsWith(SOURCE_PREFIX)) return@forEach
+            val eventId = source.removePrefix(SOURCE_PREFIX).split(':').getOrNull(1)?.toLongOrNull()
+                ?: return@forEach
+            val alive = aliveByEventId[eventId]
+            if (alive != null) {
+                claimedSources += source
+                claimedDayTitles += alive.title to alive.dayKey
+                // 完成态对账（B/小米日历完成 → 闪念完成）
+                if (alive.done != meta.isDone(entryId)) {
+                    meta.setDone(entryId, alive.done)
+                    doneSynced++
+                }
+                return@forEach
+            }
+            // 事件没了 → 同标题还有另一份就改映射过去（不重复、不丢条目）。
+            val entryTitle = entriesById[entryId]?.let { it.text ?: it.combinedText() }
+                ?.trim().orEmpty()
+            val candidate = if (entryTitle.isEmpty()) {
+                null
+            } else {
+                instancesByTitle[entryTitle]?.firstOrNull { ev ->
+                    "$SOURCE_PREFIX${ev.calendarId}:${ev.eventId}" !in claimedSources
+                }
+            }
+            if (candidate != null) {
+                val newSource = "$SOURCE_PREFIX${candidate.calendarId}:${candidate.eventId}"
+                meta.setSource(entryId, newSource)
+                sources[entryId] = newSource
+                claimedSources += newSource
+                claimedDayTitles += entryTitle to dayKeyOf(candidate.beginMs)
+                remapped++
+                CalendarSyncDebug.log(context, "reconcile: remap entry=$entryId -> $newSource")
+                return@forEach
+            }
+            // 真的没了（B/日历里删掉）→ 删本地待办。
+            CalendarSyncDebug.log(context, "reconcile: event $eventId gone -> delete todo $entryId")
+            runCatching { repo.delete(entryId) }.onSuccess { deleted++ }
+        }
 
         var added = 0
-        events.forEach { event ->
-            val source = "$SOURCE_PREFIX${event.calendarId}:${event.eventId}"
-            if (knownSources.containsValue(source)) return@forEach
+        instances.forEach { event ->
             val rawTitle = event.title?.trim().orEmpty()
             if (rawTitle.isEmpty()) return@forEach
             val isDone = rawTitle.startsWith(DONE_PREFIX)
-            val title = if (isDone) rawTitle.removePrefix(DONE_PREFIX).trim() else rawTitle
+            val title = rawTitle.removePrefix(DONE_PREFIX).trim()
             if (title.isEmpty()) return@forEach
-            // 跨日历 / 跨次去重：B 有时会把同一条待办同时写进多个日历
-            // （自己的「万象待办」+ 本地日历），按 (标题, 当天) 只导入一条。
+            val source = "$SOURCE_PREFIX${event.calendarId}:${event.eventId}"
+            if (source in claimedSources) return@forEach
+            // 跨日历去重：同一条待办的另一份（B 双写）不再导入。
             val dayKey = dayKeyOf(event.beginMs)
-            if (!mappedDayTitles.add(title to dayKey)) return@forEach
+            if (!claimedDayTitles.add(title to dayKey)) return@forEach
+            claimedSources += source
             val entry = repo.addText(title) ?: return@forEach
             meta.setTags(entry.id, listOf(StashMetaRepository.TODO_TAG_NAME))
             meta.setSource(entry.id, source)
             if (isDone) meta.setDone(entry.id, true)
             added++
         }
-        if (added > 0) {
-            // 条目/元数据都是 StateFlow，面板自动重组刷新，不需要额外刷新钩子。
-            CalendarSyncDebug.log(context, "imported $added calendar event(s) as todo")
-        }
+        CalendarSyncDebug.log(
+            context,
+            "sync done: events=${instances.size} added=$added doneSynced=$doneSynced " +
+                "remapped=$remapped deleted=$deleted",
+        )
         return added
     }
 
-    /**
-     * 对「已经映射过事件」的闪念条目做完成态对账，返回已映射事件的 (标题, 日期) 集合。
-     *
-     * 场景：C 从系统日历导入过一条待办（映射了 calendar:<cal>:<event>），之后用户在
-     * **万象待办 / 小米日历**里把它改成已完成 —— 事件标题前面多了 `[已完成] `。
-     * 这里把这个状态同步回闪念条目（否则 B 完成 → C 不完成）。
-     *
-     * 反之，如果事件标题上的前缀被去掉（B 取消完成），也把闪念条目恢复成未完成，
-     * 保持"事件是外部修改的权威来源"。
-     */
-    private suspend fun reconcileMappedEvents(
-        context: Context,
-        meta: StashMetaRepository,
+    /** 按 ID 查事件（含已映射但不在「今天+7天」窗口里的），拿到标题/日期/完成态。 */
+    private data class AliveEvent(val title: String, val dayKey: Long, val done: Boolean)
+
+    private fun queryEventsByIds(
         resolver: ContentResolver,
-        knownSources: Map<String, String>,
-    ): MutableSet<Pair<String, Long>> {
-        val dayTitles = HashSet<Pair<String, Long>>()
-        val eventIds = ArrayList<Long>()
-        val entryByEventId = HashMap<Long, String>()
-        knownSources.forEach { (entryId, source) ->
-            if (!source.startsWith(SOURCE_PREFIX)) return@forEach
-            val eventId = source.removePrefix(SOURCE_PREFIX).split(':').getOrNull(1)?.toLongOrNull()
-                ?: return@forEach
-            entryByEventId[eventId] = entryId
-            eventIds += eventId
-        }
-        if (eventIds.isEmpty()) return dayTitles
-        var flipped = 0
-        val foundEventIds = HashSet<Long>()
+        sources: List<String>,
+    ): Map<Long, AliveEvent> {
+        val eventIds = sources.mapNotNull {
+            if (!it.startsWith(SOURCE_PREFIX)) return@mapNotNull null
+            it.removePrefix(SOURCE_PREFIX).split(':').getOrNull(1)?.toLongOrNull()
+        }.distinct()
+        if (eventIds.isEmpty()) return emptyMap()
+        val result = HashMap<Long, AliveEvent>()
         eventIds.chunked(200).forEach { chunk ->
             val selection = CalendarContract.Events._ID + " IN (" + TextUtils.join(",", chunk) + ")"
             resolver.query(
@@ -303,7 +335,6 @@ object CalendarTodoSync {
                     CalendarContract.Events._ID,
                     CalendarContract.Events.TITLE,
                     CalendarContract.Events.DTSTART,
-                    CalendarContract.Events.ALL_DAY,
                 ),
                 selection,
                 null,
@@ -313,49 +344,20 @@ object CalendarTodoSync {
                 val titleIndex = cursor.getColumnIndexOrThrow(CalendarContract.Events.TITLE)
                 val startIndex = cursor.getColumnIndexOrThrow(CalendarContract.Events.DTSTART)
                 while (cursor.moveToNext()) {
-                    val eventId = cursor.getLong(idIndex)
-                    foundEventIds += eventId
                     val rawTitle = cursor.getString(titleIndex).orEmpty().trim()
                     if (rawTitle.isEmpty()) continue
                     val title = rawTitle.removePrefix(DONE_PREFIX).trim()
                     if (title.isEmpty()) continue
-                    val dayKey = dayKeyOf(cursor.getLong(startIndex))
-                    dayTitles += title to dayKey
-                    val entryId = entryByEventId[eventId] ?: continue
-                    val eventDone = rawTitle.startsWith(DONE_PREFIX)
-                    val localDone = meta.isDone(entryId)
-                    if (eventDone != localDone) {
-                        meta.setDone(entryId, eventDone)
-                        flipped++
-                    }
+                    result[cursor.getLong(idIndex)] = AliveEvent(
+                        title = title,
+                        dayKey = dayKeyOf(cursor.getLong(startIndex)),
+                        done = rawTitle.startsWith(DONE_PREFIX),
+                    )
                 }
             }
         }
-        if (flipped > 0) {
-            CalendarSyncDebug.log(context, "reconcile: $flipped todo(s) done-state synced from calendar")
-        }
-        // ── 删除对账（B 删除待办 → 闪念删除）──
-        // 事件查不到 = 被删（B/小米日历里删的）。**连续两次**同步都查不到才真删，
-        // 防"同步瞬间事件暂时不可见"把用户数据误删；事件又出现时计数清零。
-        val repo = StashAccess.repository
-        entryByEventId.forEach { (eventId, entryId) ->
-            if (eventId in foundEventIds) {
-                missingCounts.remove(eventId)
-                return@forEach
-            }
-            val count = (missingCounts[eventId] ?: 0) + 1
-            missingCounts[eventId] = count
-            if (count >= 2 && repo != null) {
-                missingCounts.remove(eventId)
-                CalendarSyncDebug.log(context, "reconcile: event $eventId gone -> delete todo $entryId")
-                runCatching { repo.delete(entryId) }
-            }
-        }
-        return dayTitles
+        return result
     }
-
-    /** eventId → 连续查不到的次数（删除对账用）。 */
-    private val missingCounts = HashMap<Long, Int>()
 
     /** 日期键（本地时区的"哪一天"）：跨日历去重用。 */
     private fun dayKeyOf(epochMs: Long): Long {
