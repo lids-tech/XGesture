@@ -7,6 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -1192,7 +1195,8 @@ fun HistoryPanelScreen(
                 indication = null,
                 onClick = onDismiss,
             ),
-        contentAlignment = if (gravityEnd) Alignment.CenterEnd else Alignment.CenterStart,
+        // 高度从**顶部**往下调：面板顶边跟手指、底边贴屏幕底，所以这里顶对齐。
+        contentAlignment = if (gravityEnd) Alignment.TopEnd else Alignment.TopStart,
     ) {
         // 设计稿是 26dp（--r-2xl），且只圆内侧。
         // ── 高度比例（1f = 满屏高；<1 时面板垂直居中、上下留空）──
@@ -1519,56 +1523,48 @@ fun HistoryPanelScreen(
                     modifier = Modifier.align(Alignment.BottomEnd),
                 )
             }
-
-            var handleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-            // 边缘宽度调节小手柄（小竖条，贴合屏幕内侧边缘）
+            // ── 缩放手柄：左上角一颗按钮，**同时**拖宽/高 ──
+            // 高度按"从上往下"：顶边跟手指、底边贴屏幕底。
+            var resizeHandleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
             Box(
                 modifier = Modifier
-                    .align(if (gravityEnd) Alignment.CenterStart else Alignment.CenterEnd)
-                    .zIndex(20f)
-                    .size(width = 28.dp, height = 72.dp)
-                    .onGloballyPositioned { handleCoordinates = it }
-                    .pointerInput(gravityEnd, maxWidthPx) {
-                        var initialTouchFraction = 0f
-                        var initialPanelFraction = 0f
+                    .align(if (gravityEnd) Alignment.TopStart else Alignment.TopEnd)
+                    .padding(
+                        top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 6.dp,
+                        start = if (gravityEnd) 10.dp else 0.dp,
+                        end = if (gravityEnd) 0.dp else 10.dp,
+                    )
+                    .zIndex(30f)
+                    .size(34.dp)
+                    .onGloballyPositioned { resizeHandleCoordinates = it }
+                    .pointerInput(gravityEnd, maxWidthPx, maxHeightPx) {
                         detectDragGestures(
-                            onDragStart = { offset ->
+                            onDragStart = {
                                 isResizing = true
-                                initialPanelFraction = dynamicFraction
-                                val coords = handleCoordinates
-                                val rootX = if (coords != null && coords.isAttached) {
-                                    coords.localToRoot(offset).x
-                                } else {
-                                    if (gravityEnd) maxWidthPx - (maxWidthPx * dynamicFraction) else maxWidthPx * dynamicFraction
-                                }
-                                initialTouchFraction = if (gravityEnd) {
-                                    (maxWidthPx - rootX) / maxWidthPx
-                                } else {
-                                    rootX / maxWidthPx
-                                }
                             },
                             onDragEnd = {
                                 isResizing = false
-                                val finalFraction = when {
+                                // 宽度接近两个预设档位时吸附，否则按自定义比例存。
+                                val finalWidth = when {
                                     abs(dynamicFraction - StashPanelWidthMode.COMPACT.fraction) < 0.025f ->
                                         StashPanelWidthMode.COMPACT.fraction
                                     abs(dynamicFraction - StashPanelWidthMode.STANDARD.fraction) < 0.025f ->
                                         StashPanelWidthMode.STANDARD.fraction
                                     else -> dynamicFraction
                                 }
-                                if (finalFraction != dynamicFraction) {
-                                    dynamicFraction = finalFraction
-                                    haptics.confirm()
-                                }
+                                // 高度接近满屏就吸附回 1（否则会留一条看不出来的缝）。
+                                val finalHeight = if (dynamicHeightFraction > 0.97f) 1f else dynamicHeightFraction
+                                dynamicFraction = finalWidth
+                                dynamicHeightFraction = finalHeight
+                                haptics.confirm()
                                 scope.launch(Dispatchers.IO) {
-                                    if (finalFraction == StashPanelWidthMode.COMPACT.fraction) {
-                                        com.slideindex.app.overlay.panels.PanelStashWriteHooks.setStashPanelWidthMode?.invoke(0)
-                                    } else if (finalFraction == StashPanelWidthMode.STANDARD.fraction) {
-                                        com.slideindex.app.overlay.panels.PanelStashWriteHooks.setStashPanelWidthMode?.invoke(1)
-                                    } else {
-                                        com.slideindex.app.overlay.panels.PanelStashWriteHooks
-                                            .setStashPanelCustomWidthFraction?.invoke(finalFraction)
+                                    val hooks = com.slideindex.app.overlay.panels.PanelStashWriteHooks
+                                    when (finalWidth) {
+                                        StashPanelWidthMode.COMPACT.fraction -> hooks.setStashPanelWidthMode?.invoke(0)
+                                        StashPanelWidthMode.STANDARD.fraction -> hooks.setStashPanelWidthMode?.invoke(1)
+                                        else -> hooks.setStashPanelCustomWidthFraction?.invoke(finalWidth)
                                     }
+                                    hooks.setStashPanelHeightFraction?.invoke(finalHeight)
                                 }
                             },
                             onDragCancel = {
@@ -1576,113 +1572,58 @@ fun HistoryPanelScreen(
                             },
                             onDrag = { change, _ ->
                                 change.consume()
-                                val coords = handleCoordinates
+                                val coords = resizeHandleCoordinates
                                 if (coords != null && coords.isAttached) {
-                                    val rootX = coords.localToRoot(change.position).x
-                                    val currentTouchFraction = if (gravityEnd) {
-                                        (maxWidthPx - rootX) / maxWidthPx
-                                    } else {
-                                        rootX / maxWidthPx
-                                    }
-                                    val deltaFraction = currentTouchFraction - initialTouchFraction
-                                    dynamicFraction = (initialPanelFraction + deltaFraction).coerceIn(0.35f, 0.96f)
+                                    val root = coords.localToRoot(change.position)
+                                    // 宽度：从面板所贴的那条屏幕边算起（右贴边 = 屏宽 − x）。
+                                    val widthPx = if (gravityEnd) maxWidthPx - root.x else root.x
+                                    dynamicFraction = (widthPx / maxWidthPx).coerceIn(0.35f, 0.96f)
+                                    // 高度：顶边跟手指（从上往下调），底边固定贴屏幕底。
+                                    val heightPx = maxHeightPx - root.y
+                                    dynamicHeightFraction = (heightPx / maxHeightPx).coerceIn(0.4f, 1f)
                                 }
                             }
                         )
                     },
-                contentAlignment = if (gravityEnd) Alignment.CenterStart else Alignment.CenterEnd,
+                contentAlignment = Alignment.Center,
             ) {
-                // 小竖条本体（精致胶囊条，贴紧内侧边缘 1.5dp）
+                // 小圆角方块 + 两道斜线（缩放提示），半透明不抢镜。
                 Box(
                     modifier = Modifier
-                        .padding(start = if (gravityEnd) 1.5.dp else 0.dp, end = if (!gravityEnd) 1.5.dp else 0.dp)
-                        .width(if (isResizing) 5.dp else 4.dp)
-                        .height(if (isResizing) 42.dp else 36.dp)
+                        .size(if (isResizing) 30.dp else 26.dp)
                         .background(
                             color = if (isResizing) {
-                                theme.accent
+                                theme.accent.copy(alpha = 0.9f)
                             } else if (theme.isDark) {
-                                Color.White.copy(alpha = 0.55f)
+                                Color.White.copy(alpha = 0.28f)
                             } else {
-                                Color.Black.copy(alpha = 0.32f)
+                                Color.Black.copy(alpha = 0.18f)
                             },
-                            shape = RoundedCornerShape(2.dp)
+                            shape = RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.foundation.Canvas(modifier = Modifier.size(14.dp)) {
+                        val stroke = 1.6.dp.toPx()
+                        val lineColor = if (theme.isDark) {
+                            Color.White.copy(alpha = 0.85f)
+                        } else {
+                            Color.Black.copy(alpha = 0.6f)
+                        }
+                        drawLine(
+                            color = lineColor,
+                            start = androidx.compose.ui.geometry.Offset(size.width * 0.18f, size.height * 0.18f),
+                            end = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.82f),
+                            strokeWidth = stroke,
                         )
-                )
-            }
-
-            var heightHandleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-            // 底部高度调节小手柄（小横条，贴面板底边内侧）：拖动改变高度比例。
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .zIndex(30f)
-                    // 整条底边窄带都吃竖直拖动：小圆点太难抓，用户反馈"拖不动"。
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .pointerInput(maxHeightPx) {
-                        detectDragGestures(
-                            onDragStart = { _ ->
-                                android.util.Log.i(
-                                    "StashHeightDrag",
-                                    "start maxHeightPx=" + maxHeightPx + " dyn=" + dynamicHeightFraction,
-                                )
-                                isHeightResizing = true
-                            },
-                            onDragEnd = {
-                                isHeightResizing = false
-                                // 接近满屏就吸附到 1（不然留 1~2px 的缝看不出来也调不回去）。
-                                val finalFraction = if (dynamicHeightFraction > 0.97f) 1f else dynamicHeightFraction
-                                android.util.Log.i(
-                                    "StashHeightDrag",
-                                    "end final=" + (if (dynamicHeightFraction > 0.97f) 1f else dynamicHeightFraction),
-                                )
-                                if (finalFraction != dynamicHeightFraction) {
-                                    dynamicHeightFraction = finalFraction
-                                    haptics.confirm()
-                                }
-                                scope.launch(Dispatchers.IO) {
-                                    com.slideindex.app.overlay.panels.PanelStashWriteHooks
-                                        .setStashPanelHeightFraction?.invoke(finalFraction)
-                                }
-                            },
-                            onDragCancel = {
-                                isHeightResizing = false
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                val coords = heightHandleCoordinates
-                                if (coords != null && coords.isAttached) {
-                                    // 面板垂直居中：底边 y = (H + H·f) / 2 → f = 2y/H − 1。
-                                    val bottomY = coords.localToRoot(change.position).y
-                                    android.util.Log.i(
-                                        "StashHeightDrag",
-                                        "drag bottomY=" + bottomY + " f=" + (2f * bottomY / maxHeightPx - 1f),
-                                    )
-                                    dynamicHeightFraction = (2f * bottomY / maxHeightPx - 1f)
-                                        .coerceIn(0.4f, 1f)
-                                }
-                            }
+                        drawLine(
+                            color = lineColor,
+                            start = androidx.compose.ui.geometry.Offset(size.width * 0.55f, size.height * 0.18f),
+                            end = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.45f),
+                            strokeWidth = stroke,
                         )
-                    },
-                contentAlignment = Alignment.BottomCenter,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .padding(bottom = 6.dp)
-                        .width(if (isHeightResizing) 42.dp else 36.dp)
-                        .height(if (isHeightResizing) 5.dp else 4.dp)
-                        .background(
-                            color = if (isHeightResizing) {
-                                theme.accent
-                            } else if (theme.isDark) {
-                                Color.White.copy(alpha = 0.55f)
-                            } else {
-                                Color.Black.copy(alpha = 0.32f)
-                            },
-                            shape = RoundedCornerShape(2.dp)
-                        )
-                )
+                    }
+                }
             }
         }
 
