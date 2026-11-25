@@ -239,7 +239,14 @@ object CalendarTodoSync {
                             // 方案 A：没有提醒 → 当天全天事件。
                             // 全天事件的时间戳按**本地时区的当天 0 点**写，时区也写本地
                             // （之前写 UTC，MIUI 上会把全天事件显示成前一天）。
-                            put(CalendarContract.Events.DTSTART, startOfTodayMs())
+                            //
+                            // ⚠️ 全天事件**也必须给 DTEND**：日历 provider 会校验
+                            // "DTEND and DURATION cannot both be null for an event"，
+                            // 只给 DTSTART 会被直接拒绝（真机 logcat 实锤）。
+                            // 全天事件的结束时间是**独占**的，所以 = 开始 + 1 天。
+                            val dayStart = startOfTodayMs()
+                            put(CalendarContract.Events.DTSTART, dayStart)
+                            put(CalendarContract.Events.DTEND, dayStart + DAY_MS)
                             put(CalendarContract.Events.ALL_DAY, 1)
                             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
                         }
