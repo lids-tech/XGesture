@@ -998,7 +998,12 @@ fun HistoryPanelScreen(
         // 待办 → 系统日历（用户需求）：新待办写一条事件。
         // 时间口径方案 A：有提醒 → 用提醒时间；没有提醒 → 当天全天事件。
         // 导入出来的条目带 `calendar:` 来源，`pushTodoToCalendar` 内部会跳过，不会重复建。
-        if (com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME in composerTags) {
+        val savedTags = composerTags
+        android.util.Log.i(
+            "CalendarTodoSync",
+            "onComposerSaved entry=$newEntryId tags=$savedTags reminder=$composerReminderAt",
+        )
+        if (com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME in savedTags) {
             val reminderAt = composerReminderAt
             scope.launch {
                 com.slideindex.app.stash.CalendarTodoSync.pushTodoToCalendar(

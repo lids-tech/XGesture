@@ -70,7 +70,10 @@ object CalendarTodoSync {
      * @return 本次新增的待办条数；无权限/查询失败返回 0。
      */
     suspend fun syncFromCalendar(context: Context, force: Boolean = false): Int {
-        if (!hasPermission(context)) return 0
+        if (!hasPermission(context)) {
+            Log.i(TAG, "sync skipped: no calendar permission")
+            return 0
+        }
         val now = System.currentTimeMillis()
         if (!force && now - lastSyncAtMs < MIN_SYNC_INTERVAL_MS) return 0
         lastSyncAtMs = now
@@ -87,15 +90,23 @@ object CalendarTodoSync {
         val resolver = context.contentResolver
 
         val calendarIds = writableOrVisibleCalendarIds(resolver)
-        if (calendarIds.isEmpty()) return 0
+        if (calendarIds.isEmpty()) {
+            Log.i(TAG, "import: no readable calendars")
+            return 0
+        }
 
         val beginMs = startOfTodayMs()
         val endMs = beginMs + IMPORT_DAYS * DAY_MS
         // 已有来源的条目不重复导入（含此前导入过、以及用户自己写进日历的待办）。
         val knownSources = meta.store.value.sources // entryId -> source
+        val events = queryInstances(resolver, calendarIds, beginMs, endMs)
+        Log.i(
+            TAG,
+            "import: calendars=${calendarIds.size} events=${events.size} known=${knownSources.size}",
+        )
 
         var added = 0
-        queryInstances(resolver, calendarIds, beginMs, endMs).forEach { event ->
+        events.forEach { event ->
             val source = "$SOURCE_PREFIX${event.calendarId}:${event.eventId}"
             if (knownSources.containsValue(source)) return@forEach
             val rawTitle = event.title?.trim().orEmpty()
@@ -129,43 +140,79 @@ object CalendarTodoSync {
         title: String,
         reminderAtMs: Long?,
     ): Long? {
-        if (!hasPermission(context)) return null
-        val meta = StashAccess.metaRepository ?: return null
-        if (meta.sourceOf(entryId)?.startsWith(SOURCE_PREFIX) == true) return null
-        val cleanTitle = title.trim().ifEmpty { return null }
+        if (!hasPermission(context)) {
+            Log.i(TAG, "push skipped: no calendar permission")
+            return null
+        }
+        val meta = StashAccess.metaRepository
+        if (meta == null) {
+            Log.i(TAG, "push skipped: meta repository unavailable")
+            return null
+        }
+        if (meta.sourceOf(entryId)?.startsWith(SOURCE_PREFIX) == true) {
+            Log.i(TAG, "push skipped: entry $entryId already has calendar source")
+            return null
+        }
+        val cleanTitle = title.trim()
+        if (cleanTitle.isEmpty()) {
+            Log.i(TAG, "push skipped: empty title")
+            return null
+        }
         return withContext(Dispatchers.IO) {
             runCatching {
                 val resolver = context.applicationContext.contentResolver
-                val calendarId = targetWritableCalendarId(resolver) ?: return@withContext null
-                val values = ContentValues().apply {
-                    put(CalendarContract.Events.CALENDAR_ID, calendarId)
-                    put(CalendarContract.Events.TITLE, cleanTitle)
-                    put(
-                        CalendarContract.Events.DESCRIPTION,
-                        "闪念待办 · xg-stash-entry:$entryId",
-                    )
-                    if (reminderAtMs != null) {
-                        put(CalendarContract.Events.DTSTART, reminderAtMs)
-                        put(CalendarContract.Events.DTEND, reminderAtMs + 30 * 60_000L)
-                        put(CalendarContract.Events.ALL_DAY, 0)
-                        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
-                    } else {
-                        // 方案 A：没有提醒 → 当天全天事件。
-                        val dayStart = startOfTodayMs()
-                        put(CalendarContract.Events.DTSTART, dayStart)
-                        put(CalendarContract.Events.ALL_DAY, 1)
-                        put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
-                    }
-                    put(CalendarContract.Events.HAS_ALARM, if (reminderAtMs != null) 1 else 0)
+                val candidates = writableCalendarCandidates(resolver)
+                Log.i(
+                    TAG,
+                    "push entry=$entryId title=${cleanTitle.take(30)} candidates=" +
+                        candidates.joinToString { "${it.id}:${it.name}(${it.accountType})" },
+                )
+                if (candidates.isEmpty()) {
+                    Log.w(TAG, "push failed: no writable calendar")
+                    return@withContext null
                 }
-                val uri = resolver.insert(CalendarContract.Events.CONTENT_URI, values)
-                    ?: return@withContext null
-                val eventId = ContentUris.parseId(uri)
-                meta.setSource(entryId, "$SOURCE_PREFIX$calendarId:$eventId")
-                Log.i(TAG, "pushed entry $entryId -> event $calendarId:$eventId")
-                eventId
+                // 依次尝试：优先本地日历（MIUI 日历一定显示），失败再换下一个。
+                for (calendar in candidates) {
+                    val values = ContentValues().apply {
+                        put(CalendarContract.Events.CALENDAR_ID, calendar.id)
+                        put(CalendarContract.Events.TITLE, cleanTitle)
+                        put(
+                            CalendarContract.Events.DESCRIPTION,
+                            "闪念待办 · xg-stash-entry:$entryId",
+                        )
+                        if (reminderAtMs != null) {
+                            put(CalendarContract.Events.DTSTART, reminderAtMs)
+                            put(CalendarContract.Events.DTEND, reminderAtMs + 30 * 60_000L)
+                            put(CalendarContract.Events.ALL_DAY, 0)
+                            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+                        } else {
+                            // 方案 A：没有提醒 → 当天全天事件。
+                            // 全天事件的时间戳按**本地时区的当天 0 点**写，时区也写本地
+                            // （之前写 UTC，MIUI 上会把全天事件显示成前一天）。
+                            put(CalendarContract.Events.DTSTART, startOfTodayMs())
+                            put(CalendarContract.Events.ALL_DAY, 1)
+                            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+                        }
+                        put(CalendarContract.Events.HAS_ALARM, if (reminderAtMs != null) 1 else 0)
+                    }
+                    val uri = runCatching {
+                        resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+                    }.onFailure {
+                        Log.w(TAG, "insert into ${calendar.name}(${calendar.id}) failed: ${it.message}", it)
+                    }.getOrNull() ?: continue
+                    val eventId = ContentUris.parseId(uri)
+                    meta.setSource(entryId, "$SOURCE_PREFIX${calendar.id}:$eventId")
+                    Log.i(
+                        TAG,
+                        "pushed entry $entryId -> event ${calendar.id}:$eventId " +
+                            "calendar=${calendar.name}",
+                    )
+                    return@withContext eventId
+                }
+                Log.w(TAG, "push failed: all candidate calendars rejected the insert")
+                null
             }.onFailure {
-                Log.w(TAG, "pushTodoToCalendar failed: ${it.message}", it)
+                Log.w(TAG, "pushTodoToCalendar crashed: ${it.message}", it)
             }.getOrNull()
         }
     }
@@ -239,10 +286,16 @@ object CalendarTodoSync {
         return result
     }
 
-    /** 写入目标：优先主日历，其次第一个可写日历（不自建日历，用户要求用系统日历）。 */
-    private fun targetWritableCalendarId(resolver: ContentResolver): Long? {
-        var primary: Long? = null
-        var firstWritable: Long? = null
+    /** 写入目标：优先**本地日历**（MIUI 日历必定显示）、其次主日历、最后第一个可写日历。 */
+    private data class CalendarCandidate(
+        val id: Long,
+        val name: String,
+        val accountType: String,
+        val isLocal: Boolean,
+    )
+
+    private fun writableCalendarCandidates(resolver: ContentResolver): List<CalendarCandidate> {
+        val all = ArrayList<CalendarCandidate>()
         resolver.query(
             CalendarContract.Calendars.CONTENT_URI,
             arrayOf(
@@ -250,6 +303,7 @@ object CalendarTodoSync {
                 CalendarContract.Calendars.IS_PRIMARY,
                 CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
                 CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+                CalendarContract.Calendars.ACCOUNT_TYPE,
             ),
             null,
             null,
@@ -259,19 +313,46 @@ object CalendarTodoSync {
             val primaryIndex = cursor.getColumnIndex(CalendarContract.Calendars.IS_PRIMARY)
             val accessIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL)
             val nameIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+            val accountIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_TYPE)
             while (cursor.moveToNext()) {
                 val writable =
                     cursor.getInt(accessIndex) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR
                 if (!writable) continue
-                val id = cursor.getLong(idIndex)
                 val name = cursor.getString(nameIndex).orEmpty()
                 if (EXCLUDED_CALENDAR_NAME.matcher(name).find()) continue
-                if (primary == null && primaryIndex >= 0 && cursor.getInt(primaryIndex) == 1) primary = id
-                if (firstWritable == null) firstWritable = id
+                val accountType = cursor.getString(accountIndex).orEmpty()
+                all += CalendarCandidate(
+                    id = cursor.getLong(idIndex),
+                    name = name,
+                    accountType = accountType,
+                    isLocal = accountType.equals(CalendarContract.ACCOUNT_TYPE_LOCAL, ignoreCase = true) ||
+                        accountType.contains("local", ignoreCase = true),
+                )
             }
         }
-        return primary ?: firstWritable
+        // 排序：本地 → 主日历 → 其余（保持查询顺序）。
+        val primaryIds = HashSet<Long>()
+        runCatching {
+            resolver.query(
+                CalendarContract.Calendars.CONTENT_URI,
+                arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.IS_PRIMARY),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars._ID)
+                val primaryIndex = cursor.getColumnIndex(CalendarContract.Calendars.IS_PRIMARY)
+                while (cursor.moveToNext()) {
+                    if (cursor.getInt(primaryIndex) == 1) primaryIds += cursor.getLong(idIndex)
+                }
+            }
+        }
+        return all.sortedWith(
+            compareByDescending<CalendarCandidate> { it.isLocal }
+                .thenByDescending { primaryIds.contains(it.id) },
+        )
     }
+
 
     private fun queryInstances(
         resolver: ContentResolver,
