@@ -100,6 +100,89 @@ object CalendarTodoSync {
         }
     }
 
+    /** 待运行的"删事件"任务（entryId → Job）：撤销窗口内可取消。 */
+    private val pendingEventDeletions = HashMap<String, kotlinx.coroutines.Job>()
+
+    /**
+     * C 删除待办 → 系统日历事件也删（B/A 那边随之消失）。
+     *
+     * ⚠️ **延迟删除**：闪念删除有"撤销"提示，立刻删事件的话撤销就救不回来了。
+     * 这里延迟 [delayMs]（默认 6 秒）再删；用户点撤销就调 [cancelScheduledEventDeletion]。
+     *
+     * @param source 删除**之前**读到的来源（`calendar:<calId>:<eventId>`）；不是日历来源则忽略。
+     */
+    fun scheduleEventDeletionForEntry(
+        context: Context,
+        entryId: String,
+        source: String?,
+        delayMs: Long = 6_000L,
+    ) {
+        if (source == null || !source.startsWith(SOURCE_PREFIX)) return
+        val appContext = context.applicationContext
+        pendingEventDeletions.remove(entryId)?.cancel()
+        CalendarSyncDebug.log(appContext, "delete scheduled entry=$entryId source=$source delay=${delayMs}ms")
+        pendingEventDeletions[entryId] = ioScope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            runCatching {
+                deleteEventForSource(appContext, entryId, source)
+            }.onFailure {
+                CalendarSyncDebug.log(appContext, "deleteEventForSource threw: ${it.message}")
+            }
+            pendingEventDeletions.remove(entryId)
+        }
+    }
+
+    /** 用户在撤销窗口里点了"撤销"：取消待执行的删事件。 */
+    fun cancelScheduledEventDeletion(context: Context, entryId: String) {
+        val job = pendingEventDeletions.remove(entryId) ?: return
+        job.cancel()
+        CalendarSyncDebug.log(context.applicationContext, "delete cancelled (undo) entry=$entryId")
+    }
+
+    /**
+     * 真正删事件。
+     *
+     * **安全规则**：只删「待办性质」的事件 ——
+     * - C 自己创建的（description 里有我们的标记 `xg-stash-entry:`）；
+     * - B（万象待办）创建的（mutators 是万象小组件）。
+     * 用户自己在小米日历里建的**真实日程**（生日/会议等）被 C 当待办导入后，
+     * 在闪念里删除时**只删本地待办、不动日历事件**，避免误删真实日程。
+     */
+    private suspend fun deleteEventForSource(context: Context, entryId: String, source: String) {
+        val parts = source.removePrefix(SOURCE_PREFIX).split(':')
+        val eventId = parts.getOrNull(1)?.toLongOrNull() ?: return
+        val resolver = context.contentResolver
+        val eventUri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+        val description = resolver.query(
+            eventUri,
+            arrayOf(CalendarContract.Events.DESCRIPTION, CalendarContract.Events.MUTATORS),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                cursor.getString(0).orEmpty() to cursor.getString(1).orEmpty()
+            } else {
+                "" to ""
+            }
+        } ?: return
+        val (desc, mutators) = description
+        val createdByC = desc.contains("xg-stash-entry:")
+        val createdByB = mutators.contains("wanxiang", ignoreCase = true)
+        if (!createdByC && !createdByB) {
+            CalendarSyncDebug.log(
+                context,
+                "delete skipped (真实日程): entry=$entryId event=$eventId mutators=$mutators",
+            )
+            return
+        }
+        val rows = resolver.delete(eventUri, null, null)
+        CalendarSyncDebug.log(
+            context,
+            "delete event $eventId (C=$createdByC B=$createdByB) rows=$rows entry=$entryId",
+        )
+    }
+
     /** 是否已授予读写日历权限。 */
     fun hasPermission(context: Context): Boolean {
         val read = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR)
@@ -211,6 +294,7 @@ object CalendarTodoSync {
         }
         if (eventIds.isEmpty()) return dayTitles
         var flipped = 0
+        val foundEventIds = HashSet<Long>()
         eventIds.chunked(200).forEach { chunk ->
             val selection = CalendarContract.Events._ID + " IN (" + TextUtils.join(",", chunk) + ")"
             resolver.query(
@@ -230,6 +314,7 @@ object CalendarTodoSync {
                 val startIndex = cursor.getColumnIndexOrThrow(CalendarContract.Events.DTSTART)
                 while (cursor.moveToNext()) {
                     val eventId = cursor.getLong(idIndex)
+                    foundEventIds += eventId
                     val rawTitle = cursor.getString(titleIndex).orEmpty().trim()
                     if (rawTitle.isEmpty()) continue
                     val title = rawTitle.removePrefix(DONE_PREFIX).trim()
@@ -249,8 +334,28 @@ object CalendarTodoSync {
         if (flipped > 0) {
             CalendarSyncDebug.log(context, "reconcile: $flipped todo(s) done-state synced from calendar")
         }
+        // ── 删除对账（B 删除待办 → 闪念删除）──
+        // 事件查不到 = 被删（B/小米日历里删的）。**连续两次**同步都查不到才真删，
+        // 防"同步瞬间事件暂时不可见"把用户数据误删；事件又出现时计数清零。
+        val repo = StashAccess.repository
+        entryByEventId.forEach { (eventId, entryId) ->
+            if (eventId in foundEventIds) {
+                missingCounts.remove(eventId)
+                return@forEach
+            }
+            val count = (missingCounts[eventId] ?: 0) + 1
+            missingCounts[eventId] = count
+            if (count >= 2 && repo != null) {
+                missingCounts.remove(eventId)
+                CalendarSyncDebug.log(context, "reconcile: event $eventId gone -> delete todo $entryId")
+                runCatching { repo.delete(entryId) }
+            }
+        }
         return dayTitles
     }
+
+    /** eventId → 连续查不到的次数（删除对账用）。 */
+    private val missingCounts = HashMap<Long, Int>()
 
     /** 日期键（本地时区的"哪一天"）：跨日历去重用。 */
     private fun dayKeyOf(epochMs: Long): Long {

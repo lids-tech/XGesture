@@ -858,11 +858,22 @@ fun HistoryPanelScreen(
     val deleteEntry: (com.slideindex.app.stash.StashEntry) -> Unit = { entry ->
         val index = stashEntries.indexOfFirst { it.id == entry.id }
         val reminderAt = stashMeta.reminderOf(entry.id)
+        // ⚠️ 日历来源要在删除**之前**读（`delete` 会 forget 掉 meta，包括 sources）。
+        val calendarSource = stashMeta.sourceOf(entry.id)
         haptics.confirm()
         scope.launch {
             com.slideindex.app.overlay.panels.PanelStashWriteHooks.reminderCancel?.cancel(appContext, entry.id)
             stashRepo?.delete(entry.id)
+            // C 删除待办 → 对应日历事件也删（B/A 随之消失）。
+            // 延迟 6 秒（撤销窗口）执行；下面撤销回调里会取消它。
+            com.slideindex.app.stash.CalendarTodoSync.scheduleEventDeletionForEntry(
+                context = appContext,
+                entryId = entry.id,
+                source = calendarSource,
+            )
             showUndoMessage(R.string.stash_deleted) {
+                // 撤销：别删事件了。
+                com.slideindex.app.stash.CalendarTodoSync.cancelScheduledEventDeletion(appContext, entry.id)
                 scope.launch {
                     stashRepo?.restore(entry, index.coerceAtLeast(0))
                     // 撤销删除时把提醒也排回来（meta 里的 reminders 已被 forget 清掉，所以重设）
