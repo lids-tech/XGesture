@@ -946,11 +946,15 @@ fun HistoryPanelScreen(
                 if (reminderAt != null) metaRepo?.setReminder(entry.id, null)
             }
             metaRepo?.setDone(entry.id, done)
+            // 完成联动（用户需求）：闪念里点完成 → 系统日历对应事件的标题加 `[已完成]` 前缀；
+            // 取消完成则把前缀去掉。只有带 `calendar:` 来源的条目才有对应事件，其余静默跳过。
+            com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendar(appContext, entry.id, done)
             showUndoMessage(
                 if (done) R.string.stash_done_marked else R.string.stash_undone_marked,
             ) {
                 scope.launch {
                     metaRepo?.setDone(entry.id, !done)
+                    com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendar(appContext, entry.id, !done)
                     if (done && reminderAt != null && reminderAt > System.currentTimeMillis()) {
                         metaRepo?.setReminder(entry.id, reminderAt)
                         com.slideindex.app.overlay.panels.PanelStashWriteHooks.reminderSchedule?.schedule(
@@ -990,6 +994,20 @@ fun HistoryPanelScreen(
         }
         showUndoMessage(R.string.stash_saved) {
             scope.launch { stashRepo?.delete(newEntryId) }
+        }
+        // 待办 → 系统日历（用户需求）：新待办写一条事件。
+        // 时间口径方案 A：有提醒 → 用提醒时间；没有提醒 → 当天全天事件。
+        // 导入出来的条目带 `calendar:` 来源，`pushTodoToCalendar` 内部会跳过，不会重复建。
+        if (com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME in composerTags) {
+            val reminderAt = composerReminderAt
+            scope.launch {
+                com.slideindex.app.stash.CalendarTodoSync.pushTodoToCalendar(
+                    context = appContext,
+                    entryId = newEntryId,
+                    title = text,
+                    reminderAtMs = reminderAt,
+                )
+            }
         }
     }
     val onComposerDone: (Boolean) -> Unit = { success ->
@@ -1153,6 +1171,14 @@ fun HistoryPanelScreen(
         if (!panelTargetVisible) return@LaunchedEffect
         reconcileReminders()
         StashReminderPendingState.refresh(appContext)
+        // 待办 ↔ 系统日历同步（用户 2026-11 需求）：面板打开瞬间补一次
+        // 「今天 + 未来 7 天」的日程为待办。没权限时第一次拉一次授权对话框
+        // （只弹一次，overlay 窗自己弹不了系统对话框，走 CalendarSyncPermissionActivity）。
+        if (com.slideindex.app.stash.CalendarSyncPermissionActivity.requestIfNeeded(appContext)) {
+            // 这次只弹权限，同步等授权后的下一次打开（拿到权限前查表只会白跑）。
+        } else {
+            com.slideindex.app.stash.CalendarTodoSync.syncFromCalendar(appContext)
+        }
     }
 
     /**

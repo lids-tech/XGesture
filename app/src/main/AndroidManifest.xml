@@ -19,6 +19,9 @@
     <!-- 闪念语音输入：overlay 在后台要拿麦克风，必须前台服务 + microphone 类型 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- 闪念待办 ↔ 系统日历同步（读取日程 + 写入事件/完成前缀） -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.READ_LOGS"
@@ -994,6 +997,15 @@
 
         <activity
             android:name=".voice.StashVoicePermissionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SlideIndex.Transparent" />
+
+        <activity
+            android:name="com.slideindex.app.stash.CalendarSyncPermissionActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTask"
