@@ -347,6 +347,8 @@ fun HistoryStashEntryCard(
     onSetDone: (Boolean) -> Unit = {},
     /** 刚存下的那条：播一次高亮环（设计稿 `.item.flash`）。 */
     flash: Boolean = false,
+    /** 待办页签：隐藏卡片底部那枚「待办」标签 chip（每条都有，纯重复，省一行空间）。 */
+    hideTodoTagRow: Boolean = false,
     /** 这条的时间档（今天 / 昨天 / 更早）：设计稿按档换卡片观感，见 `HistoryPanelColors`。 */
     dayGroup: HistoryDayGroup? = null,
     haptics: HistoryHaptics = rememberHistoryHaptics(),
@@ -588,7 +590,13 @@ fun HistoryStashEntryCard(
                 HistoryCardAppendBlock(text = append.text)
             }
             // 底部一行（设计稿 `.item .box .foot`）：来源 chip + 标签 chip。
-            HistoryCardFootRow(sourceLabel = sourceLabel, tags = tagChips)
+            // 待办页签里每条都挂着「待办」，那枚 chip 纯属重复 → 过滤掉（没有别的 chip 时整行自动消失）。
+            val visibleTagChips = if (hideTodoTagRow) {
+                tagChips.filter { (name, _) -> name != StashMetaRepository.TODO_TAG_NAME }
+            } else {
+                tagChips
+            }
+            HistoryCardFootRow(sourceLabel = sourceLabel, tags = visibleTagChips)
         },
         actions = {
             // 设计稿 `.acts` 的行内动作只有「主状态 + 复制」，其余进 ⋮：
@@ -631,23 +639,22 @@ fun HistoryStashEntryCard(
                 glyphSize = 20.dp,
                 modifier = Modifier.offset(x = -HistoryActsOffsetX),
             )
+            // 「编辑」从 ⋮ 里挪到复制按钮右边（用户要求：常用动作不该藏在更多里）。
+            HistoryCardActionIcon(
+                icon = Icons.Outlined.Edit,
+                contentDescription = stringResource(R.string.stash_action_edit),
+                onClick = {
+                    haptics.tick()
+                    onEdit()
+                },
+                glyphSize = 20.dp,
+                modifier = Modifier.offset(x = -HistoryActsOffsetX),
+            )
             Spacer(modifier = Modifier.weight(1f))
             HistoryCardOverflowMenu(
                 contentDescription = moreLabel,
                 actions = buildList {
                     // 设计稿的 ⋮：加星标 / 进入取词 / 钉在屏幕 / 分享 / 保存图片 / —— / 删除。
-                    // 我们多一项「编辑」：设计稿是从卡片本体点开编辑条，那和"点卡片展开/收起"
-                    // 冲突（App 既有行为），所以搬到 ⋮ 里更稳妥。
-                    add(
-                        HistoryCardMenuAction(
-                            label = stringResource(R.string.stash_action_edit),
-                            icon = Icons.Outlined.Edit,
-                            onClick = {
-                                haptics.tick()
-                                onEdit()
-                            },
-                        ),
-                    )
                     add(
                         HistoryCardMenuAction(
                             label = stringResource(

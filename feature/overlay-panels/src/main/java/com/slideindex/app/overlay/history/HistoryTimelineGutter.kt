@@ -155,6 +155,8 @@ fun HistoryTimelineEntryRow(
     staggerDelayMs: Int = 0,
     reminderAtMs: Long? = null,
     reminderOverdue: Boolean = false,
+    /** 待办页签：时间轴按「日」算 —— 今天的条目不细分成 时:分（分组表头已经写了今天）。 */
+    dayOnlyTime: Boolean = false,
     card: @Composable () -> Unit,
 ) {
     val theme = historyTheme()
@@ -203,11 +205,16 @@ fun HistoryTimelineEntryRow(
                 .fillMaxWidth()
                 .padding(start = HistoryTimelineGutterWidth, bottom = TimelineEntryRowGap),
         ) {
+            // 待办页签：按日算 —— 今天的条目只有分组表头「今天」，不再画 时:分。
+            val showTimeText = !(dayOnlyTime && group == HistoryDayGroup.Today)
+            // 连整行都不画（连行距一起省掉）：今天 + 按日 + 没有提醒。
+            if (showTimeText || reminderAtMs != null) {
             Row(
                 modifier = Modifier.padding(start = TimelineTimeRowStart, bottom = TimelineTimeRowGap),
                 horizontalArrangement = Arrangement.spacedBy(TimelineTimeRowItemGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (showTimeText) {
                 Text(
                     text = formatHistoryRelativeTime(entry.createdAtEpochMs),
                     style = androidx.compose.ui.text.TextStyle(
@@ -217,6 +224,7 @@ fun HistoryTimelineEntryRow(
                     ),
                     color = theme.text.copy(alpha = 0.80f),
                 )
+                }
                 // 已设提醒：设计稿 `.item .remind`（时钟 + 主题色粗体）。
                 //
                 // §0.16.15：**过期也显示** —— 只是换成灰调 + 前缀「已提醒」。以前这里虽然没写
@@ -265,6 +273,7 @@ fun HistoryTimelineEntryRow(
                         )
                     }
                 }
+            }
             }
             card()
         }

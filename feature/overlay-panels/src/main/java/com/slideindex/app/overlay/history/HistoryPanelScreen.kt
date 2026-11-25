@@ -2249,6 +2249,9 @@ private fun HistoryStashTabBody(
         }
         else -> {
             val scheme = MiuixTheme.colorScheme
+            // 待办页签（标签过滤里选中了「待办」）：时间轴按日算（今天不再细分时:分）、
+            // 卡片不再画那枚重复的「待办」chip —— 两处都是为了省纵向空间。
+            val isTodoTagTab = com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME in selectedTags
             // 时间轴槽：分组表头 + 条目平铺成同一条 Lazy 列表（见 HistoryTimelineGrouping.kt）。
             val timelineRows = remember(filteredEntries) { buildHistoryTimelineRows(filteredEntries) }
             LazyColumn(
@@ -2300,6 +2303,7 @@ private fun HistoryStashTabBody(
                                 staggerDelayMs = staggerDelay,
                                 reminderAtMs = reminder?.atMs,
                                 reminderOverdue = reminder?.overdue == true,
+                                dayOnlyTime = isTodoTagTab,
                             ) {
                                 HistoryStashEntryCard(
                                     entry = entry,
@@ -2312,6 +2316,7 @@ private fun HistoryStashTabBody(
                                     onSetDone = { done -> onSetDone(entry, done) },
                                     flash = entry.id == flashEntryId,
                                     dayGroup = row.group,
+                                    hideTodoTagRow = isTodoTagTab,
                                     haptics = haptics,
                                     onDismissPanel = onDismissPanel,
                                     onEdit = { onEditEntry(entry) },
