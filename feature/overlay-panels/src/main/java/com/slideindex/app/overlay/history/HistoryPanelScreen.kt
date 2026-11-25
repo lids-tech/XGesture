@@ -858,22 +858,11 @@ fun HistoryPanelScreen(
     val deleteEntry: (com.slideindex.app.stash.StashEntry) -> Unit = { entry ->
         val index = stashEntries.indexOfFirst { it.id == entry.id }
         val reminderAt = stashMeta.reminderOf(entry.id)
-        // ⚠️ 日历来源要在删除**之前**读（`delete` 会 forget 掉 meta，包括 sources）。
-        val calendarSource = stashMeta.sourceOf(entry.id)
         haptics.confirm()
         scope.launch {
             com.slideindex.app.overlay.panels.PanelStashWriteHooks.reminderCancel?.cancel(appContext, entry.id)
             stashRepo?.delete(entry.id)
-            // C 删除待办 → 对应日历事件也删（B/A 随之消失）。
-            // 延迟 6 秒（撤销窗口）执行；下面撤销回调里会取消它。
-            com.slideindex.app.stash.CalendarTodoSync.scheduleEventDeletionForEntry(
-                context = appContext,
-                entryId = entry.id,
-                source = calendarSource,
-            )
             showUndoMessage(R.string.stash_deleted) {
-                // 撤销：别删事件了。
-                com.slideindex.app.stash.CalendarTodoSync.cancelScheduledEventDeletion(appContext, entry.id)
                 scope.launch {
                     stashRepo?.restore(entry, index.coerceAtLeast(0))
                     // 撤销删除时把提醒也排回来（meta 里的 reminders 已被 forget 清掉，所以重设）
@@ -957,15 +946,11 @@ fun HistoryPanelScreen(
                 if (reminderAt != null) metaRepo?.setReminder(entry.id, null)
             }
             metaRepo?.setDone(entry.id, done)
-            // 完成联动（用户需求）：闪念里点完成 → 系统日历对应事件的标题加 `[已完成]` 前缀；
-            // 取消完成则把前缀去掉。只有带 `calendar:` 来源的条目才有对应事件，其余静默跳过。
-            com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendarAsync(appContext, entry.id, done)
             showUndoMessage(
                 if (done) R.string.stash_done_marked else R.string.stash_undone_marked,
             ) {
                 scope.launch {
                     metaRepo?.setDone(entry.id, !done)
-                    com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendarAsync(appContext, entry.id, !done)
                     if (done && reminderAt != null && reminderAt > System.currentTimeMillis()) {
                         metaRepo?.setReminder(entry.id, reminderAt)
                         com.slideindex.app.overlay.panels.PanelStashWriteHooks.reminderSchedule?.schedule(
@@ -1005,28 +990,6 @@ fun HistoryPanelScreen(
         }
         showUndoMessage(R.string.stash_saved) {
             scope.launch { stashRepo?.delete(newEntryId) }
-        }
-        // 待办 → 系统日历（用户需求）：新待办写一条事件。
-        // 时间口径方案 A：有提醒 → 用提醒时间；没有提醒 → 当天全天事件。
-        // 导入出来的条目带 `calendar:` 来源，`pushTodoToCalendar` 内部会跳过，不会重复建。
-        val savedTags = composerTags
-        com.slideindex.app.stash.CalendarSyncDebug.log(
-            appContext,
-            "onComposerSaved entry=$newEntryId tags=$savedTags reminder=$composerReminderAt",
-        )
-        android.util.Log.i(
-            "CalendarTodoSync",
-            "onComposerSaved entry=$newEntryId tags=$savedTags reminder=$composerReminderAt",
-        )
-        if (com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME in savedTags) {
-            // ⚠️ 用进程级作用域（pushTodoToCalendarAsync），不能用面板的 scope：
-            // 用户保存完立刻收面板时，Compose 协程会被取消，事件就永远写不进日历（真机日志实锤）。
-            com.slideindex.app.stash.CalendarTodoSync.pushTodoToCalendarAsync(
-                context = appContext,
-                entryId = newEntryId,
-                title = text,
-                reminderAtMs = composerReminderAt,
-            )
         }
     }
     val onComposerDone: (Boolean) -> Unit = { success ->
@@ -1188,17 +1151,8 @@ fun HistoryPanelScreen(
      */
     LaunchedEffect(panelTargetVisible) {
         if (!panelTargetVisible) return@LaunchedEffect
-        com.slideindex.app.stash.CalendarSyncDebug.log(appContext, "panel became visible -> calendar sync")
         reconcileReminders()
         StashReminderPendingState.refresh(appContext)
-        // 待办 ↔ 系统日历同步（用户 2026-11 需求）：面板打开瞬间补一次
-        // 「今天 + 未来 7 天」的日程为待办。没权限时第一次拉一次授权对话框
-        // （只弹一次，overlay 窗自己弹不了系统对话框，走 CalendarSyncPermissionActivity）。
-        if (com.slideindex.app.stash.CalendarSyncPermissionActivity.requestIfNeeded(appContext)) {
-            // 这次只弹权限，同步等授权后的下一次打开（拿到权限前查表只会白跑）。
-        } else {
-            com.slideindex.app.stash.CalendarTodoSync.syncFromCalendar(appContext)
-        }
     }
 
     /**
