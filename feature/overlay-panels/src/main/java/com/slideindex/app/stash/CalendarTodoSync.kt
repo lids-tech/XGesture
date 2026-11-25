@@ -115,7 +115,7 @@ object CalendarTodoSync {
     suspend fun syncFromCalendar(context: Context, force: Boolean = false): Int {
         CalendarSyncDebug.log(context, "syncFromCalendar() called force=$force")
         if (!hasPermission(context)) {
-            Log.i(TAG, "sync skipped: no calendar permission")
+            CalendarSyncDebug.log(context, "sync skipped: no calendar permission")
             CalendarSyncDebug.log(context, "sync skipped: no calendar permission")
             return 0
         }
@@ -124,7 +124,7 @@ object CalendarTodoSync {
         lastSyncAtMs = now
         return withContext(Dispatchers.IO) {
             runCatching { importRange(context.applicationContext) }
-                .onFailure { Log.w(TAG, "syncFromCalendar failed: ${it.message}", it) }
+                .onFailure { CalendarSyncDebug.log(context, "syncFromCalendar failed: ${it.message}") }
                 .getOrDefault(0)
         }
     }
@@ -136,7 +136,7 @@ object CalendarTodoSync {
 
         val calendarIds = writableOrVisibleCalendarIds(resolver)
         if (calendarIds.isEmpty()) {
-            Log.i(TAG, "import: no readable calendars")
+            CalendarSyncDebug.log(context, "import: no readable calendars")
             return 0
         }
 
@@ -167,7 +167,7 @@ object CalendarTodoSync {
         }
         if (added > 0) {
             // 条目/元数据都是 StateFlow，面板自动重组刷新，不需要额外刷新钩子。
-            Log.i(TAG, "imported $added calendar event(s) as todo")
+            CalendarSyncDebug.log(context, "imported $added calendar event(s) as todo")
         }
         return added
     }
@@ -190,35 +190,35 @@ object CalendarTodoSync {
             "pushTodoToCalendar() called entry=$entryId title=${title.take(20)} reminder=$reminderAtMs",
         )
         if (!hasPermission(context)) {
-            Log.i(TAG, "push skipped: no calendar permission")
+            CalendarSyncDebug.log(context, "push skipped: no calendar permission")
             CalendarSyncDebug.log(context, "push skipped: no calendar permission")
             return null
         }
         val meta = StashAccess.metaRepository
         if (meta == null) {
-            Log.i(TAG, "push skipped: meta repository unavailable")
+            CalendarSyncDebug.log(context, "push skipped: meta repository unavailable")
             return null
         }
         if (meta.sourceOf(entryId)?.startsWith(SOURCE_PREFIX) == true) {
-            Log.i(TAG, "push skipped: entry $entryId already has calendar source")
+            CalendarSyncDebug.log(context, "push skipped: entry $entryId already has calendar source")
             return null
         }
         val cleanTitle = title.trim()
         if (cleanTitle.isEmpty()) {
-            Log.i(TAG, "push skipped: empty title")
+            CalendarSyncDebug.log(context, "push skipped: empty title")
             return null
         }
         return withContext(Dispatchers.IO) {
             runCatching {
                 val resolver = context.applicationContext.contentResolver
                 val candidates = writableCalendarCandidates(resolver)
-                Log.i(
-                    TAG,
+                CalendarSyncDebug.log(
+                    context,
                     "push entry=$entryId title=${cleanTitle.take(30)} candidates=" +
                         candidates.joinToString { "${it.id}:${it.name}(${it.accountType})" },
                 )
                 if (candidates.isEmpty()) {
-                    Log.w(TAG, "push failed: no writable calendar")
+                    CalendarSyncDebug.log(context, "push failed: no writable calendar")
                     return@withContext null
                 }
                 // 依次尝试：优先本地日历（MIUI 日历一定显示），失败再换下一个。
@@ -255,21 +255,24 @@ object CalendarTodoSync {
                     val uri = runCatching {
                         resolver.insert(CalendarContract.Events.CONTENT_URI, values)
                     }.onFailure {
-                        Log.w(TAG, "insert into ${calendar.name}(${calendar.id}) failed: ${it.message}", it)
+                        CalendarSyncDebug.log(
+                            context,
+                            "insert into ${calendar.name}(${calendar.id}) failed: ${it.message}",
+                        )
                     }.getOrNull() ?: continue
                     val eventId = ContentUris.parseId(uri)
                     meta.setSource(entryId, "$SOURCE_PREFIX${calendar.id}:$eventId")
-                    Log.i(
-                        TAG,
+                    CalendarSyncDebug.log(
+                        context,
                         "pushed entry $entryId -> event ${calendar.id}:$eventId " +
                             "calendar=${calendar.name}",
                     )
                     return@withContext eventId
                 }
-                Log.w(TAG, "push failed: all candidate calendars rejected the insert")
+                CalendarSyncDebug.log(context, "push failed: all candidate calendars rejected the insert")
                 null
             }.onFailure {
-                Log.w(TAG, "pushTodoToCalendar crashed: ${it.message}", it)
+                CalendarSyncDebug.log(context, "pushTodoToCalendar crashed: ${it.message}")
             }.getOrNull()
         }
     }
@@ -307,10 +310,10 @@ object CalendarTodoSync {
                     put(CalendarContract.Events.TITLE, nextTitle)
                 }
                 val rows = resolver.update(eventUri, values, null, null)
-                Log.i(TAG, "setDoneInCalendar entry=$entryId done=$done rows=$rows")
+                CalendarSyncDebug.log(context, "setDoneInCalendar entry=$entryId done=$done rows=$rows")
                 rows > 0
             }.onFailure {
-                Log.w(TAG, "setDoneInCalendar failed: ${it.message}", it)
+                CalendarSyncDebug.log(context, "setDoneInCalendar failed: ${it.message}")
             }.getOrDefault(false)
         }
     }
