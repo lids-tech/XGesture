@@ -1251,11 +1251,6 @@ fun HistoryPanelScreen(
         val maxWidthPx = with(density) { maxWidth.toPx() }
         // 高度把手拖拽换算用：面板可用高度（窗口满屏时即窗口高）。
         val maxHeightPx = with(density) { maxHeight.toPx() }
-        // 状态栏（含挖孔/前摄区）以下才是可用高度：面板顶边永远不低于这里，
-        // 免得挡住状态栏，也避免手柄被前摄挖孔压住。
-        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        val usableHeight = (maxHeight - statusBarTop).coerceAtLeast(120.dp)
-        val usableHeightPx = with(density) { usableHeight.toPx() }
         // 面板宽度 = 窗口宽 × 当前动态比例（封顶 PANEL_WIDTH_MAX）。
         val panelWidth = minOf(maxWidth * dynamicFraction, PANEL_WIDTH_MAX)
         val panelWidthPx = with(density) { panelWidth.toPx() }
@@ -1306,7 +1301,7 @@ fun HistoryPanelScreen(
 
         Box(
             modifier = Modifier
-                .height(usableHeight * dynamicHeightFraction)
+                .fillMaxHeight(dynamicHeightFraction)
                 .width(panelWidth)
                 // ⚠️ 位移/透明度必须放在 background/border **之前**：`graphicsLayer` 只包住它之后的绘制，
                 // 放在后面面板底色会留在最终位置不动，只有内容跟着手指跑（踩过）。
@@ -1596,7 +1591,7 @@ fun HistoryPanelScreen(
                                     dynamicFraction = (widthPx / maxWidthPx).coerceIn(0.35f, 0.96f)
                                     // 高度：底边固定，手指上移 Δ → 顶边下移 Δ（从上往下缩）。
                                     val risePx = startFingerY - root.y
-                                    dynamicHeightFraction = (startHeightFraction - risePx / usableHeightPx)
+                                    dynamicHeightFraction = (startHeightFraction - risePx / maxHeightPx)
                                         .coerceIn(0.4f, 1f)
                                 }
                             }
