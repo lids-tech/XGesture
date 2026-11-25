@@ -215,7 +215,7 @@ object CalendarTodoSync {
                 CalendarSyncDebug.log(
                     context,
                     "push entry=$entryId title=${cleanTitle.take(30)} candidates=" +
-                        candidates.joinToString { "${it.id}:${it.name}(${it.accountType})" },
+                        candidates.joinToString { "${it.id}:${it.name}[${it.accountName}/${it.accountType}]" },
                 )
                 if (candidates.isEmpty()) {
                     CalendarSyncDebug.log(context, "push failed: no writable calendar")
@@ -346,23 +346,30 @@ object CalendarTodoSync {
         return result
     }
 
-    /** 写入目标：优先**本地日历**（MIUI 日历必定显示）、其次主日历、最后第一个可写日历。 */
+    /** 写入目标：优先**标准本地日历**（系统日历 App 里显示的那个），其次普通本地日历。 */
     private data class CalendarCandidate(
         val id: Long,
         val name: String,
+        val accountName: String,
         val accountType: String,
-        val isLocal: Boolean,
+        val isStandardLocal: Boolean,
     )
 
+    /**
+     * ⚠️ 不按 `isPrimary` 选（真机踩坑）：这台机器上 isPrimary=1 的是「万象待办」
+     * —— 第三方小组件 App 自建的日历，系统日历 App **不显示**它，事件写进去用户就"看不到"。
+     * 标准本地日历的判据是 AOSP 的固定标识：`account_name == "account_name_local"`
+     * （MIUI 日历里显示为「本地日历」）。
+     */
     private fun writableCalendarCandidates(resolver: ContentResolver): List<CalendarCandidate> {
         val all = ArrayList<CalendarCandidate>()
         resolver.query(
             CalendarContract.Calendars.CONTENT_URI,
             arrayOf(
                 CalendarContract.Calendars._ID,
-                CalendarContract.Calendars.IS_PRIMARY,
                 CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
                 CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+                CalendarContract.Calendars.ACCOUNT_NAME,
                 CalendarContract.Calendars.ACCOUNT_TYPE,
             ),
             null,
@@ -370,46 +377,31 @@ object CalendarTodoSync {
             null,
         )?.use { cursor ->
             val idIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars._ID)
-            val primaryIndex = cursor.getColumnIndex(CalendarContract.Calendars.IS_PRIMARY)
             val accessIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL)
             val nameIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
-            val accountIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_TYPE)
+            val accountIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_NAME)
+            val accountTypeIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_TYPE)
             while (cursor.moveToNext()) {
                 val writable =
                     cursor.getInt(accessIndex) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR
                 if (!writable) continue
                 val name = cursor.getString(nameIndex).orEmpty()
                 if (EXCLUDED_CALENDAR_NAME.matcher(name).find()) continue
-                val accountType = cursor.getString(accountIndex).orEmpty()
+                val accountName = cursor.getString(accountIndex).orEmpty()
+                val accountType = cursor.getString(accountTypeIndex).orEmpty()
                 all += CalendarCandidate(
                     id = cursor.getLong(idIndex),
                     name = name,
+                    accountName = accountName,
                     accountType = accountType,
-                    isLocal = accountType.equals(CalendarContract.ACCOUNT_TYPE_LOCAL, ignoreCase = true) ||
-                        accountType.contains("local", ignoreCase = true),
+                    isStandardLocal = accountName.equals("account_name_local", ignoreCase = true),
                 )
             }
         }
-        // 排序：本地 → 主日历 → 其余（保持查询顺序）。
-        val primaryIds = HashSet<Long>()
-        runCatching {
-            resolver.query(
-                CalendarContract.Calendars.CONTENT_URI,
-                arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.IS_PRIMARY),
-                null,
-                null,
-                null,
-            )?.use { cursor ->
-                val idIndex = cursor.getColumnIndexOrThrow(CalendarContract.Calendars._ID)
-                val primaryIndex = cursor.getColumnIndex(CalendarContract.Calendars.IS_PRIMARY)
-                while (cursor.moveToNext()) {
-                    if (cursor.getInt(primaryIndex) == 1) primaryIds += cursor.getLong(idIndex)
-                }
-            }
-        }
+        // 排序：标准本地日历 → 其它 LOCAL 账户 → 其余（保持查询顺序）。
         return all.sortedWith(
-            compareByDescending<CalendarCandidate> { it.isLocal }
-                .thenByDescending { primaryIds.contains(it.id) },
+            compareByDescending<CalendarCandidate> { it.isStandardLocal }
+                .thenByDescending { it.accountType.equals(CalendarContract.ACCOUNT_TYPE_LOCAL, true) },
         )
     }
 
