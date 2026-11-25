@@ -999,6 +999,10 @@ fun HistoryPanelScreen(
         // 时间口径方案 A：有提醒 → 用提醒时间；没有提醒 → 当天全天事件。
         // 导入出来的条目带 `calendar:` 来源，`pushTodoToCalendar` 内部会跳过，不会重复建。
         val savedTags = composerTags
+        com.slideindex.app.stash.CalendarSyncDebug.log(
+            appContext,
+            "onComposerSaved entry=$newEntryId tags=$savedTags reminder=$composerReminderAt",
+        )
         android.util.Log.i(
             "CalendarTodoSync",
             "onComposerSaved entry=$newEntryId tags=$savedTags reminder=$composerReminderAt",
@@ -1174,6 +1178,7 @@ fun HistoryPanelScreen(
      */
     LaunchedEffect(panelTargetVisible) {
         if (!panelTargetVisible) return@LaunchedEffect
+        com.slideindex.app.stash.CalendarSyncDebug.log(appContext, "panel became visible -> calendar sync")
         reconcileReminders()
         StashReminderPendingState.refresh(appContext)
         // 待办 ↔ 系统日历同步（用户 2026-11 需求）：面板打开瞬间补一次

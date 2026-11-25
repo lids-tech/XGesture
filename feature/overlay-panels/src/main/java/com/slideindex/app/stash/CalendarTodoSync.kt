@@ -70,8 +70,10 @@ object CalendarTodoSync {
      * @return 本次新增的待办条数；无权限/查询失败返回 0。
      */
     suspend fun syncFromCalendar(context: Context, force: Boolean = false): Int {
+        CalendarSyncDebug.log(context, "syncFromCalendar() called force=$force")
         if (!hasPermission(context)) {
             Log.i(TAG, "sync skipped: no calendar permission")
+            CalendarSyncDebug.log(context, "sync skipped: no calendar permission")
             return 0
         }
         val now = System.currentTimeMillis()
@@ -140,8 +142,13 @@ object CalendarTodoSync {
         title: String,
         reminderAtMs: Long?,
     ): Long? {
+        CalendarSyncDebug.log(
+            context,
+            "pushTodoToCalendar() called entry=$entryId title=${title.take(20)} reminder=$reminderAtMs",
+        )
         if (!hasPermission(context)) {
             Log.i(TAG, "push skipped: no calendar permission")
+            CalendarSyncDebug.log(context, "push skipped: no calendar permission")
             return null
         }
         val meta = StashAccess.metaRepository
