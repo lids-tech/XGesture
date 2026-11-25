@@ -1527,9 +1527,12 @@ fun HistoryPanelScreen(
             // ── 缩放手柄：左上角一颗按钮，**同时**拖宽/高 ──
             // 高度按"从上往下"：顶边跟手指、底边贴屏幕底。
             var resizeHandleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-            // 底边固定 → 高度按手指位移算（上推缩小、下拉放大），不用绝对 Y。
+            // 方向（以右贴边面板为例）：下拉变矮 / 上拉变高 / 左拉变宽 / 右拉变窄。
+            // 全部按**手指位移**算，与手柄自身的内边距无关。
             var startFingerY by remember { mutableFloatStateOf(0f) }
             var startHeightFraction by remember { mutableFloatStateOf(1f) }
+            var startFingerX by remember { mutableFloatStateOf(0f) }
+            var startWidthFraction by remember { mutableFloatStateOf(1f) }
             Box(
                 modifier = Modifier
                     .align(if (gravityEnd) Alignment.TopStart else Alignment.TopEnd)
@@ -1552,6 +1555,12 @@ fun HistoryPanelScreen(
                                     maxHeightPx
                                 }
                                 startHeightFraction = dynamicHeightFraction
+                                startFingerX = if (coords != null && coords.isAttached) {
+                                    coords.localToRoot(offset).x
+                                } else {
+                                    maxWidthPx
+                                }
+                                startWidthFraction = dynamicFraction
                             },
                             onDragEnd = {
                                 isResizing = false
@@ -1586,12 +1595,17 @@ fun HistoryPanelScreen(
                                 val coords = resizeHandleCoordinates
                                 if (coords != null && coords.isAttached) {
                                     val root = coords.localToRoot(change.position)
-                                    // 宽度：从面板所贴的那条屏幕边算起（右贴边 = 屏宽 − x）。
-                                    val widthPx = if (gravityEnd) maxWidthPx - root.x else root.x
-                                    dynamicFraction = (widthPx / maxWidthPx).coerceIn(0.35f, 0.96f)
-                                    // 高度：底边固定，手指上移 Δ → 顶边下移 Δ（从上往下缩）。
-                                    val risePx = startFingerY - root.y
-                                    dynamicHeightFraction = (startHeightFraction - risePx / maxHeightPx)
+                                    // 宽度：往面板外侧拖变宽、往内侧拖变窄（左拉变宽 / 右拉变窄）。
+                                    val widenPx = if (gravityEnd) {
+                                        startFingerX - root.x
+                                    } else {
+                                        root.x - startFingerX
+                                    }
+                                    dynamicFraction = (startWidthFraction + widenPx / maxWidthPx)
+                                        .coerceIn(0.35f, 0.96f)
+                                    // 高度：往下拉 = 顶边下移（变矮）；往上拉 = 变高。
+                                    val dropPx = root.y - startFingerY
+                                    dynamicHeightFraction = (startHeightFraction - dropPx / maxHeightPx)
                                         .coerceIn(0.4f, 1f)
                                 }
                             }
