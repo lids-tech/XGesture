@@ -318,6 +318,7 @@ fun OverlaySettings.toMinimalAppSettings(): AppSettings = AppSettings(
         stashPanelHandleOpenTab = stashPanelHandleOpenTab,
         stashPanelWidthMode = stashPanelWidthMode,
         stashPanelCustomWidthFraction = stashPanelCustomWidthFraction,
+            stashPanelHeightFraction = stashPanelHeightFraction,
     ),
     defaultImageViewerPackage = defaultImageViewerPackage,
     pickImageTapActionId = pickImageTapActionId,

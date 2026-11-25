@@ -1,6 +1,7 @@
 package com.slideindex.app.overlay.history
 
 import androidx.compose.runtime.mutableStateOf
+import com.slideindex.app.stash.StashMetaRepository
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 
@@ -75,8 +76,11 @@ object StashComposerDraft {
      */
     val text = mutableStateOf("")
 
-    /** 快速选中的标签（存下时落到新条目）。 */
-    val tags = mutableStateOf<Set<String>>(emptySet())
+    /**
+     * 标签草稿。**默认带「待办」**：用户要求的默认行为是"点加号记一条 = 先当待办"，
+     * 不想要就点掉那枚 chip；每次开/关弹窗都回到这个默认（见 HistoryPanelScreen 的两处 reset）。
+     */
+    val tags = mutableStateOf<Set<String>>(setOf(StashMetaRepository.TODO_TAG_NAME))
 
     /** 预设的提醒时间（null = 没设）。 */
     val reminderAtMs = mutableStateOf<Long?>(null)

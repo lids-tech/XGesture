@@ -1,4 +1,4 @@
-﻿package com.slideindex.app.settings
+package com.slideindex.app.settings
 
 import androidx.datastore.preferences.core.Preferences
 import com.slideindex.app.floatball.FloatBallGestureCodec
@@ -1665,6 +1665,11 @@ class OverlaySettingsMutator @Inject constructor(
         } else {
             it[SettingsPreferenceKeys.STASH_PANEL_CUSTOM_WIDTH_FRACTION] = fraction
         }
+    }
+
+    /** 侧拉面板高度比例（0.4~1）。1 = 满屏高。 */
+    suspend fun setStashPanelHeightFraction(fraction: Float) = editor.edit {
+        it[SettingsPreferenceKeys.STASH_PANEL_HEIGHT_FRACTION] = fraction.coerceIn(0.4f, 1f)
     }
 
     suspend fun setDefaultImageViewerPackage(packageName: String?) = editor.edit {

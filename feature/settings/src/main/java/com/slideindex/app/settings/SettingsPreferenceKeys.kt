@@ -870,6 +870,9 @@ internal object SettingsPreferenceKeys {
 
     /** 侧拉面板用户直接拖拽的自定义宽度比例（0.40f ~ 0.85f），存在时优先于 [STASH_PANEL_WIDTH_MODE]。 */
     val STASH_PANEL_CUSTOM_WIDTH_FRACTION = floatPreferencesKey("stash_panel_custom_width_fraction")
+
+    /** 侧拉面板高度比例（1f = 满屏高，向下留白时由面板自己垂直居中）。 */
+    val STASH_PANEL_HEIGHT_FRACTION = floatPreferencesKey("stash_panel_height_fraction")
     val OVERLAY_BLUR_ENABLED = booleanPreferencesKey("overlay_blur_enabled")
     val DEFAULT_IMAGE_VIEWER_PACKAGE = stringPreferencesKey("default_image_viewer_package")
     val PICK_IMAGE_TAP_ACTION = stringPreferencesKey("pick_image_tap_action")

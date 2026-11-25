@@ -1,4 +1,4 @@
-﻿package com.slideindex.app.settings
+package com.slideindex.app.settings
 
 import com.slideindex.app.message.MessageSettings
 import com.slideindex.app.otp.OtpKeywords
@@ -480,6 +480,7 @@ data class AppSettings(
     val stashPanelHandleOpenTab get() = clipboard.stashPanelHandleOpenTab
     val stashPanelWidthMode get() = clipboard.stashPanelWidthMode
     val stashPanelCustomWidthFraction get() = clipboard.stashPanelCustomWidthFraction
+    val stashPanelHeightFraction get() = clipboard.stashPanelHeightFraction
 
     val searchEngines get() = searchPanel.searchEngines
     val searchEngineGridColumns get() = searchPanel.searchEngineGridColumns

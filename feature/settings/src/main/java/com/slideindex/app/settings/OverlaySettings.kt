@@ -173,6 +173,8 @@ data class OverlaySettings(
     /** 侧拉面板宽度档位，见 [StashPanelWidthMode]。 */
     val stashPanelWidthMode: StashPanelWidthMode = StashPanelWidthMode.STANDARD,
     val stashPanelCustomWidthFraction: Float? = null,
+    /** 侧拉面板高度比例（1f = 满屏高）。 */
+    val stashPanelHeightFraction: Float = 1f,
     val defaultImageViewerPackage: String? = null,
     /** 单击图片执行的动作，见 [PickImageTapAction]。 */
     val pickImageTapActionId: String = PickImageTapAction.VIEW.id,
@@ -437,6 +439,7 @@ data class OverlaySettings(
             stashPanelHandleOpenTab = settings.stashPanelHandleOpenTab,
             stashPanelWidthMode = settings.stashPanelWidthMode,
             stashPanelCustomWidthFraction = settings.stashPanelCustomWidthFraction,
+            stashPanelHeightFraction = settings.stashPanelHeightFraction,
             defaultImageViewerPackage = settings.defaultImageViewerPackage,
             pickImageTapActionId = settings.pickImageTapActionId,
             imageEditorDelayDeleteEnabled = settings.imageEditorDelayDeleteEnabled,

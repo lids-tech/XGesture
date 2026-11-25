@@ -43,6 +43,12 @@ val LocalStashPanelWidthFraction = staticCompositionLocalOf {
     StashPanelWidthMode.STANDARD.fraction
 }
 
+/**
+ * 面板高度比例（1f = 满屏高；<1 时面板垂直居中、上下留空）。
+ * 由「设置 → 侧拉面板」或面板内底部把手调整后写入。
+ */
+val LocalStashPanelHeightFraction = staticCompositionLocalOf { 1f }
+
 /** 面板宽度 = 可用宽度 × 当前档位比例，再用 [PANEL_WIDTH_MAX] 封顶。 */
 @Composable
 fun panelWidthOf(available: Dp): Dp =

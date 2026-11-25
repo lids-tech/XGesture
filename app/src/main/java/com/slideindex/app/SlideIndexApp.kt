@@ -1071,6 +1071,14 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                     ?.setStashPanelCustomWidthFraction(f)
             }
         }
+        com.slideindex.app.overlay.panels.PanelStashWriteHooks.setStashPanelHeightFraction = { f ->
+            hookScope.launch {
+                com.slideindex.app.di.OverlayDependencyAccess
+                    .overlayDependencies(this@SlideIndexApp)
+                    ?.settingsRepository
+                    ?.setStashPanelHeightFraction(f)
+            }
+        }
         com.slideindex.app.stash.StashReminderScheduling.schedule = { ctx, entryId, atEpochMs, text ->
             com.slideindex.app.stash.StashReminderScheduler.schedule(ctx, entryId, atEpochMs, text)
         }

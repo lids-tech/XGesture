@@ -109,6 +109,9 @@ object PanelStashWriteHooks {
     /** 写入暂存面板自定义宽度比例。 */
     @Volatile
     var setStashPanelCustomWidthFraction: ((Float) -> Unit)? = null
+
+    /** 面板内拖拽底部把手调整高度（0.4~1）后写回设置。 */
+    var setStashPanelHeightFraction: ((Float) -> Unit)? = null
     /** 取消一条提醒。 */
     @Volatile
     var reminderCancel: ReminderCancelHook? = null

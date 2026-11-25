@@ -587,6 +587,8 @@ data class ClipboardSettings(
     val stashPanelWidthMode: StashPanelWidthMode = StashPanelWidthMode.STANDARD,
     /** 侧拉面板用户直接拖拽的自定义宽度比例。 */
     val stashPanelCustomWidthFraction: Float? = null,
+    /** 侧拉面板高度比例（1f = 满屏高；<1 时面板垂直居中、上下留空）。 */
+    val stashPanelHeightFraction: Float = 1f,
 )
 
 /** 搜索面板与搜索引擎。 */

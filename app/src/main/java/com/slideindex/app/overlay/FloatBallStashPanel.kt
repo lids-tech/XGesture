@@ -14,6 +14,7 @@ import com.slideindex.app.di.OverlayDependencyAccess
 import com.slideindex.app.overlay.history.HistoryPanelReveal
 import com.slideindex.app.overlay.history.HistoryPanelScreen
 import com.slideindex.app.overlay.history.LocalStashPanelWidthFraction
+import com.slideindex.app.overlay.history.LocalStashPanelHeightFraction
 import com.slideindex.app.overlay.history.StashPanelLaunchState
 import com.slideindex.app.settings.AppSettings
 import com.slideindex.app.ui.theme.OverlayAwareModuleTheme
@@ -263,7 +264,9 @@ object FloatBallStashPanel {
                 ?.coerceIn(0.35f, 0.96f)
                 ?: settings.stashPanelWidthMode.fraction
             CompositionLocalProvider(
-                LocalStashPanelWidthFraction provides currentFraction
+                LocalStashPanelWidthFraction provides currentFraction,
+                LocalStashPanelHeightFraction provides
+                    settings.stashPanelHeightFraction.coerceIn(0.4f, 1f),
             ) {
                 HistoryPanelScreen(
                     gravityEnd = gravityEnd,

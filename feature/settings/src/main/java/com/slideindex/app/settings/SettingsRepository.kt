@@ -978,6 +978,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setStashPanelCustomWidthFraction(fraction: Float?) =
         overlay.setStashPanelCustomWidthFraction(fraction)
 
+    suspend fun setStashPanelHeightFraction(fraction: Float) =
+        overlay.setStashPanelHeightFraction(fraction)
+
     suspend fun setOverlayBlurEnabled(enabled: Boolean) =
         overlay.setOverlayBlurEnabled(enabled)
 

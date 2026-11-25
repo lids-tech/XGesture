@@ -994,7 +994,7 @@ fun HistoryPanelScreen(
             // §0.16.16：清空的判据从"正文串"换成"块序列"—— 回到"一个空文字块"，
             // 镜像（composerText / composerImagePaths）由 `updateBlocks` 一起归零。
             resetComposerBlocks()
-            composerTags = emptySet()
+            composerTags = setOf(com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME)
             composerReminderAt = null
             // 设计稿 `addFromComposer()` 里 `filter = null; query = ''`：
             // 不清筛选的话新条目可能正好落在筛选之外，用户会以为没存上。
@@ -1195,7 +1195,22 @@ fun HistoryPanelScreen(
         contentAlignment = if (gravityEnd) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         // 设计稿是 26dp（--r-2xl），且只圆内侧。
-        val panelShape = if (gravityEnd) {
+        // ── 高度比例（1f = 满屏高；<1 时面板垂直居中、上下留空）──
+        // 由底部小把手拖拽调整，松手后写回设置（PanelStashWriteHooks）。
+        val baseHeightFraction = LocalStashPanelHeightFraction.current
+        val dynamicHeightFractionState = remember { mutableFloatStateOf(baseHeightFraction) }
+        var dynamicHeightFraction by dynamicHeightFractionState
+        var isHeightResizing by remember { mutableStateOf(false) }
+        LaunchedEffect(baseHeightFraction) {
+            if (!isHeightResizing) {
+                dynamicHeightFraction = baseHeightFraction
+            }
+        }
+
+        val panelShape = if (dynamicHeightFraction < 0.995f) {
+            // 高度不满屏：上下不再贴屏边，四个角都圆（不然顶/底是直角贴空边，很怪）。
+            RoundedCornerShape(HistoryPanelCornerRadius)
+        } else if (gravityEnd) {
             RoundedCornerShape(
                 topStart = HistoryPanelCornerRadius,
                 bottomStart = HistoryPanelCornerRadius,
@@ -1229,6 +1244,8 @@ fun HistoryPanelScreen(
             }
         }
         val maxWidthPx = with(density) { maxWidth.toPx() }
+        // 高度把手拖拽换算用：面板可用高度（窗口满屏时即窗口高）。
+        val maxHeightPx = with(density) { maxHeight.toPx() }
         // 面板宽度 = 窗口宽 × 当前动态比例（封顶 PANEL_WIDTH_MAX）。
         val panelWidth = minOf(maxWidth * dynamicFraction, PANEL_WIDTH_MAX)
         val panelWidthPx = with(density) { panelWidth.toPx() }
@@ -1279,7 +1296,7 @@ fun HistoryPanelScreen(
 
         Box(
             modifier = Modifier
-                .fillMaxHeight()
+                .fillMaxHeight(dynamicHeightFraction)
                 .width(panelWidth)
                 // ⚠️ 位移/透明度必须放在 background/border **之前**：`graphicsLayer` 只包住它之后的绘制，
                 // 放在后面面板底色会留在最终位置不动，只有内容跟着手指跑（踩过）。
@@ -1484,7 +1501,7 @@ fun HistoryPanelScreen(
                     onOpenChange = {
                         composerOpen = it
                         if (!it) {
-                            composerTags = emptySet()
+                            composerTags = setOf(com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME)
                             composerReminderAt = null
                             // 关掉弹窗时把**没存下**的正文草稿一起丢掉（老实现只丢图、留正文，
                             // §0.16.16 起正文里就有图块了，而图块的 cache 文件正要被删掉 ——
@@ -1583,6 +1600,68 @@ fun HistoryPanelScreen(
                         .height(if (isResizing) 42.dp else 36.dp)
                         .background(
                             color = if (isResizing) {
+                                theme.accent
+                            } else if (theme.isDark) {
+                                Color.White.copy(alpha = 0.55f)
+                            } else {
+                                Color.Black.copy(alpha = 0.32f)
+                            },
+                            shape = RoundedCornerShape(2.dp)
+                        )
+                )
+            }
+
+            var heightHandleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+            // 底部高度调节小手柄（小横条，贴面板底边内侧）：拖动改变高度比例。
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .zIndex(20f)
+                    .padding(bottom = 16.dp)
+                    .size(width = 72.dp, height = 28.dp)
+                    .onGloballyPositioned { heightHandleCoordinates = it }
+                    .pointerInput(maxHeightPx) {
+                        detectDragGestures(
+                            onDragStart = { _ ->
+                                isHeightResizing = true
+                            },
+                            onDragEnd = {
+                                isHeightResizing = false
+                                // 接近满屏就吸附到 1（不然留 1~2px 的缝看不出来也调不回去）。
+                                val finalFraction = if (dynamicHeightFraction > 0.97f) 1f else dynamicHeightFraction
+                                if (finalFraction != dynamicHeightFraction) {
+                                    dynamicHeightFraction = finalFraction
+                                    haptics.confirm()
+                                }
+                                scope.launch(Dispatchers.IO) {
+                                    com.slideindex.app.overlay.panels.PanelStashWriteHooks
+                                        .setStashPanelHeightFraction?.invoke(finalFraction)
+                                }
+                            },
+                            onDragCancel = {
+                                isHeightResizing = false
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val coords = heightHandleCoordinates
+                                if (coords != null && coords.isAttached) {
+                                    // 面板垂直居中：底边 y = (H + H·f) / 2 → f = 2y/H − 1。
+                                    val bottomY = coords.localToRoot(change.position).y
+                                    dynamicHeightFraction = (2f * bottomY / maxHeightPx - 1f)
+                                        .coerceIn(0.4f, 1f)
+                                }
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(bottom = 6.dp)
+                        .width(if (isHeightResizing) 42.dp else 36.dp)
+                        .height(if (isHeightResizing) 5.dp else 4.dp)
+                        .background(
+                            color = if (isHeightResizing) {
                                 theme.accent
                             } else if (theme.isDark) {
                                 Color.White.copy(alpha = 0.55f)
