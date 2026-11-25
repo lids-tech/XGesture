@@ -41,39 +41,40 @@ class WidgetPickerTrampolineActivity : ComponentActivity() {
 
     setContent {
       MiuixTopLayerRoot {
-      // WidgetPickerScreen 内部通过 rememberSettingsRepository/rememberAppRepository 取依赖，
-      // 缺这层 provider 会在组合期直接抛 IllegalStateException（选器 Activity 一进就闪退）。
-      CompositionLocalProvider(LocalAppDependencies provides deps) {
-        ModuleTheme(settings = appSettings) {
-          WidgetPickerScreen(
-            onBack = {
-              delivered = true
-              WidgetPickerTrampoline.deliverCancel()
-              finish()
-            },
-            onWidgetSelected = { entry -> onWidgetPicked(entry) },
-            onAppSelected = { app ->
-              delivered = true
-              WidgetPickerTrampoline.deliverAppSuccess(app.packageName, app.className, app.appLabel, app.cloneUserId)
-              finish()
-            },
-            onShortcutSelected = { sc ->
-              delivered = true
-              WidgetPickerTrampoline.deliverShortcutSuccess(sc.packageName, sc.shortcutId, sc.label, sc.intentUri)
-              finish()
-            },
-            onActionSelected = { action ->
-              delivered = true
-              WidgetPickerTrampoline.deliverActionSuccess(
-                com.slideindex.app.launcher.QuickLauncherItemCodec.encodeActionPayload(action),
-                com.slideindex.app.ui.gesturepicker.gestureActionLabelText(this, action),
-              )
-              finish()
-            },
-            enableBackHandler = true
-          )
+        // WidgetPickerScreen 内部通过 rememberSettingsRepository/rememberAppRepository 取依赖，
+        // 缺这层 provider 会在组合期直接抛 IllegalStateException（选器 Activity 一进就闪退）。
+        CompositionLocalProvider(LocalAppDependencies provides deps) {
+          ModuleTheme(settings = appSettings) {
+            WidgetPickerScreen(
+              onBack = {
+                delivered = true
+                WidgetPickerTrampoline.deliverCancel()
+                finish()
+              },
+              onWidgetSelected = { entry -> onWidgetPicked(entry) },
+              onAppSelected = { app ->
+                delivered = true
+                WidgetPickerTrampoline.deliverAppSuccess(app.packageName, app.className, app.appLabel, app.cloneUserId)
+                finish()
+              },
+              onShortcutSelected = { sc ->
+                delivered = true
+                WidgetPickerTrampoline.deliverShortcutSuccess(sc.packageName, sc.shortcutId, sc.label, sc.intentUri)
+                finish()
+              },
+              onActionSelected = { action ->
+                delivered = true
+                val label = com.slideindex.app.ui.gesturepicker.gestureActionLabelText(
+                  this@WidgetPickerTrampolineActivity,
+                  action,
+                )
+                WidgetPickerTrampoline.deliverActionSuccess(action, label)
+                finish()
+              },
+              enableBackHandler = true,
+            )
+          }
         }
-      }
       }
     }
   }

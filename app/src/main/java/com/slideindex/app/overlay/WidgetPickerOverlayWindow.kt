@@ -388,7 +388,7 @@ fun WidgetPickerOverlayRoot(
           color = Color(0xFFF7F7F7)
         ) {
         val context = androidx.compose.ui.platform.LocalContext.current
-        val (initialAppPkgs, initialShortcutKeys) = remember {
+        val (initialAppPkgs, initialShortcutKeys, initialActionKeys) = remember {
           WidgetPickerTrampoline.getCurrentPageConfiguredItems()
         }
         WidgetPickerScreen(
@@ -396,11 +396,16 @@ fun WidgetPickerOverlayRoot(
           onWidgetSelected = onWidgetSelected,
           configuredAppPackages = initialAppPkgs,
           configuredShortcutKeys = initialShortcutKeys,
+          configuredActionKeys = initialActionKeys,
           onToggleApp = { app, _ ->
             WidgetPickerTrampoline.toggleApp(app.packageName, app.className, app.appLabel, app.cloneUserId)
           },
           onToggleShortcut = { sc, _ ->
             WidgetPickerTrampoline.toggleShortcut(sc.packageName, sc.shortcutId, sc.label, sc.intentUri)
+          },
+          onToggleAction = { action, _ ->
+            val label = com.slideindex.app.ui.gesturepicker.gestureActionLabelText(context, action)
+            WidgetPickerTrampoline.toggleAction(action, label)
           },
           onAppSelected = { app ->
             WidgetPickerTrampoline.toggleApp(app.packageName, app.className, app.appLabel, app.cloneUserId)
@@ -409,11 +414,8 @@ fun WidgetPickerOverlayRoot(
             WidgetPickerTrampoline.toggleShortcut(sc.packageName, sc.shortcutId, sc.label, sc.intentUri)
           },
           onActionSelected = { action ->
-            // 动作只做「新增」：addActionToPage 会找一个空格位放进去，无需勾选态。
-            WidgetPickerTrampoline.deliverActionSuccess(
-              com.slideindex.app.launcher.QuickLauncherItemCodec.encodeActionPayload(action),
-              com.slideindex.app.ui.gesturepicker.gestureActionLabelText(context, action),
-            )
+            val label = com.slideindex.app.ui.gesturepicker.gestureActionLabelText(context, action)
+            WidgetPickerTrampoline.toggleAction(action, label)
           },
           launchCreateShortcut = { createHost ->
             val hostContext = SlideIndexAccessibilityService.overlayHostContext() ?: context.applicationContext
