@@ -948,13 +948,13 @@ fun HistoryPanelScreen(
             metaRepo?.setDone(entry.id, done)
             // 完成联动（用户需求）：闪念里点完成 → 系统日历对应事件的标题加 `[已完成]` 前缀；
             // 取消完成则把前缀去掉。只有带 `calendar:` 来源的条目才有对应事件，其余静默跳过。
-            com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendar(appContext, entry.id, done)
+            com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendarAsync(appContext, entry.id, done)
             showUndoMessage(
                 if (done) R.string.stash_done_marked else R.string.stash_undone_marked,
             ) {
                 scope.launch {
                     metaRepo?.setDone(entry.id, !done)
-                    com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendar(appContext, entry.id, !done)
+                    com.slideindex.app.stash.CalendarTodoSync.setDoneInCalendarAsync(appContext, entry.id, !done)
                     if (done && reminderAt != null && reminderAt > System.currentTimeMillis()) {
                         metaRepo?.setReminder(entry.id, reminderAt)
                         com.slideindex.app.overlay.panels.PanelStashWriteHooks.reminderSchedule?.schedule(
@@ -1008,15 +1008,14 @@ fun HistoryPanelScreen(
             "onComposerSaved entry=$newEntryId tags=$savedTags reminder=$composerReminderAt",
         )
         if (com.slideindex.app.stash.StashMetaRepository.TODO_TAG_NAME in savedTags) {
-            val reminderAt = composerReminderAt
-            scope.launch {
-                com.slideindex.app.stash.CalendarTodoSync.pushTodoToCalendar(
-                    context = appContext,
-                    entryId = newEntryId,
-                    title = text,
-                    reminderAtMs = reminderAt,
-                )
-            }
+            // ⚠️ 用进程级作用域（pushTodoToCalendarAsync），不能用面板的 scope：
+            // 用户保存完立刻收面板时，Compose 协程会被取消，事件就永远写不进日历（真机日志实锤）。
+            com.slideindex.app.stash.CalendarTodoSync.pushTodoToCalendarAsync(
+                context = appContext,
+                entryId = newEntryId,
+                title = text,
+                reminderAtMs = composerReminderAt,
+            )
         }
     }
     val onComposerDone: (Boolean) -> Unit = { success ->

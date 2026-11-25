@@ -11,6 +11,7 @@ import android.text.TextUtils
 import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.TimeZone
@@ -56,6 +57,48 @@ object CalendarTodoSync {
 
     @Volatile
     private var lastSyncAtMs = 0L
+
+    /**
+     * 进程级 IO 作用域（**不是** Compose 的 rememberCoroutineScope）。
+     *
+     * ⚠️ 踩过的坑：写日历原本用的是面板的 `rememberCoroutineScope`，用户**保存完立刻收起面板**
+     * 时组合被销毁 → 协程在 `withContext(IO)` 处直接取消，事件永远没写进日历、日志也只停在
+     * "pushTodoToCalendar() called"（真机日志实锤）。日历写入必须活过面板销毁，所以挂进程级作用域。
+     */
+    private val ioScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + Dispatchers.IO,
+    )
+
+    /** 异步版：新增待办后调用；与面板生命周期无关，面板收起也会写完。 */
+    fun pushTodoToCalendarAsync(
+        context: Context,
+        entryId: String,
+        title: String,
+        reminderAtMs: Long?,
+    ) {
+        val appContext = context.applicationContext
+        ioScope.launch {
+            CalendarSyncDebug.log(appContext, "pushTodoToCalendarAsync start entry=$entryId")
+            runCatching {
+                pushTodoToCalendar(appContext, entryId, title, reminderAtMs)
+            }.onFailure {
+                CalendarSyncDebug.log(appContext, "pushTodoToCalendarAsync threw: ${it.message}")
+            }
+            CalendarSyncDebug.log(appContext, "pushTodoToCalendarAsync end entry=$entryId")
+        }
+    }
+
+    /** 异步版：完成态写回日历（同上，不能挂在面板作用域上）。 */
+    fun setDoneInCalendarAsync(context: Context, entryId: String, done: Boolean) {
+        val appContext = context.applicationContext
+        ioScope.launch {
+            runCatching {
+                setDoneInCalendar(appContext, entryId, done)
+            }.onFailure {
+                CalendarSyncDebug.log(appContext, "setDoneInCalendarAsync threw: ${it.message}")
+            }
+        }
+    }
 
     /** 是否已授予读写日历权限。 */
     fun hasPermission(context: Context): Boolean {
