@@ -344,6 +344,14 @@ class OverlaySidePanelHost(
         } ?: return false
 
         val composeView = panelHost.composeView ?: return false
+        // ⚠️ 必须占住底部系统手势带（导航条 / 上滑 Home 那条）：
+        // 面板满屏高时它的底边就是屏幕底边，而系统手势区会**先**把从底部起的竖滑吃掉
+        // —— 表现就是"底边的高度把手拖不动，只能左右调宽度"（真机反馈）。
+        // 其他浮层（小组件面板 / 搜索面板）早就挂了同一个排除；侧拉面板之前漏了。
+        com.slideindex.app.overlay.OverlayPanelSystemGestureExclusion.attach(
+            composeView,
+            excludeLeftBackEdge = false,
+        )
         // 记住"这扇窗是挂在哪一代无障碍实例上的"：实例被系统换掉后它的窗口 token 会被整片摘掉，
         // 而客户端不一定收到 detach，只能靠代次判断（见 [attachedGeneration] / [dropStalePanelShell]）。
         attachedGeneration = SlideIndexAccessibilityService.overlayHostGeneration()

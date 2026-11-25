@@ -1616,19 +1616,27 @@ fun HistoryPanelScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .zIndex(20f)
-                    .padding(bottom = 16.dp)
-                    .size(width = 72.dp, height = 28.dp)
-                    .onGloballyPositioned { heightHandleCoordinates = it }
+                    .zIndex(30f)
+                    // 整条底边窄带都吃竖直拖动：小圆点太难抓，用户反馈"拖不动"。
+                    .fillMaxWidth()
+                    .height(44.dp)
                     .pointerInput(maxHeightPx) {
                         detectDragGestures(
                             onDragStart = { _ ->
+                                android.util.Log.i(
+                                    "StashHeightDrag",
+                                    "start maxHeightPx=" + maxHeightPx + " dyn=" + dynamicHeightFraction,
+                                )
                                 isHeightResizing = true
                             },
                             onDragEnd = {
                                 isHeightResizing = false
                                 // 接近满屏就吸附到 1（不然留 1~2px 的缝看不出来也调不回去）。
                                 val finalFraction = if (dynamicHeightFraction > 0.97f) 1f else dynamicHeightFraction
+                                android.util.Log.i(
+                                    "StashHeightDrag",
+                                    "end final=" + (if (dynamicHeightFraction > 0.97f) 1f else dynamicHeightFraction),
+                                )
                                 if (finalFraction != dynamicHeightFraction) {
                                     dynamicHeightFraction = finalFraction
                                     haptics.confirm()
@@ -1647,6 +1655,10 @@ fun HistoryPanelScreen(
                                 if (coords != null && coords.isAttached) {
                                     // 面板垂直居中：底边 y = (H + H·f) / 2 → f = 2y/H − 1。
                                     val bottomY = coords.localToRoot(change.position).y
+                                    android.util.Log.i(
+                                        "StashHeightDrag",
+                                        "drag bottomY=" + bottomY + " f=" + (2f * bottomY / maxHeightPx - 1f),
+                                    )
                                     dynamicHeightFraction = (2f * bottomY / maxHeightPx - 1f)
                                         .coerceIn(0.4f, 1f)
                                 }
