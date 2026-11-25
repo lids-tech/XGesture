@@ -140,13 +140,20 @@ object CalendarTodoSync {
             return 0
         }
 
-        val beginMs = startOfTodayMs()
-        val endMs = beginMs + IMPORT_DAYS * DAY_MS
         // 已有来源的条目不重复导入（含此前导入过、以及用户自己写进日历的待办）。
         val knownSources = meta.store.value.sources // entryId -> source
+
+        // ── ① 完成态对账（B/小米日历里改了完成 → 闪念跟上）──
+        // B（万象待办）与 A（小米日历）都用「标题前缀 [已完成]」表示完成，
+        // 所以这里按事件标题把它们已有的完成状态同步回闪念。
+        // 顺带把「已映射事件」的 (标题, 日期) 收下来，给下一步跨日历去重用。
+        val mappedDayTitles = reconcileMappedEvents(context, meta, resolver, knownSources)
+
+        val beginMs = startOfTodayMs()
+        val endMs = beginMs + IMPORT_DAYS * DAY_MS
         val events = queryInstances(resolver, calendarIds, beginMs, endMs)
-        Log.i(
-            TAG,
+        CalendarSyncDebug.log(
+            context,
             "import: calendars=${calendarIds.size} events=${events.size} known=${knownSources.size}",
         )
 
@@ -159,6 +166,10 @@ object CalendarTodoSync {
             val isDone = rawTitle.startsWith(DONE_PREFIX)
             val title = if (isDone) rawTitle.removePrefix(DONE_PREFIX).trim() else rawTitle
             if (title.isEmpty()) return@forEach
+            // 跨日历 / 跨次去重：B 有时会把同一条待办同时写进多个日历
+            // （自己的「万象待办」+ 本地日历），按 (标题, 当天) 只导入一条。
+            val dayKey = dayKeyOf(event.beginMs)
+            if (!mappedDayTitles.add(title to dayKey)) return@forEach
             val entry = repo.addText(title) ?: return@forEach
             meta.setTags(entry.id, listOf(StashMetaRepository.TODO_TAG_NAME))
             meta.setSource(entry.id, source)
@@ -170,6 +181,82 @@ object CalendarTodoSync {
             CalendarSyncDebug.log(context, "imported $added calendar event(s) as todo")
         }
         return added
+    }
+
+    /**
+     * 对「已经映射过事件」的闪念条目做完成态对账，返回已映射事件的 (标题, 日期) 集合。
+     *
+     * 场景：C 从系统日历导入过一条待办（映射了 calendar:<cal>:<event>），之后用户在
+     * **万象待办 / 小米日历**里把它改成已完成 —— 事件标题前面多了 `[已完成] `。
+     * 这里把这个状态同步回闪念条目（否则 B 完成 → C 不完成）。
+     *
+     * 反之，如果事件标题上的前缀被去掉（B 取消完成），也把闪念条目恢复成未完成，
+     * 保持"事件是外部修改的权威来源"。
+     */
+    private suspend fun reconcileMappedEvents(
+        context: Context,
+        meta: StashMetaRepository,
+        resolver: ContentResolver,
+        knownSources: Map<String, String>,
+    ): MutableSet<Pair<String, Long>> {
+        val dayTitles = HashSet<Pair<String, Long>>()
+        val eventIds = ArrayList<Long>()
+        val entryByEventId = HashMap<Long, String>()
+        knownSources.forEach { (entryId, source) ->
+            if (!source.startsWith(SOURCE_PREFIX)) return@forEach
+            val eventId = source.removePrefix(SOURCE_PREFIX).split(':').getOrNull(1)?.toLongOrNull()
+                ?: return@forEach
+            entryByEventId[eventId] = entryId
+            eventIds += eventId
+        }
+        if (eventIds.isEmpty()) return dayTitles
+        var flipped = 0
+        eventIds.chunked(200).forEach { chunk ->
+            val selection = CalendarContract.Events._ID + " IN (" + TextUtils.join(",", chunk) + ")"
+            resolver.query(
+                CalendarContract.Events.CONTENT_URI,
+                arrayOf(
+                    CalendarContract.Events._ID,
+                    CalendarContract.Events.TITLE,
+                    CalendarContract.Events.DTSTART,
+                    CalendarContract.Events.ALL_DAY,
+                ),
+                selection,
+                null,
+                null,
+            )?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(CalendarContract.Events._ID)
+                val titleIndex = cursor.getColumnIndexOrThrow(CalendarContract.Events.TITLE)
+                val startIndex = cursor.getColumnIndexOrThrow(CalendarContract.Events.DTSTART)
+                while (cursor.moveToNext()) {
+                    val eventId = cursor.getLong(idIndex)
+                    val rawTitle = cursor.getString(titleIndex).orEmpty().trim()
+                    if (rawTitle.isEmpty()) continue
+                    val title = rawTitle.removePrefix(DONE_PREFIX).trim()
+                    if (title.isEmpty()) continue
+                    val dayKey = dayKeyOf(cursor.getLong(startIndex))
+                    dayTitles += title to dayKey
+                    val entryId = entryByEventId[eventId] ?: continue
+                    val eventDone = rawTitle.startsWith(DONE_PREFIX)
+                    val localDone = meta.isDone(entryId)
+                    if (eventDone != localDone) {
+                        meta.setDone(entryId, eventDone)
+                        flipped++
+                    }
+                }
+            }
+        }
+        if (flipped > 0) {
+            CalendarSyncDebug.log(context, "reconcile: $flipped todo(s) done-state synced from calendar")
+        }
+        return dayTitles
+    }
+
+    /** 日期键（本地时区的"哪一天"）：跨日历去重用。 */
+    private fun dayKeyOf(epochMs: Long): Long {
+        val zone = TimeZone.getDefault()
+        val ms = epochMs + zone.getOffset(epochMs)
+        return ms / DAY_MS
     }
 
     /**
@@ -320,7 +407,13 @@ object CalendarTodoSync {
 
     /* ------------------------------ 日历查询 ------------------------------ */
 
-    private data class EventRef(val calendarId: Long, val eventId: Long, val title: String?)
+    private data class EventRef(
+        val calendarId: Long,
+        val eventId: Long,
+        val title: String?,
+        /** 该次实例的开始时间（ms）：跨日历去重用的「哪一天」。 */
+        val beginMs: Long,
+    )
 
     /** 所有「可见且可读」的日历 id（跳过节假日/农历类）。 */
     private fun writableOrVisibleCalendarIds(resolver: ContentResolver): List<Long> {
@@ -433,6 +526,7 @@ object CalendarTodoSync {
             val calIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.CALENDAR_ID)
             val eventIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.EVENT_ID)
             val titleIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.TITLE)
+            val beginIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.BEGIN)
             val seen = HashSet<String>()
             while (cursor.moveToNext()) {
                 val calId = cursor.getLong(calIndex)
@@ -443,6 +537,7 @@ object CalendarTodoSync {
                     calendarId = calId,
                     eventId = eventId,
                     title = cursor.getString(titleIndex),
+                    beginMs = cursor.getLong(beginIndex),
                 )
             }
         }
