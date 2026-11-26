@@ -2015,6 +2015,12 @@ class OverlaySettingsMutator @Inject constructor(
             CornerGestureSettings.clampWheelLayerCount(value)
     }
 
+    /** 每圈槽位数量（总和恒为 35，越界/坏值在这里收敛）。 */
+    suspend fun setCornerLayerSlotCounts(counts: List<Int>) = editor.edit {
+        it[SettingsPreferenceKeys.CORNER_GESTURE_LAYER_SLOT_COUNTS] =
+            CornerRadialMenuCodec.normalizeLayerSlotCounts(counts).joinToString(",")
+    }
+
     suspend fun setCornerGestureSlotIconShape(shape: PanelIconShape) = editor.edit {
         it[SettingsPreferenceKeys.CORNER_GESTURE_SLOT_ICON_SHAPE] = shape.name
     }
@@ -2122,6 +2128,25 @@ class OverlaySettingsMutator @Inject constructor(
             CornerInnerZoneActionCodec.encode(sanitized)
     }
 
+    /**
+     * 一次性写入整组槽位。
+     *
+     * 拖动换位如果逐槽位调 setCornerGesture*SlotAction，每次都是一次独立的
+     * DataStore 事务 → 每次发一次设置 → 轮盘会把中间顺序画出来（图标一个一个挪）。
+     * 这里用单个 edit 事务写完，只发一次设置。
+     */
+    suspend fun setCornerGestureSlots(isLeft: Boolean, actions: List<GestureAction>) = editor.edit { prefs ->
+        if (actions.size != CornerRadialMenuCodec.SLOT_COUNT) return@edit
+        val encoded = CornerRadialMenuCodec.encode(actions)
+        if (isLeft) {
+            prefs[SettingsPreferenceKeys.CORNER_GESTURE_LEFT_SLOTS] = encoded
+            if (prefs[SettingsPreferenceKeys.CORNER_GESTURE_UNIFIED_SLOTS] ?: true) {
+                prefs[SettingsPreferenceKeys.CORNER_GESTURE_RIGHT_SLOTS] = encoded
+            }
+        } else {
+            prefs[SettingsPreferenceKeys.CORNER_GESTURE_RIGHT_SLOTS] = encoded
+        }
+    }
     suspend fun setCornerGestureRightSlotAction(index: Int, action: GestureAction) = editor.edit { prefs ->
         val current = CornerRadialMenuCodec.decode(
             prefs[SettingsPreferenceKeys.CORNER_GESTURE_RIGHT_SLOTS] ?: emptySet(),

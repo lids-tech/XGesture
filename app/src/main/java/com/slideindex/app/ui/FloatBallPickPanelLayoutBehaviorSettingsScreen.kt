@@ -67,6 +67,12 @@ fun FloatBallPickPanelLayoutBehaviorSettingsScreen(
     onPickPanelEnterAnimationMsChange: (Int) -> Unit,
     onPickPanelExitAnimationMsChange: (Int) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pickResultFlat by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(
+            com.slideindex.app.overlay.pickresult.PickResultFlatPrefs.isEnabled(context),
+        )
+    }
     val appearanceSectionTitle = stringResource(R.string.pick_settings_section_panel_appearance)
     val selectCopySectionTitle = stringResource(R.string.pick_settings_section_panel_select_copy)
     val feedbackSectionTitle = stringResource(R.string.pick_settings_section_panel_feedback)
@@ -141,6 +147,28 @@ fun FloatBallPickPanelLayoutBehaviorSettingsScreen(
                             onSelect = { style ->
                                 localPanelStyle = style
                                 onPickPanelStyleChange(style)
+                            },
+                        )
+                    },
+                )
+                add(
+                    settingsCardScopeItem("panel-flat") {
+                        // 反馈：平铺是「版式二选一」，用 segmented 比开关更准确。
+                        SettingSegmentedRow(
+                            title = stringResource(R.string.pick_result_flat_title),
+                            items = listOf(false, true),
+                            selected = pickResultFlat,
+                            labelRes = { flat ->
+                                if (flat) {
+                                    R.string.pick_result_flat_style_flat
+                                } else {
+                                    R.string.pick_result_flat_style_card
+                                }
+                            },
+                            onSelect = { flat ->
+                                pickResultFlat = flat
+                                com.slideindex.app.overlay.pickresult.PickResultFlatPrefs
+                                    .setEnabled(context, flat)
                             },
                         )
                     },

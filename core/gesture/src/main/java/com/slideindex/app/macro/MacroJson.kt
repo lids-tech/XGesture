@@ -24,6 +24,7 @@ object MacroJson {
     private const val KEY_ID = "id"
     private const val KEY_NAME = "name"
     private const val KEY_TARGET_PACKAGE = "targetPackage"
+    private const val KEY_SCOPE = "scope"
     private const val KEY_CREATED_AT = "createdAtMs"
     private const val KEY_UPDATED_AT = "updatedAtMs"
     private const val KEY_STEPS = "steps"
@@ -40,6 +41,8 @@ object MacroJson {
     private const val TYPE_DELAY = "delay"
     private const val TYPE_TAP = "tap"
     private const val TYPE_SWIPE = "swipe"
+    private const val TYPE_KEY = "key"
+    private const val KEY_SYSTEM_KEY = "key"
 
     /** 早期版本用过 `holdMs` 表示点击时长，读的时候兼容一下。 */
     private const val KEY_TAP_DURATION_LEGACY = "holdMs"
@@ -77,6 +80,10 @@ object MacroJson {
                     .put(KEY_ID, macro.id)
                     .put(KEY_NAME, macro.name)
                     .put(KEY_TARGET_PACKAGE, macro.targetPackage)
+                    // 只给非默认作用域写字段：APP 宏的旧格式保持逐字节不变（含单测里的期望串）。
+                    .apply {
+                        if (macro.scope != MacroScope.APP) put(KEY_SCOPE, macro.scope.name)
+                    }
                     .put(KEY_CREATED_AT, macro.createdAtMs)
                     .put(KEY_UPDATED_AT, macro.updatedAtMs)
                     .put(KEY_STEPS, steps),
@@ -98,6 +105,7 @@ object MacroJson {
             updatedAtMs = item.optLong(KEY_UPDATED_AT, now),
             schemaVersion = item.optInt(KEY_SCHEMA_VERSION, Macro.CURRENT_SCHEMA_VERSION),
             steps = decodeSteps(item.optJSONArray(KEY_STEPS)),
+            scope = MacroScope.fromName(item.optString(KEY_SCOPE).takeIf { it.isNotBlank() }),
         )
     }
 
@@ -129,6 +137,10 @@ object MacroJson {
             endY = item.optDouble(KEY_END_Y, DEFAULT_END_Y).toFloat(),
             durationMs = item.optLong(KEY_DURATION_MS, MacroStep.DEFAULT_SWIPE_MS),
             points = decodePoints(item.optJSONArray(KEY_POINTS)),
+        )
+
+        TYPE_KEY -> MacroStep.Key(
+            key = MacroStep.SystemKey.fromName(item.optString(KEY_SYSTEM_KEY)),
         )
 
         // 不认识的类型：跳过这一步，不影响同一宏里其它步骤
@@ -182,5 +194,9 @@ object MacroJson {
                 .put(KEY_DURATION_MS, step.durationMs)
                 .put(KEY_POINTS, points)
         }
+
+        is MacroStep.Key -> JSONObject()
+            .put(KEY_TYPE, TYPE_KEY)
+            .put(KEY_SYSTEM_KEY, step.key.name)
     }
 }

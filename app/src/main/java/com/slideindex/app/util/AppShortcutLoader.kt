@@ -287,6 +287,8 @@ object AppShortcutLoader {
         val componentFlat: String? = null,
         val intentUri: String? = null,
         val shortcutIntent: Intent? = null,
+        /** 回传的外层 Intent：图标 extra（EXTRA_SHORTCUT_ICON / ICON_RESOURCE）在它身上。 */
+        val iconProviderIntent: Intent? = null,
     )
 
     fun queryCreateShortcutActivities(context: Context): List<CreateShortcutHost> {
@@ -308,6 +310,7 @@ object AppShortcutLoader {
     fun parseCreateShortcutResult(
         hostPackageName: String,
         data: Intent?,
+        context: Context? = null,
     ): CreatedShortcut? {
         if (data == null) return null
         @Suppress("DEPRECATION")
@@ -332,12 +335,28 @@ object AppShortcutLoader {
         val finalLabel = label.ifBlank {
             componentFlat?.substringAfterLast('/') ?: hostPackageName
         }
+        // 图标只存在于这一次回传的 Intent 里：有 context 就当场快照，
+        // 按 intent / 组件两种身份键各存一份，渲染时不必再碰原 Intent。
+        val iconPath = context?.let { ctx ->
+            com.slideindex.app.activity.ShortcutIconCapture.captureFromIntent(ctx, data)
+        }
+        if (context != null && iconPath != null) {
+            val store = com.slideindex.app.activity.ShortcutIconSnapshotStore
+            store.save(context, store.identityKeyForIntent(intentUri), iconPath)
+            componentFlat?.let { store.save(context, it, iconPath) }
+        }
+        android.util.Log.i(
+            "AppShortcutLoader",
+            "create shortcut parsed: host=$hostPackageName label=$finalLabel " +
+                "intentUri=$intentUri component=$componentFlat iconPath=$iconPath",
+        )
         return CreatedShortcut(
             hostPackageName = hostPackageName,
             label = finalLabel,
             componentFlat = componentFlat,
             intentUri = intentUri,
             shortcutIntent = launchIntent,
+            iconProviderIntent = data,
         )
     }
 

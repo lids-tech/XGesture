@@ -1,5 +1,7 @@
 package com.slideindex.app.overlay.pickresult
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.ImageBitmap
 import com.slideindex.app.ui.theme.LocalAppDarkTheme
 
@@ -7,6 +9,7 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -58,6 +61,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.rotate
@@ -196,6 +201,33 @@ fun PickResultInteractiveTextSection(
     }
     val effectiveAutoSelectAll = autoSelectAll ?: appSettings.floatBallPickAutoSelectAll
     val wordTapGranularity = appSettings.floatBallPickWordTapGranularity
+
+    // 反馈：点词模式下长按「点词」按钮 → 在分词/按字之间切换。
+    val toggleWordTapGranularity: () -> Unit = {
+        val next = if (wordTapGranularity ==
+            com.slideindex.app.settings.PickResultWordTapGranularity.CHARACTER
+        ) {
+            com.slideindex.app.settings.PickResultWordTapGranularity.WORD
+        } else {
+            com.slideindex.app.settings.PickResultWordTapGranularity.CHARACTER
+        }
+        // combinedClickable 的长按本身已触发系统触感，这里不再重复震动。
+        val labelRes = if (next == com.slideindex.app.settings.PickResultWordTapGranularity.WORD) {
+            R.string.pick_word_granularity_word
+        } else {
+            R.string.pick_word_granularity_character
+        }
+        android.widget.Toast.makeText(
+            appContext,
+            appContext.getString(labelRes),
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsRepository
+                ?.invoke(appContext)
+                ?.setFloatBallPickWordTapGranularity(next)
+        }
+    }
     /** 分词时把网址收成一个词块（设置里可关）；关掉后仍按标点拆开。 */
     val wordTapMergeLinks = appSettings.floatBallPickMergeLinks
     var wordTokens by remember(text) {
@@ -633,7 +665,8 @@ fun PickResultInteractiveTextSection(
                         showEditingToolbar = showEditingToolbar,
                         sectionTitle = sectionTitle,
                         onSourceChange = onTextSourceChange,
-                        onEditToggle = {
+                        onWordTapGranularityToggle = toggleWordTapGranularity,
+                    onEditToggle = {
                             if (textMode == PickResultTextMode.EDIT) {
                                 exitEditMode()
                             } else {
@@ -922,6 +955,8 @@ fun PickResultTextToolbar(
     onSourceChange: (PickResultTextSource) -> Unit,
     onEditToggle: () -> Unit,
     onWordSelectToggle: () -> Unit,
+    /** 长按「点词」按钮切换点词粒度（分词 / 按字）。 */
+    onWordTapGranularityToggle: () -> Unit = {},
     onTrimSpaces: () -> Unit,
     onRemoveAllSpaces: () -> Unit,
     onSelectAll: () -> Unit,
@@ -1036,6 +1071,7 @@ fun PickResultTextToolbar(
                     selected = textMode == PickResultTextMode.WORD_TAP,
                     contentDescription = stringResource(R.string.float_ball_action_word_select),
                     onClick = onWordSelectToggle,
+                    onLongClick = onWordTapGranularityToggle,
                 )
 
                 // 4. Trim / Remove all spaces icon (><)
@@ -1353,10 +1389,27 @@ fun PickResultTextBody(
                     )
                 },
             )
+            // 反馈 #402：编辑态面板会被撑到近乎全屏，而 BasicTextField 的高度只包住文字行，
+            // 所以最后一行下面的空白没有焦点命中区 —— 点上去不出光标（必须点到文字才有）。
+            // 这里在文本区容器上补一次"点空白 → 聚焦 + 光标移到末尾"，点文字本身仍由输入框处理。
+            val editFocusRequester = remember { FocusRequester() }
             Box(
                 modifier = editOuterModifier
                     .clip(RoundedCornerShape(0.dp))
-                    .then(Modifier.viewportModifier(toolbarState)),
+                    .then(Modifier.viewportModifier(toolbarState))
+                    // 点空白聚焦挂在**外层**容器上：内层只包住文字行，空白落在它外面，
+                    // 之前挂内层所以点下方空白没反应（反馈 #402 实测仍无效）。
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        editFocusRequester.requestFocus()
+                        onTextFieldValueChange(
+                            textFieldValue.copy(
+                                selection = TextRange(textFieldValue.text.length),
+                            ),
+                        )
+                    },
             ) {
                 Box(
                     modifier = Modifier
@@ -1374,6 +1427,7 @@ fun PickResultTextBody(
                         onValueChange = onTextFieldValueChange,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .focusRequester(editFocusRequester)
                             .suppressSystemTextContextMenu()
                             .then(Modifier.fieldModifier(toolbarState)),
                         onTextLayout = { toolbarState.textLayoutResult = it },

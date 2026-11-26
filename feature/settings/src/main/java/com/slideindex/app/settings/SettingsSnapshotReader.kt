@@ -80,7 +80,9 @@ internal object SettingsSnapshotReader {
         } else {
             360f
         }
-        val min = FloatBallPositionFractions.minInsetDp(ballSizeDp)
+        // 旧规则只允许露出半个球（-球径/2），但用户可以把球挪得更外；这里放宽到「整球移出屏幕」为止。
+        val min = (-ballSizeDp.toInt())
+            .coerceIn(FloatBallPositionFractions.MIN_EDGE_INSET_DP, 0)
         val max = FloatBallPositionFractions.maxInsetDp(screenWidthDp, ballSizeDp)
         val raw = prefs[SettingsPreferenceKeys.FLOAT_BALL_EDGE_INSET_DP] ?: run {
             val fraction = (prefs[SettingsPreferenceKeys.FLOAT_BALL_VISIBLE_FRACTION] ?: 1f)
@@ -1122,6 +1124,12 @@ internal object SettingsSnapshotReader {
             prefs[SettingsPreferenceKeys.CORNER_GESTURE_WHEEL_LAYER_COUNT]
                 ?: CornerRadialMenuCodec.BASE_LAYER_COUNT,
         )
+        val layerSlotCounts = CornerRadialMenuCodec.normalizeLayerSlotCounts(
+            prefs[SettingsPreferenceKeys.CORNER_GESTURE_LAYER_SLOT_COUNTS]
+                ?.split(',')
+                ?.mapNotNull { it.trim().toIntOrNull() }
+                .orEmpty(),
+        )
         val bubbleSizeDp = CornerGestureSettings.clampBubbleSizeDp(
             prefs[SettingsPreferenceKeys.CORNER_GESTURE_BUBBLE_SIZE_DP] ?: 24f,
         )
@@ -1172,6 +1180,7 @@ internal object SettingsSnapshotReader {
                 )
             } ?: PanelIconShape.FOLLOW_GLOBAL,
             wheelLayerCount = wheelLayerCount,
+            layerSlotCounts = layerSlotCounts,
             cancelOutsideWheel = prefs[SettingsPreferenceKeys.CORNER_GESTURE_CANCEL_OUTSIDE_WHEEL] ?: true,
             progressiveLayers = prefs[SettingsPreferenceKeys.CORNER_GESTURE_PROGRESSIVE_LAYERS] ?: false,
             slotHapticEnabled = prefs[SettingsPreferenceKeys.CORNER_GESTURE_SLOT_HAPTIC] ?: true,

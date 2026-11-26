@@ -51,6 +51,7 @@ fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector = when (
     GestureActionType.BACK -> ThinActionIcons.Back
     GestureActionType.HOME -> ThinActionIcons.Home
     GestureActionType.RECENTS -> ThinActionIcons.Recents
+    GestureActionType.FLOAT_NAV -> ThinActionIcons.FloatNav
     GestureActionType.CLOSE_CURRENT_APP -> ThinActionIcons.Close
     GestureActionType.FORCE_STOP_CURRENT_APP -> ThinActionIcons.ForceStopApp
     GestureActionType.FREE_WINDOW_CURRENT_APP -> ThinActionIcons.FreeWindow
@@ -153,6 +154,7 @@ fun gestureActionTypeOutlinedIcon(type: GestureActionType): ImageVector = when (
     GestureActionType.ALIPAY_PAY_CODE -> PayQrActionIcons.AlipayPayCode
     GestureActionType.ALIPAY_SCAN -> PayQrActionIcons.AlipayScan
     GestureActionType.QUICK_WHEEL -> ThinActionIcons.QuickWheel
+    GestureActionType.COMPOSITE -> ThinActionIcons.Inventory
 }
 
 @Suppress("DEPRECATION")
@@ -183,6 +185,7 @@ fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = when (type
     GestureActionType.BACK -> ThinActionIcons.Back
     GestureActionType.HOME -> ThinActionIcons.Home
     GestureActionType.RECENTS -> ThinActionIcons.Recents
+    GestureActionType.FLOAT_NAV -> ThinActionIcons.FloatNav
     GestureActionType.CLOSE_CURRENT_APP -> ThinActionIcons.Close
     GestureActionType.FORCE_STOP_CURRENT_APP -> ThinActionIcons.ForceStopApp
     GestureActionType.FREE_WINDOW_CURRENT_APP -> ThinActionIcons.FreeWindow
@@ -285,4 +288,5 @@ fun gestureActionTypeThinIcon(type: GestureActionType): ImageVector = when (type
     GestureActionType.ALIPAY_PAY_CODE -> PayQrActionIcons.AlipayPayCode
     GestureActionType.ALIPAY_SCAN -> PayQrActionIcons.AlipayScan
     GestureActionType.QUICK_WHEEL -> ThinActionIcons.QuickWheel
+    GestureActionType.COMPOSITE -> ThinActionIcons.Inventory
 }

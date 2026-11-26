@@ -13,6 +13,7 @@ import androidx.core.graphics.withScale
 import com.slideindex.app.activity.ActivityShortcut
 import com.slideindex.app.data.AppRepository
 import com.slideindex.app.gesture.GestureAction
+import androidx.compose.ui.geometry.Offset
 import com.slideindex.app.gesture.SelectedHintMetrics
 import com.slideindex.app.launcher.isCloneTarget
 import com.slideindex.app.launcher.isShellActivityShortcut
@@ -53,6 +54,8 @@ object CornerRadialMenuRenderer {
     private const val PLUS_COLOR_HIGHLIGHT = 0xFF0D9488.toInt()
     private const val NAME_PILL_FILL = 0xDD20263F.toInt()
     private const val NAME_TEXT = 0xFFFFFFFF.toInt()
+private const val NAME_PILL_FILL_LIGHT = 0xE6FFFFFF.toInt()
+private const val NAME_TEXT_LIGHT = 0xFF1E293B.toInt()
     private const val SUBMENU_PILL_FILL = 0xFFFDFDFD.toInt()
     private const val SUBMENU_PILL_FILL_HIGHLIGHT = 0xFFEFFCF9.toInt()
     private const val SUBMENU_TEXT = 0xFF1E293B.toInt()
@@ -81,7 +84,7 @@ object CornerRadialMenuRenderer {
         appRepository: AppRepository? = null,
         hintIconSizeDp: Int = SelectedHintMetrics.DEFAULT_ICON_SIZE_DP,
         shortcutSubMenuLayout: CornerShortcutSubMenuLayout? = null,
-        shortcutSubMenuItems: List<GestureAction.LaunchShortcut> = emptyList(),
+        shortcutSubMenuItems: List<GestureAction> = emptyList(),
         highlightedShortcutIndex: Int = -1,
         shortcutSubMenuRevealProgress: Float = 1f,
         /**
@@ -92,6 +95,12 @@ object CornerRadialMenuRenderer {
         hintLabelSuffix: String = "",
         /** 长按到时间后是否在图标右下角画"小窗"（画中画）角标。 */
         hintPipArmed: Boolean = false,
+        /** 当前是否深色主题：命中提示卡片在日间要用浅色底（反馈 #9）。 */
+        isDark: Boolean = true,
+        /** 每个槽位的额外绘制偏移（拖动换位时的实时让位动画）。 */
+        slotOffsetPx: (Int) -> Offset = { Offset.Zero },
+        /** 拖动中的槽位不按固定位置绘制（由浮层画跟手图标）；-1 = 全部正常绘制。 */
+        hiddenSlot: Int = -1,
     ) {
         val progress = revealProgress.coerceIn(0f, 1f)
         if (progress <= 0.01f) return
@@ -110,9 +119,13 @@ object CornerRadialMenuRenderer {
         }
 
         // 编辑模式由调用方把 activeLayerCount 传成"已启用的层数"，因此空槽位只在启用层内渲染。
-        val lastSlot = CornerRadialMenuGeometry.lastVisibleSlotIndex(activeLayerCount)
+        val lastSlot = CornerRadialMenuGeometry.lastVisibleSlotIndex(
+            activeLayerCount,
+            settings.normalizedLayerSlotCounts,
+        )
 
         for (slot in 0..lastSlot) {
+            if (slot == hiddenSlot) continue
             val action = slots.getOrElse(slot) { GestureAction.None }
             val isEmpty = action is GestureAction.None
             if (!editMode && isEmpty) continue
@@ -125,8 +138,9 @@ object CornerRadialMenuRenderer {
                 settings = settings,
                 density = density,
             )
-            val centerX = anchorX + (target.x - anchorX) * progress
-            val centerY = anchorY + (target.y - anchorY) * progress
+            val slotOffset = slotOffsetPx(slot)
+            val centerX = anchorX + (target.x - anchorX) * progress + slotOffset.x
+            val centerY = anchorY + (target.y - anchorY) * progress + slotOffset.y
             val highlighted = slot == highlightedSlot
             val bubbleRadius = CornerRadialMenuGeometry.bubbleRadiusPx(settings, density, slot)
             val scale = if (highlighted) 1.06f else 1f
@@ -208,6 +222,7 @@ object CornerRadialMenuRenderer {
                     longPressRingProgress = longPressRingProgress,
                     hintLabelSuffix = hintLabelSuffix,
                     hintPipArmed = hintPipArmed,
+                    isDark = isDark,
                 )
             }
         }
@@ -232,7 +247,7 @@ object CornerRadialMenuRenderer {
     private fun drawShortcutSubMenu(
         context: Context,
         canvas: Canvas,
-        items: List<GestureAction.LaunchShortcut>,
+        items: List<GestureAction>,
         layout: CornerShortcutSubMenuLayout,
         highlightedIndex: Int,
         density: Float,
@@ -327,33 +342,33 @@ object CornerRadialMenuRenderer {
                     iconPaint.apply { alpha = itemAlpha },
                 )
             }
-            when {
-                shortcut.showsShellActivityShortcutBadge(activityShortcuts) -> {
-                    ShellCommandBadgeRenderer.draw(
-                        canvas,
-                        iconCenterX,
-                        iconCenterY,
-                        iconSize,
-                        itemAlpha / 255f,
-                        density,
-                    )
-                }
-                !shortcut.isShellActivityShortcut(activityShortcuts) -> {
-                    ShortcutBadgeRenderer.draw(
-                        canvas,
-                        iconCenterX,
-                        iconCenterY,
-                        iconSize,
-                        itemAlpha / 255f,
-                        density,
-                    )
+            // 角标只对「快捷方式」有意义（反馈 #385 之后二级菜单也能放应用/内置动作）。
+            if (shortcut is GestureAction.LaunchShortcut) {
+                when {
+                    shortcut.showsShellActivityShortcutBadge(activityShortcuts) -> {
+                        ShellCommandBadgeRenderer.draw(
+                            canvas,
+                            iconCenterX,
+                            iconCenterY,
+                            iconSize,
+                            itemAlpha / 255f,
+                            density,
+                        )
+                    }
+                    !shortcut.isShellActivityShortcut(activityShortcuts) -> {
+                        ShortcutBadgeRenderer.draw(
+                            canvas,
+                            iconCenterX,
+                            iconCenterY,
+                            iconSize,
+                            itemAlpha / 255f,
+                            density,
+                        )
+                    }
                 }
             }
 
-            val label = (com.slideindex.app.overlay.panels.PanelRuntimeHooks.launchShortcutLabel
-                ?.invoke(shortcut).orEmpty()).ifBlank {
-                actionLabel(context, shortcut, shellCommands)
-            }
+            val label = actionLabel(context, shortcut, shellCommands)
             val textStart = drawRect.left + iconContentWidth
             val textMaxWidth = (drawRect.right - paddingRight - textStart).coerceAtLeast(0f)
             val fitted = TextUtils.ellipsize(label, textPaint, textMaxWidth, TextUtils.TruncateAt.END)
@@ -383,6 +398,8 @@ object CornerRadialMenuRenderer {
         hintLabelSuffix: String = "",
         /** 长按到时间后是否在图标右下角画"小窗"（画中画）角标。 */
         hintPipArmed: Boolean = false,
+        /** 当前是否深色主题：命中提示卡片在日间要用浅色底（反馈 #9）。 */
+        isDark: Boolean = true,
     ) {
         // 长按到时间 → 名字后面拼上目标形态（-小窗 / -全屏）
         val label = actionLabel(context, action, shellCommands) +
@@ -390,15 +407,20 @@ object CornerRadialMenuRenderer {
         if (label.isBlank()) return
 
         val iconSizeDp = SelectedHintMetrics.clampIconSizeDp(hintIconSizeDp)
+        // 日间：浅色底 + 深色字；夜间：深藏青底 + 白字（反馈 #9）。
+        val pillFill = if (isDark) NAME_PILL_FILL else NAME_PILL_FILL_LIGHT
+        val labelColor = if (isDark) NAME_TEXT else NAME_TEXT_LIGHT
         val namePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = NAME_TEXT
+            color = labelColor
             textSize = SelectedHintMetrics.textSizePx(iconSizeDp, density)
             textAlign = Paint.Align.LEFT
             alpha = (255f * progress).toInt().coerceIn(0, 255)
         }
         val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = NAME_PILL_FILL
-            alpha = (221f * progress).toInt().coerceIn(0, 255)
+            color = pillFill
+            // 日间底色本来就浅，用更高的不透明度才压得住背景。
+            val baseAlpha = if (isDark) 221f else 240f
+            alpha = (baseAlpha * progress).toInt().coerceIn(0, 255)
         }
         val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             alpha = (255f * progress).toInt().coerceIn(0, 255)

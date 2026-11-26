@@ -40,10 +40,49 @@ sealed interface MacroStep {
         data class PathPoint(val x: Float = 0.5f, val y: Float = 0.5f)
     }
 
+    /**
+     * 系统按键（反馈 #4）：返回 / 主屏 / 最近任务。
+     *
+     * 只有点击与滑动时，宏永远无法"离开当前界面"；加上这一种步骤后，
+     * 录制工具条上的三个按键按钮就能把"回桌面 / 切最近任务 / 返回"录进宏里，
+     * 于是宏可以跨界面、跨应用走完整流程。
+     */
+    data class Key(
+        val key: SystemKey = SystemKey.BACK,
+    ) : MacroStep
+
+    /** 宏里支持的三种系统按键。 */
+    enum class SystemKey {
+        BACK,
+        HOME,
+        RECENTS,
+        ;
+
+        companion object {
+            fun fromName(raw: String?): SystemKey =
+                entries.firstOrNull { it.name == raw } ?: BACK
+        }
+    }
+
     companion object {
         const val DEFAULT_WAIT_MS = 200L
         const val DEFAULT_TAP_MS = 80L
         const val DEFAULT_SWIPE_MS = 250L
+    }
+}
+
+/** 宏的作用域（反馈 #394）。 */
+enum class MacroScope {
+    /** 只在目标 App 内跑：执行前把它拉到前台，中途离开就中止（历史行为）。 */
+    APP,
+
+    /** 全局宏：不绑定 App，直接在当前界面回放。 */
+    GLOBAL,
+    ;
+
+    companion object {
+        fun fromName(raw: String?): MacroScope =
+            entries.firstOrNull { it.name == raw } ?: APP
     }
 }
 
@@ -57,7 +96,18 @@ data class Macro(
     val updatedAtMs: Long = 0L,
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION,
     val steps: List<MacroStep> = emptyList(),
+    /** 作用域；缺省 APP = 老数据行为不变。 */
+    val scope: MacroScope = MacroScope.APP,
 ) {
+
+    /**
+     * 是否全局宏。
+     *
+     * 除了显式声明 GLOBAL，**没有目标应用**的宏也按全局处理 —— 否则它既不会拉起 App
+     * 也不会命中前台校验，等于永远跑不起来。
+     */
+    val isGlobal: Boolean
+        get() = scope == MacroScope.GLOBAL || targetPackage.isBlank()
 
     /** 会真正产生手势的步数（不含等待）—— 列表里显示「名字 - N 个动作」用这个。 */
     val actionCount: Int

@@ -113,6 +113,9 @@ val PANEL_MIN_IMAGE_HEIGHT = 48.dp
 val PANEL_VERTICAL_PADDING = 12.dp
 val PANEL_ACTION_BAR_BOTTOM_GAP = 20.dp
 val TEXT_IMAGE_DIVIDER_HEIGHT = 10.dp
+
+/** 编辑态在正文高度之外额外留的高度（工具条 + 动作栏）。 */
+val EDIT_MODE_EXTRA_HEIGHT = 132.dp
 const val LANDSCAPE_DUAL_COLUMN_TEXT_WEIGHT = 0.52f
 const val LANDSCAPE_DUAL_COLUMN_AUX_WEIGHT = 0.48f
 const val AUXILIARY_COLLAPSE_ANIMATION_MS = 280
@@ -456,7 +459,9 @@ fun PickResultTextImageDividerBlock(
     alphaFactor: Float,
     hasAuxiliaryCollapse: Boolean,
     onDragEnd: () -> Unit,
-    applyDrag: (Float) -> Unit
+    applyDrag: (Float) -> Unit,
+    /** 平铺模式：两段之间画一条细线，替代原来的卡片边界（反馈 #401）。 */
+    showHairline: Boolean = false
 ) {
     if (dividerHeight <= 0.dp) return
 
@@ -479,7 +484,19 @@ fun PickResultTextImageDividerBlock(
                     Modifier
                 }
             )
-    )
+    ) {
+        if (showHairline) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f * alphaFactor),
+                    ),
+            )
+        }
+    }
 }
 
 @Composable
@@ -631,20 +648,24 @@ fun PickResultPanelTextSlot(
     val isDark = com.slideindex.app.ui.theme.LocalAppDarkTheme.current
     val cardBg = if (isDark) Color(0x10FFFFFF) else Color(0xB2FFFFFF)
     val cardBorder = if (isDark) Color(0x24FFFFFF) else Color(0x12000000)
+    // 反馈 #401/#5：平铺只作用于「分段卡片」——去掉这两张卡的底色/描边/圆角与左右外扩，
+    // 外层面板材质保持不变。
+    val flatSection = rememberPickResultFlatMode()
+    val sectionHorizontalPadding = if (flatSection) 4.dp else 16.dp
 
     androidx.compose.material3.Surface(
         modifier = if (useExpandedLayout) {
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = sectionHorizontalPadding)
         } else {
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = sectionHorizontalPadding)
         },
-        shape = RoundedCornerShape(16.dp),
-        color = cardBg,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, cardBorder)
+        shape = if (flatSection) RoundedCornerShape(0.dp) else RoundedCornerShape(16.dp),
+        color = if (flatSection) Color.Transparent else cardBg,
+        border = if (flatSection) null else androidx.compose.foundation.BorderStroke(0.5.dp, cardBorder)
     ) {
         Box(
             modifier = if (useExpandedLayout) {
@@ -1105,7 +1126,10 @@ fun PickResultCollapsePanelColumn(
         }
 
     val fixedPanelHeight = when {
-        isEditMode -> panelContentHeight + innerImeBottom
+        // 编辑态不再强行铺满整块容器（否则面板顶到屏幕顶端，正文看起来"跑到最上面"）。
+        // 只按正文需要的高度撑开，最多到容器高度；键盘让位只让一次。
+        isEditMode -> (idealTextBodyHeight + EDIT_MODE_EXTRA_HEIGHT + innerImeBottom)
+            .coerceIn(minTextBodyHeight, panelContentHeight + innerImeBottom)
         else -> null
     }
 
@@ -1573,7 +1597,8 @@ fun PickResultCollapsePanelColumn(
                         alphaFactor = normalLayoutFactor,
                         hasAuxiliaryCollapse = auxiliaryDragEnabled,
                         onDragEnd = onDragEnd,
-                        applyDrag = wrappedApplyDrag
+                        applyDrag = wrappedApplyDrag,
+                        showHairline = PickResultFlatPrefs.isEnabled(LocalContext.current),
                     )
                     Box(
                         modifier = (if (useWeightedTextLayout) {

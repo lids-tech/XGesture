@@ -294,7 +294,6 @@ fun OverlayMaterialSettingsScreen(
                         )
                     }
                 )
-
                 // 4. 小组件面板模糊
                 val currentWidgetMode = OverlayBlurMode.fromId(widgetPanelBlurModeId)
                 val selectedWidgetIndex = blurModeOptions.indexOf(currentWidgetMode).coerceAtLeast(0)

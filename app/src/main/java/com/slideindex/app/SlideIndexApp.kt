@@ -799,6 +799,10 @@ class SlideIndexApp : Application(), androidx.work.Configuration.Provider {
                         query: String,
                     ): List<com.slideindex.app.clipboard.ClipboardEntry> =
                         repo.searchHistory(query)
+
+                    override suspend fun delete(id: String) {
+                        repo.delete(id)
+                    }
                 }
             }
         }

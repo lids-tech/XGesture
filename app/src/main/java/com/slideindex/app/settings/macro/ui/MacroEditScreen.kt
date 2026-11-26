@@ -37,6 +37,7 @@ import com.slideindex.app.R
 import com.slideindex.app.settings.macro.MacroValidation
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.SettingNavigationRow
+import com.slideindex.app.ui.settings.components.SettingSwitchRow
 import com.slideindex.app.ui.settings.components.SettingsLabeledTextFieldRow
 import com.slideindex.app.ui.settings.components.SettingsLazyScreenScaffold
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
@@ -125,7 +126,7 @@ fun MacroEditScreen(
         if (recording) R.string.macro_help_recording else R.string.macro_help_idle,
     )
     val targetSummary = if (targetPackage.isBlank()) {
-        stringResource(R.string.macro_target_none)
+        stringResource(R.string.macro_target_none_optional)
     } else {
         stringResource(R.string.macro_target_value, appLabel.ifBlank { targetPackage }, targetPackage)
     }
@@ -152,27 +153,32 @@ fun MacroEditScreen(
         settingsLazySmallTitle(key = "macro-section-basic", title = nameSectionTitle)
         groupedCardItems(
             keyPrefix = "macro-basic",
-            items = listOf(
-                settingsCardScopeItem("macro-name") {
-                    SettingsLabeledTextFieldRow(
-                        key = "macro-name-field",
-                        label = stringResource(R.string.macro_name_label),
-                        value = name,
-                        onValueChange = { text ->
-                            errorResId = null
-                            onNameChange(text)
-                        },
-                    )
-                },
-                settingsCardScopeItem("macro-target") {
-                    SettingNavigationRow(
-                        icon = { label -> MacroTargetAppIcon(targetPackage, label) },
-                        title = stringResource(R.string.macro_target_label),
-                        subtitle = targetSummary,
-                        onClick = onPickTargetApp,
-                    )
-                },
-            ),
+            items = buildList {
+                add(
+                    settingsCardScopeItem("macro-name") {
+                        SettingsLabeledTextFieldRow(
+                            key = "macro-name-field",
+                            label = stringResource(R.string.macro_name_label),
+                            value = name,
+                            onValueChange = { text ->
+                                errorResId = null
+                                onNameChange(text)
+                            },
+                        )
+                    },
+                )
+                // 目标应用可选：不选 = 全局宏（从当前界面开始），选了 = 应用内宏。
+                add(
+                    settingsCardScopeItem("macro-target-app") {
+                        SettingNavigationRow(
+                            icon = { label -> MacroTargetAppIcon(targetPackage, label) },
+                            title = stringResource(R.string.macro_target_label),
+                            subtitle = targetSummary,
+                            onClick = onPickTargetApp,
+                        )
+                    },
+                )
+            },
         )
 
         settingsLazySmallTitle(key = "macro-section-record", title = recordSectionTitle)

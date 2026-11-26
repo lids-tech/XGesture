@@ -1,6 +1,7 @@
 package com.slideindex.app.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import com.slideindex.app.ui.miuix.MiuixBottomSheet
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.MiuixNavigationRow
 import com.slideindex.app.ui.settings.components.SettingSwitchRow
+import com.slideindex.app.ui.settings.components.SettingsCardScopeContent
 import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.settings.components.SettingsSliderRow
 import com.slideindex.app.ui.settings.components.StatusRow
@@ -57,11 +59,13 @@ fun PhysicalKeySettingsScreen(
     onMediaPlaybackPrioritizedChange: (Boolean) -> Unit,
     onLongPressTimeoutChange: (Long) -> Unit,
     onDoubleClickTimeoutChange: (Long) -> Unit,
-    onOpenActionPick: (PhysicalKeyGesture) -> Unit,
+    onOpenActionPick: (PhysicalKeyGesture, Boolean) -> Unit,
     onRefreshDiagnostics: () -> Unit,
     onRetry: () -> Unit,
 ) {
     var showDiagnostics by remember { mutableStateOf(false) }
+    // 反馈 #2：点某个按键先弹「亮屏 / 熄屏」两行，再进动作选择。
+    var detailGesture by remember { mutableStateOf<PhysicalKeyGesture?>(null) }
 
     LaunchedEffect(showDiagnostics) {
         if (showDiagnostics) {
@@ -93,6 +97,21 @@ fun PhysicalKeySettingsScreen(
     val volDownLongTitle = stringResource(R.string.physical_key_gesture_vol_down_long)
     val volDownDoubleTitle = stringResource(R.string.physical_key_gesture_vol_down_double)
     val volBothTitle = stringResource(R.string.physical_key_gesture_vol_both_press)
+
+    val followScreenOnLabel = stringResource(R.string.physical_key_follow_screen_on)
+    // 熄屏专用动作跟亮屏动作同一批按键，标题复用，顺序也保持一致。
+    val gestureDetailRows = listOf(
+        PhysicalKeyGesture.POWER_SINGLE_PRESS to powerSingleTitle,
+        PhysicalKeyGesture.POWER_DOUBLE_PRESS to powerDoubleTitle,
+        PhysicalKeyGesture.POWER_LONG_PRESS to powerLongTitle,
+        PhysicalKeyGesture.VOLUME_UP_SINGLE_PRESS to volUpSingleTitle,
+        PhysicalKeyGesture.VOLUME_UP_DOUBLE_PRESS to volUpDoubleTitle,
+        PhysicalKeyGesture.VOLUME_UP_LONG_PRESS to volUpLongTitle,
+        PhysicalKeyGesture.VOLUME_DOWN_SINGLE_PRESS to volDownSingleTitle,
+        PhysicalKeyGesture.VOLUME_DOWN_DOUBLE_PRESS to volDownDoubleTitle,
+        PhysicalKeyGesture.VOLUME_DOWN_LONG_PRESS to volDownLongTitle,
+        PhysicalKeyGesture.VOLUME_BOTH_PRESS to volBothTitle,
+    )
 
     val sectionAdvancedTitle = stringResource(R.string.physical_key_section_advanced)
     val interceptNativeTitle = stringResource(R.string.physical_key_intercept_native_title)
@@ -190,7 +209,7 @@ fun PhysicalKeySettingsScreen(
                         title = powerSingleTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.POWER_SINGLE_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.POWER_SINGLE_PRESS },
                     )
                 },
                 settingsCardScopeItem("power-double") {
@@ -199,7 +218,7 @@ fun PhysicalKeySettingsScreen(
                         title = powerDoubleTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.POWER_DOUBLE_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.POWER_DOUBLE_PRESS },
                     )
                 },
                 settingsCardScopeItem("power-long") {
@@ -208,7 +227,7 @@ fun PhysicalKeySettingsScreen(
                         title = powerLongTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.POWER_LONG_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.POWER_LONG_PRESS },
                     )
                 },
             )
@@ -228,7 +247,7 @@ fun PhysicalKeySettingsScreen(
                         title = volUpSingleTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_UP_SINGLE_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_UP_SINGLE_PRESS },
                     )
                 },
                 settingsCardScopeItem("vol-up-double") {
@@ -237,7 +256,7 @@ fun PhysicalKeySettingsScreen(
                         title = volUpDoubleTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_UP_DOUBLE_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_UP_DOUBLE_PRESS },
                     )
                 },
                 settingsCardScopeItem("vol-up-long") {
@@ -246,7 +265,7 @@ fun PhysicalKeySettingsScreen(
                         title = volUpLongTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_UP_LONG_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_UP_LONG_PRESS },
                     )
                 },
                 settingsCardScopeItem("vol-down-single") {
@@ -255,7 +274,7 @@ fun PhysicalKeySettingsScreen(
                         title = volDownSingleTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_DOWN_SINGLE_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_DOWN_SINGLE_PRESS },
                     )
                 },
                 settingsCardScopeItem("vol-down-double") {
@@ -264,7 +283,7 @@ fun PhysicalKeySettingsScreen(
                         title = volDownDoubleTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_DOWN_DOUBLE_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_DOWN_DOUBLE_PRESS },
                     )
                 },
                 settingsCardScopeItem("vol-down-long") {
@@ -273,7 +292,7 @@ fun PhysicalKeySettingsScreen(
                         title = volDownLongTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_DOWN_LONG_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_DOWN_LONG_PRESS },
                     )
                 },
                 settingsCardScopeItem("vol-both-press") {
@@ -282,7 +301,7 @@ fun PhysicalKeySettingsScreen(
                         title = volBothTitle,
                         summary = gestureActionLabel(action),
                         enabled = settings.enabled,
-                        onClick = { onOpenActionPick(PhysicalKeyGesture.VOLUME_BOTH_PRESS) },
+                        onClick = { detailGesture = PhysicalKeyGesture.VOLUME_BOTH_PRESS },
                     )
                 },
             )
@@ -351,6 +370,67 @@ fun PhysicalKeySettingsScreen(
         )
 
         settingsLazyHint(key = "bottom-hint", text = bottomHint)
+    }
+
+    // 按键详情：亮屏 / 熄屏两套动作放一起（反馈 #2）。
+    val detail = detailGesture
+    if (detail != null) {
+        val entry = settings.entries[detail]
+        val screenOnAction = entry?.action ?: GestureAction.None
+        val screenOffAction = entry?.screenOffAction ?: GestureAction.None
+        MiuixBottomSheet(
+            show = true,
+            title = stringResource(
+                R.string.physical_key_gesture_detail_title,
+                gestureDetailRows.firstOrNull { it.first == detail }?.second.orEmpty(),
+            ),
+            onDismissRequest = { detailGesture = null },
+        ) {
+            Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                CardSegment(
+                    isFirst = true,
+                    isLast = false,
+                    outerHorizontalPadding = 0.dp,
+                ) {
+                    SettingsCardScopeContent {
+                        MiuixNavigationRow(
+                            title = stringResource(R.string.physical_key_screen_on_action),
+                            summary = if (screenOnAction is GestureAction.None) {
+                                stringResource(R.string.physical_key_action_unset)
+                            } else {
+                                gestureActionLabel(screenOnAction)
+                            },
+                            enabled = settings.enabled,
+                            onClick = {
+                                detailGesture = null
+                                onOpenActionPick(detail, false)
+                            },
+                        )
+                    }
+                }
+                CardSegment(
+                    isFirst = false,
+                    isLast = true,
+                    outerHorizontalPadding = 0.dp,
+                ) {
+                    SettingsCardScopeContent {
+                        MiuixNavigationRow(
+                            title = stringResource(R.string.physical_key_screen_off_action),
+                            summary = if (screenOffAction is GestureAction.None) {
+                                followScreenOnLabel
+                            } else {
+                                gestureActionLabel(screenOffAction)
+                            },
+                            enabled = settings.enabled,
+                            onClick = {
+                                detailGesture = null
+                                onOpenActionPick(detail, true)
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // 诊断弹窗

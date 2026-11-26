@@ -26,6 +26,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.ComposeView
 import com.slideindex.app.R
 import com.slideindex.app.imageeditor.ImageEditorSavedImageDeleteScheduler
@@ -110,6 +113,8 @@ object ScreenDrawOverlay {
     private var textCallback: ((String) -> Unit)? = null
 
     private var density = 1f
+    /** App 的「界面缩放」系数（1f = 100%）。Compose 内容按它缩放，窗口尺寸也要跟着乘。 */
+    private var uiScale = 1f
     private var screenWidth = 1
     private var screenHeight = 1
     private var saving = false
@@ -150,6 +155,13 @@ object ScreenDrawOverlay {
         if (wm == null) return false
 
         val metrics = OverlayScreenMetrics.sizePx(host)
+        uiScale = runCatching {
+            com.slideindex.app.di.OverlayDependencyAccess
+                .overlayDependencies(context)
+                ?.settingsRepository
+                ?.readSnapshot()
+                ?.uiDensityScale
+        }.getOrNull()?.takeIf { it > 0f } ?: 1f
         screenWidth = metrics.first.coerceAtLeast(1)
         screenHeight = metrics.second.coerceAtLeast(1)
         density = host.resources.displayMetrics.density
@@ -161,8 +173,9 @@ object ScreenDrawOverlay {
         canUndoState.value = false
         canRedoState.value = false
         minimized = false
-        orientationState.value = ScreenDrawOrientation.HORIZONTAL
-        currentToolState.value = ScreenDrawTool.PEN
+        val initialOrientation = ScreenDrawPrefs.resolveInitialOrientation(host)
+        orientationState.value = initialOrientation
+        currentToolState.value = ScreenDrawPrefs.resolveInitialTool(host)
         popupOptionsToolState.value = null
         isOptionsPopupShowing = false
         strokeWidthState.value = 3f
@@ -176,6 +189,7 @@ object ScreenDrawOverlay {
         eraserModeState.value = ScreenDrawEraserMode.STROKE
 
         val drawCanvas = ScreenDrawCanvasView(host) { dismiss() }
+        drawCanvas.tool = currentToolState.value
         drawCanvas.onTouchDown = {
             hideOptionsPopup()
         }
@@ -327,6 +341,11 @@ object ScreenDrawOverlay {
         val drawToolbar = OverlayCompose.createComposeView(host, toolbarOwner).apply {
             setContent {
                 OverlayAwareModuleTheme {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = androidx.compose.ui.Modifier
+                            .fillMaxSize()
+                            .padding(SHADOW_MARGIN_DP.dp),
+                    ) {
                     ScreenDrawMainToolbarCompose(
                         orientation = orientationState.value,
                         passthrough = passthroughState.value,
@@ -350,12 +369,13 @@ object ScreenDrawOverlay {
                         onMoveBy = { dx, dy -> moveToolbarBy(dx, dy) },
                         onMoveFinished = {},
                     )
+                    }
                 }
             }
         }
 
-        val tbWidth = dp(316f)
-        val tbHeight = dp(86f)
+        val (tbWidth, tbHeight) = toolbarSizePx(initialOrientation)
+        val (initialX, initialY) = initialToolbarPosition(initialOrientation, tbWidth, tbHeight)
         val toolbarLayout = WindowManager.LayoutParams(
             tbWidth,
             tbHeight,
@@ -367,8 +387,8 @@ object ScreenDrawOverlay {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = ((screenWidth - tbWidth) / 2).coerceAtLeast(0)
-            y = (screenHeight - tbHeight - dp(28f)).coerceAtLeast(0)
+            x = initialX
+            y = initialY
             layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             OverlayWindowTypes.ensureNoBrightnessOverride(this)
@@ -403,6 +423,8 @@ object ScreenDrawOverlay {
         val canvasView = canvas ?: return
         canvasView.tool = target
         currentToolState.value = target
+        // 「记忆」选项要读到"上次实际用过的工具"，所以每次切换都落盘。
+        hostContext?.let { ScreenDrawPrefs.writeLastTool(it, target) }
 
         if (isFinishActionsShowingState.value) {
             hideOptionsPopup()
@@ -434,7 +456,7 @@ object ScreenDrawOverlay {
         val isVertical = orientationState.value == ScreenDrawOrientation.VERTICAL
         val tbWidth = tbParams.width
         val tbHeight = tbParams.height
-        val panelWidth = if (isVertical) dp(148f) else dp(316f)
+        val panelWidth = if (isVertical) scaledDp(148f) else scaledDp(316f)
         val panelHeight = dp(getOptionsPanelHeightDp(orientationState.value, tool, false))
         val gap = dp(8f)
 
@@ -494,7 +516,7 @@ object ScreenDrawOverlay {
         val isVertical = orientationState.value == ScreenDrawOrientation.VERTICAL
         val tbWidth = tbParams.width
         val tbHeight = tbParams.height
-        val panelWidth = if (isVertical) dp(52f) else dp(264f)
+        val panelWidth = if (isVertical) scaledDp(52f) else scaledDp(264f)
         val panelHeight = if (isVertical) dp(264f) else dp(52f)
         val gap = dp(8f)
 
@@ -565,23 +587,45 @@ object ScreenDrawOverlay {
         val isVertical = orientationState.value == ScreenDrawOrientation.VERTICAL
         val nextOrientation = if (isVertical) ScreenDrawOrientation.HORIZONTAL else ScreenDrawOrientation.VERTICAL
         orientationState.value = nextOrientation
+        hostContext?.let { ScreenDrawPrefs.writeLastOrientation(it, nextOrientation) }
 
         val view = toolbar ?: return
         val params = toolbarParams ?: return
         val wm = windowManager ?: return
 
-        if (nextOrientation == ScreenDrawOrientation.VERTICAL) {
-            params.width = dp(86f)
-            params.height = dp(316f)
-            params.x = (screenWidth - dp(86f) - dp(16f)).coerceAtLeast(0)
-            params.y = ((screenHeight - dp(316f)) / 2).coerceAtLeast(0)
-        } else {
-            params.width = dp(316f)
-            params.height = dp(86f)
-            params.x = ((screenWidth - dp(316f)) / 2).coerceAtLeast(0)
-            params.y = (screenHeight - dp(86f) - dp(28f)).coerceAtLeast(0)
-        }
+        val (width, height) = toolbarSizePx(nextOrientation)
+        val (x, y) = initialToolbarPosition(nextOrientation, width, height)
+        params.width = width
+        params.height = height
+        params.x = x
+        params.y = y
         runCatching { wm.updateViewLayout(view, params) }
+    }
+
+    private fun toolbarSizePx(orientation: ScreenDrawOrientation): Pair<Int, Int> {
+        // 窗口比胶囊大一圈：GlassCapsule 的阴影画在内容外，窗口正好等于内容时
+        // 底部阴影会被窗口边缘裁掉，底部两角露成直角（反馈）。
+        val margin = SHADOW_MARGIN_DP * 2f
+        return if (orientation == ScreenDrawOrientation.VERTICAL) {
+            scaledDp(86f + margin) to scaledDp(316f + margin)
+        } else {
+            scaledDp(316f + margin) to scaledDp(86f + margin)
+        }
+    }
+
+    /** 窗口尺寸要用「界面缩放后」的 dp：Compose 内容跟 uiScale 走，窗口不跟就会靠左留白。 */
+    private fun scaledDp(value: Float): Int = dp(value * uiScale)
+
+    private fun initialToolbarPosition(
+        orientation: ScreenDrawOrientation,
+        width: Int,
+        height: Int,
+    ): Pair<Int, Int> = if (orientation == ScreenDrawOrientation.VERTICAL) {
+        (screenWidth - width - dp(16f)).coerceAtLeast(0) to
+            ((screenHeight - height) / 2).coerceAtLeast(0)
+    } else {
+        ((screenWidth - width) / 2).coerceAtLeast(0) to
+            (screenHeight - height - dp(28f)).coerceAtLeast(0)
     }
 
     private fun moveToolbarBy(dx: Float, dy: Float) {
@@ -1315,6 +1359,9 @@ object ScreenDrawOverlay {
             Toast.makeText(context.applicationContext, text, Toast.LENGTH_SHORT).show()
         }
     }
+
+    /** 工具条窗口给阴影留的外扩（dp，单边）。 */
+    private val SHADOW_MARGIN_DP = 20f
 
     private fun dp(value: Float): Int = (value * density).roundToInt()
 

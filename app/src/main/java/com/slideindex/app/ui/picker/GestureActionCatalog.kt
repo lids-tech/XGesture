@@ -109,6 +109,7 @@ object GestureActionCatalog {
         GestureActionType.BACK,
         GestureActionType.HOME,
         GestureActionType.RECENTS,
+        GestureActionType.FLOAT_NAV,
         GestureActionType.PREVIOUS_APP,
         GestureActionType.FREE_WINDOW_CURRENT_APP,
         GestureActionType.CLOSE_CURRENT_APP,
@@ -300,6 +301,7 @@ object GestureActionCatalog {
         GestureAction.Back,
         GestureAction.Home,
         GestureAction.Recents,
+        GestureAction.FloatNav,
         GestureAction.PreviousApp,
         GestureAction.FreeWindowCurrentApp,
         GestureAction.CloseCurrentApp,
@@ -321,6 +323,9 @@ object GestureActionCatalog {
         GestureAction.ScrollToTop,
         GestureAction.ScrollToBottom,
         GestureAction.PageScroll,
+
+        // 「组合动作」：按顺序执行多个动作（自由组合）。
+        GestureAction.Composite(),
 
         // 2. 开关与调节 (Controls & Media)
         GestureAction.ToggleWifi(),

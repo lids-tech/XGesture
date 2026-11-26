@@ -78,43 +78,74 @@ class MacroEngine(private val context: Context) {
             return
         }
 
-        // 目标可能是分身：`包名\u0002userId`，需要跨 user 启动；旧数据裸包名 = user 0。
-        val target = com.slideindex.app.launcher.AppTarget.parse(macro.targetPackage)
-        val targetPackage = target.packageName
-        if (target.isClone) {
-            if (!com.slideindex.app.util.CloneAppLauncher.launch(context, targetPackage, target.cloneUserId)) {
-                toast(R.string.macro_run_target_not_found)
-                return
-            }
-        } else {
-            val launchIntent = context.packageManager.getLaunchIntentForPackage(targetPackage)
-            if (launchIntent == null) {
-                toast(R.string.macro_run_target_not_found)
-                return
-            }
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { context.startActivity(launchIntent) }
-                .onFailure { Log.w(TAG, "无法启动 $targetPackage", it) }
+        // 全局宏（反馈 #394）：不绑定 App，不拉起、不做前台校验，直接在当前界面回放。
+        val global = macro.isGlobal
+        val targetPackage = if (global) "" else macro.targetPackage.let {
+            // 目标可能是分身：`包名\u0002userId`，需要跨 user 启动；旧数据裸包名 = user 0。
+            com.slideindex.app.launcher.AppTarget.parse(it).packageName
         }
-
-        val startedAt = SystemClock.uptimeMillis()
         var waitedMs = 0L
-        var reachedForeground = false
-        while (true) {
-            waitedMs = SystemClock.uptimeMillis() - startedAt
-            if (waitedMs >= FOREGROUND_WAIT_TIMEOUT_MS) break
-            if (currentForegroundPackage() == targetPackage) {
-                reachedForeground = true
-                break
+        if (!global) {
+            // 目标可能是分身：`包名\u0002userId`，需要跨 user 启动；旧数据裸包名 = user 0。
+            val target = com.slideindex.app.launcher.AppTarget.parse(macro.targetPackage)
+            if (target.isClone) {
+                if (!com.slideindex.app.util.CloneAppLauncher.launch(context, target.packageName, target.cloneUserId)) {
+                    toast(R.string.macro_run_target_not_found)
+                    return
+                }
+            } else {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(target.packageName)
+                if (launchIntent == null) {
+                    toast(R.string.macro_run_target_not_found)
+                    return
+                }
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(launchIntent) }
+                    .onFailure { Log.w(TAG, "无法启动 ${target.packageName}", it) }
             }
-            Thread.sleep(FOREGROUND_POLL_INTERVAL_MS)
-        }
-        if (!reachedForeground) {
-            toast(R.string.macro_run_app_timeout)
-            return
+
+            val startedAt = SystemClock.uptimeMillis()
+            var reachedForeground = false
+            while (true) {
+                waitedMs = SystemClock.uptimeMillis() - startedAt
+                if (waitedMs >= FOREGROUND_WAIT_TIMEOUT_MS) break
+                if (currentForegroundPackage() == target.packageName) {
+                    reachedForeground = true
+                    break
+                }
+                Thread.sleep(FOREGROUND_POLL_INTERVAL_MS)
+            }
+            if (!reachedForeground) {
+                toast(R.string.macro_run_app_timeout)
+                return
+            }
+
+            Thread.sleep(SETTLE_MS)
         }
 
-        Thread.sleep(SETTLE_MS)
+        // 回放期间挂起自家的边缘浮层/触钮：全局宏跨界面回放时，它们会盖住点击点。
+        var overlaysSuspended = false
+        if (global) {
+            runCatching { SlideIndexAccessibilityService.suspendAllEdgeOverlays() }
+            overlaysSuspended = true
+        }
+        try {
+            runSteps(macro, global, targetPackage, service, indicator, waitedMs)
+        } finally {
+            if (overlaysSuspended) {
+                runCatching { SlideIndexAccessibilityService.resumeAllEdgeOverlays() }
+            }
+        }
+    }
+
+    private fun runSteps(
+        macro: Macro,
+        global: Boolean,
+        targetPackage: String,
+        service: AccessibilityService,
+        indicator: MacroTouchIndicator,
+        waitedMs: Long,
+    ) {
 
         // 等待步的实际时长：开头那段会被"启动耗时 + settle"抵扣。
         // 这段数学在 MacroPlanner 里（有单测），这里只负责睡。
@@ -124,15 +155,12 @@ class MacroEngine(private val context: Context) {
         val screenHeight = screen.y.toFloat()
 
         macro.steps.forEachIndexed { index, step ->
-            val foreground = currentForegroundPackage()
+            // 用户切到哪个应用是用户自己的操作：执行器只负责精确回放录下来的步骤，
+            // 不做前台校验、也不中途终止（反馈）。
             Log.i(
                 TAG,
-                "step[$index/${macro.steps.size}] ${step.javaClass.simpleName} 开始 foreground=$foreground target=$targetPackage",
+                "step[$index/${macro.steps.size}] ${step.javaClass.simpleName} 开始",
             )
-            if (foreground != null && foreground != targetPackage) {
-                toast(R.string.macro_run_foreground_changed)
-                return
-            }
 
             val ok = when (step) {
                 is MacroStep.Wait -> {
@@ -170,6 +198,7 @@ class MacroEngine(private val context: Context) {
                     }
                     dispatched
                 }
+                is MacroStep.Key -> performSystemKey(service, step.key)
             }
 
             if (!ok) {
@@ -181,6 +210,32 @@ class MacroEngine(private val context: Context) {
 
         Log.i(TAG, "宏执行完成：${macro.name}")
         toast(R.string.macro_run_completed, macro.name)
+    }
+
+    /**
+     * 执行一步系统按键（反馈 #4）。
+     *
+     * 用无障碍的 `performGlobalAction`：不需要 root / Shizuku，也不依赖输入法壳，
+     * 是"回桌面 / 切最近任务 / 返回"最稳的一条路。
+     */
+    private fun performSystemKey(service: AccessibilityService, key: MacroStep.SystemKey): Boolean {
+        val globalAction = when (key) {
+            MacroStep.SystemKey.BACK -> AccessibilityService.GLOBAL_ACTION_BACK
+            MacroStep.SystemKey.HOME -> AccessibilityService.GLOBAL_ACTION_HOME
+            MacroStep.SystemKey.RECENTS -> AccessibilityService.GLOBAL_ACTION_RECENTS
+        }
+        val latch = CountDownLatch(1)
+        val ok = AtomicBoolean(false)
+        mainHandler.post {
+            ok.set(runCatching { service.performGlobalAction(globalAction) }.getOrDefault(false))
+            latch.countDown()
+        }
+        latch.await(KEY_ACTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        android.util.Log.i(
+            "MacroEngine",
+            "system key: key=$key globalAction=$globalAction ok=${ok.get()}",
+        )
+        return ok.get()
     }
 
     /** 注入一条手势路径并等它结束；取消或超时都算失败。 */
@@ -255,6 +310,7 @@ class MacroEngine(private val context: Context) {
             is MacroStep.Wait -> R.string.macro_step_wait
             is MacroStep.Tap -> R.string.macro_step_tap
             is MacroStep.Swipe -> R.string.macro_step_swipe
+            is MacroStep.Key -> R.string.macro_step_key
         },
     )
 
@@ -280,6 +336,9 @@ class MacroEngine(private val context: Context) {
 
         /** 触摸指示器在步骤结束后停留的时长。 */
         private const val INDICATOR_LINGER_MS = 320L
+
+    /** 系统按键步骤的执行上限（performGlobalAction 是异步的）。 */
+    private const val KEY_ACTION_TIMEOUT_MS = 800L
 
         private val LOCK = Any()
         private val mainHandler = Handler(Looper.getMainLooper())

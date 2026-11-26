@@ -122,6 +122,15 @@ fun gestureActionSearchAliases(context: Context, action: GestureAction): List<St
         "radial",
         "ring menu",
     )
+    GestureActionType.FLOAT_NAV -> listOf(
+        context.getString(R.string.gesture_search_float_nav_1),
+        context.getString(R.string.gesture_search_float_nav_2),
+        context.getString(R.string.gesture_search_float_nav_3),
+        "floating nav",
+        "floating navigation",
+        "navigation bar",
+        "virtual navigation",
+    )
     GestureActionType.SCREEN_OFF_KEEP_AWAKE -> listOf(
         context.getString(R.string.gesture_search_screen_off_1),
         context.getString(R.string.gesture_search_screen_off_2),
@@ -376,23 +385,35 @@ fun launchShortcutDisplayLabel(action: GestureAction.LaunchShortcut): String =
     }
 
 private fun gestureActionBaseLabelText(context: Context, action: GestureAction): String = when (action) {
-    is GestureAction.LaunchApp -> launchAppActionLabel(context, action.packageName, action.cloneUserId)
-    is GestureAction.LaunchShortcut -> {
-        val shortcutLabel = launchShortcutDisplayLabel(action)
-        if (shortcutLabel.isBlank()) {
-            context.getString(R.string.gesture_action_launch_shortcut)
+    is GestureAction.LaunchApp -> {
+        // 反馈 #385 ④ / #10：不再拼「启动应用：」前缀（图标已说明类型）。
+        if (action.packageName.isBlank()) {
+            context.getString(R.string.gesture_action_launch_app)
         } else {
-            context.getString(R.string.gesture_action_launch_shortcut_named, shortcutLabel)
+            val base = resolveAppDisplayName(context, action.packageName)
+            if (action.cloneUserId > 0) {
+                com.slideindex.app.overlay.CloneAppsIndex.labelForUser(
+                    context,
+                    action.cloneUserId,
+                    base,
+                )
+            } else {
+                base
+            }
+        }
+    }
+    is GestureAction.LaunchShortcut -> {
+        // 反馈 #385：命中名称只显示快捷方式自己的名字，不再拼「启动快捷方式：」前缀
+        //（前缀在小尺寸文字里占位太多，图标已经把类型说清楚了）。
+        launchShortcutDisplayLabel(action).ifBlank {
+            context.getString(R.string.gesture_action_launch_shortcut)
         }
     }
     is GestureAction.ExecuteShellCommand -> {
         if (action.command.isBlank()) {
             context.getString(R.string.gesture_action_execute_shell_command)
         } else {
-            context.getString(
-                R.string.gesture_action_execute_shell_command_named,
-                gestureExecuteShellCommandPreview(action.command),
-            )
+            gestureExecuteShellCommandPreview(action.command)
         }
     }
     is GestureAction.OpenLink -> {
@@ -404,10 +425,16 @@ private fun gestureActionBaseLabelText(context: Context, action: GestureAction):
         }
     }
     is GestureAction.SimulateKeyEvent -> {
-        val name = if (action.keyName.isNotBlank()) action.keyName else com.slideindex.app.gesture.KeyEventPresets.getDisplayName(context, action.keyCode)
-        context.getString(R.string.gesture_action_simulate_key_event_named, name)
+        // 同上：不再拼「模拟按键：」前缀。
+        if (action.keyName.isNotBlank()) {
+            action.keyName
+        } else {
+            com.slideindex.app.gesture.KeyEventPresets.getDisplayName(context, action.keyCode)
+        }
     }
     else -> when (action.type) {
+        GestureActionType.COMPOSITE ->
+            context.getString(R.string.gesture_action_composite)
         GestureActionType.RUN_MACRO -> {
             // 显示"运行宏：<宏名>"；宏被删掉时给一个明确的失效文案，而不是空字符串。
             val macroId = (action as? GestureAction.RunMacro)?.macroId.orEmpty()
@@ -431,6 +458,7 @@ private fun gestureActionBaseLabelText(context: Context, action: GestureAction):
         GestureActionType.BACK -> context.getString(R.string.gesture_action_back)
         GestureActionType.HOME -> context.getString(R.string.gesture_action_home)
         GestureActionType.RECENTS -> context.getString(R.string.gesture_action_recents)
+        GestureActionType.FLOAT_NAV -> context.getString(R.string.gesture_action_float_nav)
         GestureActionType.CLOSE_CURRENT_APP -> context.getString(R.string.gesture_action_close_current_app)
         GestureActionType.FORCE_STOP_CURRENT_APP -> context.getString(R.string.gesture_action_force_stop_current_app)
         GestureActionType.FREE_WINDOW_CURRENT_APP -> context.getString(R.string.gesture_action_free_window_current_app)
@@ -650,6 +678,7 @@ private fun gestureActionBaseLabel(action: GestureAction, settings: AppSettings?
         }
     }
     else -> when (action.type) {
+        GestureActionType.COMPOSITE -> stringResource(R.string.gesture_action_composite)
         GestureActionType.RUN_MACRO -> stringResource(R.string.macro_action_run_macro)
         GestureActionType.PAGE_SCROLL -> stringResource(R.string.page_scroll_action_name)
         GestureActionType.NONE -> stringResource(R.string.gesture_action_none)
@@ -664,6 +693,7 @@ private fun gestureActionBaseLabel(action: GestureAction, settings: AppSettings?
         GestureActionType.BACK -> stringResource(R.string.gesture_action_back)
         GestureActionType.HOME -> stringResource(R.string.gesture_action_home)
         GestureActionType.RECENTS -> stringResource(R.string.gesture_action_recents)
+        GestureActionType.FLOAT_NAV -> stringResource(R.string.gesture_action_float_nav)
         GestureActionType.CLOSE_CURRENT_APP -> stringResource(R.string.gesture_action_close_current_app)
         GestureActionType.FORCE_STOP_CURRENT_APP -> stringResource(R.string.gesture_action_force_stop_current_app)
         GestureActionType.FREE_WINDOW_CURRENT_APP -> stringResource(R.string.gesture_action_free_window_current_app)
@@ -923,6 +953,7 @@ fun gestureActionDescription(action: GestureAction): String? = when (action.type
     GestureActionType.MICROPHONE_MENU -> stringResource(R.string.gesture_action_microphone_menu_desc)
     GestureActionType.WIDGET_POPUP_OVERLAY -> stringResource(R.string.gesture_action_widget_popup_overlay_desc)
     GestureActionType.FLOATING_POINTER -> stringResource(R.string.gesture_action_floating_pointer_desc)
+    GestureActionType.FLOAT_NAV -> stringResource(R.string.gesture_action_float_nav_desc)
     GestureActionType.OPEN_STASH_PANEL -> stringResource(R.string.gesture_action_open_stash_panel_desc)
     GestureActionType.EXECUTE_SHELL_COMMAND -> stringResource(R.string.gesture_action_execute_shell_command_desc)
     GestureActionType.OPEN_CLIPBOARD_PANEL -> stringResource(R.string.gesture_action_open_clipboard_panel_desc)
@@ -1110,6 +1141,10 @@ fun gestureActionPermissionHintText(
         GestureActionType.FLOATING_POINTER -> {
             if (PermissionHelper.isAccessibilityServiceEnabledForOverlays(context)) return null
             context.getString(R.string.gesture_action_floating_pointer_permission)
+        }
+        GestureActionType.FLOAT_NAV -> {
+            if (PermissionHelper.isAccessibilityServiceEnabledForOverlays(context)) return null
+            context.getString(R.string.gesture_action_float_nav_permission)
         }
         GestureActionType.SIMULATE_POINTER_SWIPE -> {
             if (PermissionHelper.isAccessibilityServiceEnabledForOverlays(context)) return null

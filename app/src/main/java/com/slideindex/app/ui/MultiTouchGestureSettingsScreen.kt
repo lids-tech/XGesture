@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -61,7 +64,9 @@ import com.slideindex.app.multitouch.MultiTouchStatus
 import com.slideindex.app.multitouch.encodePathStrokes
 import com.slideindex.app.multitouch.multiTouchPresetKinds
 import com.slideindex.app.ui.miuix.MiuixArrowRow
-import com.slideindex.app.ui.miuix.MiuixArrowRow
+import com.slideindex.app.ui.miuix.MiuixLabeledTextField
+import com.slideindex.app.ui.components.reorderable.ReorderableItem
+import com.slideindex.app.ui.components.reorderable.rememberReorderableLazyListState
 import com.slideindex.app.ui.miuix.MiuixBottomSheet
 import com.slideindex.app.ui.miuix.groupedCardItems
 import com.slideindex.app.ui.settings.components.MiuixNavigationRow
@@ -70,6 +75,7 @@ import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.settings.components.StatusRow
 import com.slideindex.app.ui.settings.components.StatusTone
 import com.slideindex.app.ui.settings.components.settingsCardScopeItem
+import com.slideindex.app.ui.settings.components.SettingsCardScopeContent
 import com.slideindex.app.ui.settings.components.settingsLazyHint
 import com.slideindex.app.ui.settings.components.settingsLazyTipCard
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -77,6 +83,7 @@ import com.slideindex.app.ui.miuix.CardSegment
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.preference.RadioButtonLocation
@@ -95,6 +102,9 @@ private val PreviewColors = listOf(
     Color(0xFFFB8C00),
     Color(0xFF8E24AA),
 )
+
+/** 手势条目在 lazy 列表里的 key 前缀（拖拽排序时用它反查 entry id）。 */
+private const val ENTRY_ITEM_KEY_PREFIX = "multitouch-entry-"
 
 /**
  * 多指手势设置页（Shizuku 观察模式）。
@@ -115,6 +125,10 @@ fun MultiTouchGestureSettingsScreen(
     onRefreshTouchDevices: () -> Unit = {},
     onDevicePathChange: (String) -> Unit = {},
     onEntryAreaChange: (entryId: String, areaKey: String) -> Unit = { _, _ -> },
+    onEntryNameChange: (entryId: String, name: String) -> Unit = { _, _ -> },
+    onEntryEnabledChange: (entryId: String, enabled: Boolean) -> Unit = { _, _ -> },
+    onEntryShowHintChange: (entryId: String, showHint: Boolean) -> Unit = { _, _ -> },
+    onEntryReorder: (entryId: String, toEntryId: String) -> Unit = { _, _ -> },
     onKeyboardBehaviorChange: (String) -> Unit = {},
     onRetry: () -> Unit,
     onOpenActionPick: (MultiPointerGesture, Int, String, String) -> Unit = { _, _, _, _ -> },
@@ -127,6 +141,18 @@ fun MultiTouchGestureSettingsScreen(
     var editingEntry by remember { mutableStateOf<MultiTouchGestureEntry?>(null) }
     var showDiagnostics by remember { mutableStateOf(false) }
     var showKeyboardPicker by remember { mutableStateOf(false) }
+    // 手势条目支持长按拖动排序：需要外部持有 listState 才能算出 from/to 项。
+    val entryListState = rememberLazyListState()
+    val entryReorderState = rememberReorderableLazyListState(lazyListState = entryListState) { from, to ->
+        val fromKey = from.key as? String
+        val toKey = to.key as? String
+        if (fromKey != null && toKey != null) {
+            onEntryReorder(
+                fromKey.removePrefix(ENTRY_ITEM_KEY_PREFIX),
+                toKey.removePrefix(ENTRY_ITEM_KEY_PREFIX),
+            )
+        }
+    }
 
     // 打开状态/诊断 sheet 时取一次；协议或设备切换会重启观察器，延时再刷新。
     LaunchedEffect(showDiagnostics) {
@@ -149,7 +175,7 @@ fun MultiTouchGestureSettingsScreen(
     val tipText = stringResource(R.string.multitouch_tip)
     val bottomHint = stringResource(R.string.multitouch_hint)
 
-    SettingsScreenScaffold(title = screenTitle, onBack = onBack) {
+    SettingsScreenScaffold(title = screenTitle, onBack = onBack, listState = entryListState) {
         settingsLazyTipCard(
             key = "multitouch-tip",
             text = tipText,
@@ -262,32 +288,55 @@ fun MultiTouchGestureSettingsScreen(
                 )
             },
         )
-        groupedCardItems(
-            keyPrefix = "multitouch-entries",
-            items = buildList {
-                add(
-                    settingsCardScopeItem("multitouch-add") {
-                        MiuixNavigationRow(
-                            title = stringResource(R.string.multitouch_add_title),
-                            summary = stringResource(R.string.multitouch_add_summary),
-                            enabled = settings.enabled,
-                            onClick = { showKindPicker = true },
-                        )
-                    }
-                )
-                settings.entries.forEach { entry ->
-                    add(
-                        settingsCardScopeItem("multitouch-entry-${entry.id}") {
-                            EntryRow(
-                                entry = entry,
-                                enabled = settings.enabled,
-                                onClick = { editingEntry = entry },
-                            )
-                        }
+        // 手势条目：一条卡片，首段是「添加」，其余段可长按拖动排序（同组内重排，不跨卡片）。
+        item(key = "multitouch-entries:multitouch-add") {
+            CardSegment(
+                isFirst = true,
+                isLast = settings.entries.isEmpty(),
+                outerHorizontalPadding = 12.dp,
+                outerBottomPadding = if (settings.entries.isEmpty()) 12.dp else 0.dp,
+            ) {
+                SettingsCardScopeContent {
+                    MiuixNavigationRow(
+                        title = stringResource(R.string.multitouch_add_title),
+                        summary = stringResource(R.string.multitouch_add_summary),
+                        enabled = settings.enabled,
+                        onClick = { showKindPicker = true },
                     )
                 }
             }
-        )
+        }
+        val lastEntryIndex = settings.entries.lastIndex
+        settings.entries.forEachIndexed { index, entry ->
+            val entryKey = ENTRY_ITEM_KEY_PREFIX + entry.id
+            // 反馈 #1：拖拽手柄不能包住整行 —— 行自己带 clickable，会把 down/up 吃掉，
+            // 父级的 longPressDraggableHandle 永远收不到事件。手柄只挂在左侧图标上。
+            item(key = entryKey) {
+                val haptic = LocalHapticFeedback.current
+                ReorderableItem(state = entryReorderState, key = entryKey) { _ ->
+                    // 反馈：长按图标开始拖动时要有一声震动（库本身不带触感）。
+                    val dragHandle = Modifier.longPressDraggableHandle(
+                        onDragStarted = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                    )
+                    CardSegment(
+                        isFirst = false,
+                        isLast = index == lastEntryIndex,
+                        outerHorizontalPadding = 12.dp,
+                        outerBottomPadding = if (index == lastEntryIndex) 12.dp else 0.dp,
+                    ) {
+                        EntryRow(
+                            entry = entry,
+                            enabled = settings.enabled,
+                            onClick = { editingEntry = entry },
+                            onEnabledChange = { value -> onEntryEnabledChange(entry.id, value) },
+                            dragHandleModifier = dragHandle,
+                        )
+                    }
+                }
+            }
+        }
         settingsLazyHint(
             key = "multitouch-hint",
             text = bottomHint,
@@ -523,12 +572,19 @@ fun MultiTouchGestureSettingsScreen(
 
     val editing = editingEntry
     if (editing != null) {
+        // 名称输入框的本地草稿：跟着条目 id 重置，输入即时回写。
+        var nameText by remember(editing.id) { mutableStateOf(editing.name) }
         WindowDialog(
             show = true,
             title = stringResource(R.string.multitouch_edit_title),
             onDismissRequest = { editingEntry = null },
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 弹窗内容统一 16dp 水平内边距：预览框、输入框、行卡片左边缘对齐。
+                    .padding(horizontal = 16.dp),
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -551,28 +607,77 @@ fun MultiTouchGestureSettingsScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                MiuixArrowRow(
-                    title = stringResource(
-                        R.string.multitouch_entry_label,
-                        editing.fingerCount,
-                        editing.kind.displayName(),
-                    ),
-                    summary = gestureActionLabel(editing.action),
-                    onClick = {
-                        editingEntry = null
-                        onOpenActionPick(
-                            editing.kind,
-                            editing.fingerCount,
-                            encodePathStrokes(editing.pathStrokes),
-                            editing.id,
-                        )
+                // 自定义名称：放最上面、用「标题 + 输入框」样式（useLabelAsPlaceholder=false）。
+                MiuixLabeledTextField(
+                    value = nameText,
+                    onValueChange = { value ->
+                        nameText = value
+                        onEntryNameChange(editing.id, value)
                     },
+                    label = stringResource(R.string.multitouch_entry_name_label),
+                    singleLine = true,
+                    useLabelAsPlaceholder = false,
+                    modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                // 与列表其它行一样放进卡片，行内 16dp 内边距与上面的输入框对齐。
+                CardSegment(
+                    isFirst = true,
+                    isLast = true,
+                    outerHorizontalPadding = 0.dp,
+                ) {
+                    MiuixArrowRow(
+                        title = stringResource(
+                            R.string.multitouch_entry_label,
+                            editing.fingerCount,
+                            editing.kind.displayName(),
+                        ),
+                        summary = gestureActionLabel(editing.action),
+                        onClick = {
+                            editingEntry = null
+                            onOpenActionPick(
+                                editing.kind,
+                                editing.fingerCount,
+                                encodePathStrokes(editing.pathStrokes),
+                                editing.id,
+                            )
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                // 「启用」只在列表行提供开关，弹窗不再重复（反馈）。
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.multitouch_entry_hint_label),
+                            style = MiuixTheme.textStyles.title4,
+                            color = MiuixTheme.colorScheme.onSurfaceContainer,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.multitouch_entry_hint_desc),
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    MiuixSwitch(
+                        checked = editing.showHint,
+                        onCheckedChange = { value ->
+                            editingEntry = editing.copy(showHint = value)
+                            onEntryShowHintChange(editing.id, value)
+                        },
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = stringResource(R.string.multitouch_trigger_area_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SegmentedControl(
@@ -617,6 +722,9 @@ private fun EntryRow(
     entry: MultiTouchGestureEntry,
     enabled: Boolean,
     onClick: () -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+    /** 挂在左侧图标上的拖拽手柄（反馈 #1：不能包整行，否则点击会吃掉手势）。 */
+    dragHandleModifier: Modifier = Modifier,
 ) {
     Row(
         modifier = Modifier
@@ -625,24 +733,47 @@ private fun EntryRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GesturePreview(entry = entry, modifier = Modifier.size(44.dp))
+        GesturePreview(
+            entry = entry,
+            modifier = Modifier
+                .size(44.dp)
+                .then(dragHandleModifier),
+        )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(
-                    R.string.multitouch_entry_label_area,
-                    entry.fingerCount,
-                    entry.kind.displayName(),
-                    triggerAreaLabel(entry.triggerArea.key),
-                ),
-                style = MaterialTheme.typography.bodyLarge,
+                // 起过名字就显示名字（多条绘制手势才能区分开），否则沿用「位置 · 手指数 · 类型」。
+                text = entry.name.ifBlank {
+                    stringResource(
+                        R.string.multitouch_entry_label_area,
+                        entry.fingerCount,
+                        entry.kind.displayName(),
+                        triggerAreaLabel(entry.triggerArea.key),
+                    )
+                },
+                style = MiuixTheme.textStyles.title4,
+                color = if (entry.enabled) {
+                    MiuixTheme.colorScheme.onSurfaceContainer
+                } else {
+                    MiuixTheme.colorScheme.onSurfaceVariantSummary
+                },
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = gestureActionLabel(entry.action),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = if (entry.enabled) {
+                    gestureActionLabel(entry.action)
+                } else {
+                    stringResource(R.string.multitouch_entry_disabled_label)
+                },
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
+        MiuixSwitch(
+            checked = entry.enabled,
+            enabled = enabled,
+            onCheckedChange = onEnabledChange,
+        )
     }
 }
 

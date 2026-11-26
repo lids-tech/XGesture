@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import com.slideindex.app.R
 import com.slideindex.app.activity.ActivityShortcut
+import com.slideindex.app.activity.ShortcutIconCapture
 import com.slideindex.app.activity.toActivityShortcut
 import com.slideindex.app.overlay.TaskSwitcherMenuItem
 import com.slideindex.app.service.CreateShortcutTrampoline
@@ -72,7 +73,17 @@ fun ActivityShortcutPickAppShortcutScreen(
                 host = host,
                 onPrepare = {},
                 onResult = { created ->
-                    val shortcut = created?.toActivityShortcutOrNull()
+                    // 反馈 #6：图标 extra 在回传的**外层** Intent 上，不在快捷方式的启动 Intent 上。
+                    val capturedIconPath = ShortcutIconCapture.captureFromIntent(
+                        context,
+                        created?.iconProviderIntent ?: created?.shortcutIntent,
+                    )
+                    val base = created?.toActivityShortcutOrNull()
+                    val shortcut = if (base != null && capturedIconPath != null) {
+                        base.copy(iconPath = capturedIconPath)
+                    } else {
+                        base
+                    }
                     if (shortcut == null) {
                         Toast.makeText(
                             context,

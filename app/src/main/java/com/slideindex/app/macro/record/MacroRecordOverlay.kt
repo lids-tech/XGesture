@@ -17,6 +17,7 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -69,6 +70,8 @@ class MacroRecordOverlay(
     private val onDiscarded: () -> Unit = {},
     /** 控制条被拖到新位置后回调（捕获层要跟着重算"洞"）。 */
     private val onMoved: (() -> Unit)? = null,
+    /** 插一步系统按键（返回 / 主屏 / 最近任务）。 */
+    private val onKeyStep: (MacroStep.SystemKey) -> Unit = {},
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -122,10 +125,20 @@ class MacroRecordOverlay(
         recorder.onStepsChanged = { actions, waits -> onStepsChanged(actions, waits) }
         // 条的高度会因为"已录 N 步"计数文本而变化：一变就通知捕获层重算洞，
         // 否则新增的那一截会露在捕获窗底下，从那里起手拖动就会被录成手势。
-        content.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        content.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            // 反馈：条的高度一变就要重算洞，否则新增的那一截会露在捕获窗底下。
+            Log.i(
+                TAG,
+                "bar layout changed: height=${bottom - top} (was ${oldBottom - oldTop}) -> updateHole",
+            )
             onMoved?.invoke()
         }
         refresh()
+        // 首帧布局完成后再补一次（onLayoutChange 不一定在 show 的那一帧触发）。
+        content.post {
+            Log.i(TAG, "bar first layout: rect=${barRectOnScreen()}")
+            onMoved?.invoke()
+        }
     }
 
     /**
@@ -249,6 +262,33 @@ class MacroRecordOverlay(
         countView = count
         card.addView(count)
 
+        // 反馈 #4：录制期间可以插入「返回 / 主屏 / 最近任务」三个系统按键步骤，
+        // 宏才可能走出当前界面（否则只能记点击与滑动）。
+        val keyRow = LinearLayout(hostContext).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(8f) }
+        }
+        // 反馈：文字按钮在 196dp 的条里太挤，三个键改成图标（contentDescription 保留语义）。
+        listOf(
+            Triple(MacroStep.SystemKey.BACK, R.drawable.ic_macro_key_back, R.string.macro_key_step_back),
+            Triple(MacroStep.SystemKey.HOME, R.drawable.ic_macro_key_home, R.string.macro_key_step_home),
+            Triple(MacroStep.SystemKey.RECENTS, R.drawable.ic_macro_key_recents, R.string.macro_key_step_recents),
+        ).forEachIndexed { index, (key, iconRes, descRes) ->
+            val button = createIconButton(
+                iconRes = iconRes,
+                description = hostContext.getString(descRes),
+            ) {
+                Log.i(TAG, "key step button clicked: $key")
+                onKeyStep(key)
+                refresh()
+            }
+            keyRow.addView(button, buttonParams(isFirst = index == 0))
+        }
+        card.addView(keyRow)
+
         val buttonRow = LinearLayout(hostContext).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -331,6 +371,22 @@ class MacroRecordOverlay(
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
         typeface = Typeface.DEFAULT_BOLD
         setPadding(dp(6f), 0, dp(6f), dp(1f))
+        isClickable = true
+        setOnClickListener { onClick() }
+    }
+
+    /** 图标按钮：与文字按钮同底色/描边，只是内容换成 24dp 矢量图。 */
+    private fun createIconButton(
+        iconRes: Int,
+        description: String,
+        onClick: () -> Unit,
+    ): ImageView = ImageView(hostContext).apply {
+        setImageResource(iconRes)
+        contentDescription = description
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        setPadding(dp(7f), dp(7f), dp(7f), dp(7f))
+        background = pill(BarColors.pauseFill, BarColors.cardStroke, cornerDp = 14f)
+        imageTintList = android.content.res.ColorStateList.valueOf(BarColors.primaryText)
         isClickable = true
         setOnClickListener { onClick() }
     }

@@ -136,6 +136,9 @@ enum class GestureActionType(val id: Int) {
     /** 「运行宏」：把一条录制好的宏重放到它自己的目标 App 里；payload 是宏 id。 */
     RUN_MACRO(96),
 
+    /** 「组合动作」：按顺序执行一串动作（不嵌套）；payload 是子动作的编码串。 */
+    COMPOSITE(131),
+
     /**
      * 「页面滚动」：打开一个竖排控制条，并用**被持续续接的划动手势**让页面平滑滚动。
      *
@@ -280,6 +283,14 @@ enum class GestureActionType(val id: Int) {
 
     /** 「静音」：把铃声模式设成 / 切到静音（菜单：切换 / 打开 / 关闭）。 */
     RINGER_SILENT(129),
+
+    /**
+     * 「浮动导航」：显示一条可拖动的返回 / 主屏 / 最近任务按钮条。
+     *
+     * 松手触发在抬手后显示；直接触发在越过触发距离时显示；持续触发在越过触发距离后进入
+     * 跟手选择态，松手落在哪个键上就执行哪个导航键。
+     */
+    FLOAT_NAV(130),
     ;
 
     companion object {
@@ -823,6 +834,51 @@ sealed class GestureAction {
      * 松手后继续滚（用控制条改方向 / 调速 / 暂停 / 关闭）；速度 7 档，默认第 3 档。
      * 运行时实现见 `com.slideindex.app.pagescroll`。
      */
+    /**
+     * 「组合动作」：按顺序执行多个动作。
+     *
+     * 不允许嵌套（编码/解码和选择器都会过滤 Composite）；空组合等价于无动作。
+     * payload 采用「typeId + 长度 + 正文」拼接，避免子动作正文里的分隔符歧义。
+     */
+    data class Composite(
+        val actions: List<GestureAction> = emptyList(),
+    ) : GestureAction() {
+        override val type = GestureActionType.COMPOSITE
+        override val payload: String = encodeChildren(actions)
+
+        companion object {
+            private const val CHILD_SEP = '\u001F'
+            private const val FIELD_SEP = '\u001E'
+
+            fun encodeChildren(actions: List<GestureAction>): String =
+                actions
+                    .filter { it.type != GestureActionType.NONE && it !is Composite }
+                    .joinToString(CHILD_SEP.toString()) { child ->
+                        val body = child.payload
+                        "${child.type.id}$FIELD_SEP${body.length}$FIELD_SEP$body"
+                    }
+
+            fun parse(payload: String): Composite {
+                if (payload.isBlank()) return Composite()
+                val children = payload.split(CHILD_SEP).mapNotNull { part ->
+                    val first = part.indexOf(FIELD_SEP)
+                    if (first <= 0) return@mapNotNull null
+                    val second = part.indexOf(FIELD_SEP, first + 1)
+                    if (second <= first) return@mapNotNull null
+                    val typeId = part.substring(0, first).toIntOrNull() ?: return@mapNotNull null
+                    val length = part.substring(first + 1, second).toIntOrNull() ?: return@mapNotNull null
+                    val body = part.substring(second + 1)
+                    if (body.length != length) return@mapNotNull null
+                    val childType = GestureActionType.entries.firstOrNull { it.id == typeId }
+                        ?: return@mapNotNull null
+                    if (childType == GestureActionType.COMPOSITE) return@mapNotNull null
+                    from(childType, body)
+                }
+                return Composite(children)
+            }
+        }
+    }
+
     data object PageScroll : GestureAction() {
         override val type = GestureActionType.PAGE_SCROLL
         override val payload = ""
@@ -900,6 +956,17 @@ sealed class GestureAction {
     /** Virtual joystick + on-screen pointer; tap joystick to click at pointer via accessibility. */
     data object FloatingPointer : GestureAction() {
         override val type = GestureActionType.FLOATING_POINTER
+        override val payload = ""
+    }
+
+    /**
+     * 浮动导航按钮条：返回 / 主屏 / 最近任务，可拖动。
+     *
+     * 浮条是独立常驻窗口，不随边缘会话结束而收起；持续触发时由手势会话按屏幕坐标
+     * 命中按钮，松手执行对应导航键。
+     */
+    data object FloatNav : GestureAction() {
+        override val type = GestureActionType.FLOAT_NAV
         override val payload = ""
     }
 
@@ -1455,25 +1522,29 @@ sealed class GestureAction {
 
     companion object {
         /** Actions that support [GestureTriggerMode.CONTINUOUS] on compatible triggers. */
-        val continuousTrackingActions: List<GestureAction> = listOf(
-            OpenIndex,
-            QuickLauncher(),
-            TaskSwitcher,
-            ShellCommandPanel,
-            HoneycombLauncher,
-            RingLauncher,
-            AppCarouselSwitcher,
-            FingertipRing,
-            AdjustVolume,
-            AdjustBrightness,
-            FloatingPointer,
-            RegionalScreenshotPick,
-            QuickWheel(),
-            // 「页面滚动」在持续触发下 = 按住并拖动（逐页滚动），所以它也算支持持续跟踪的动作。
-            PageScroll,
-            // 「放大镜」持续触发 = 按住放大、手指移动跟随、松手恢复。
-            Magnifier,
-        )
+        val continuousTrackingActions: List<GestureAction> by lazy {
+            listOf(
+                OpenIndex,
+                QuickLauncher(),
+                TaskSwitcher,
+                ShellCommandPanel,
+                HoneycombLauncher,
+                RingLauncher,
+                AppCarouselSwitcher,
+                FingertipRing,
+                AdjustVolume,
+                AdjustBrightness,
+                FloatingPointer,
+                // 浮条在持续触发下进入跟手选择态，松手落在哪个键上执行哪个导航键。
+                FloatNav,
+                RegionalScreenshotPick,
+                QuickWheel(),
+                // 「页面滚动」在持续触发下 = 按住并拖动（逐页滚动），所以它也算支持持续跟踪的动作。
+                PageScroll,
+                // 「放大镜」持续触发 = 按住放大、手指移动跟随、松手恢复。
+                Magnifier,
+            )
+        }
 
         fun from(type: GestureActionType, payload: String): GestureAction =
             when (type) {
@@ -1530,6 +1601,7 @@ sealed class GestureAction {
                 GestureActionType.SHELL_COMMAND_PANEL -> ShellCommandPanel
                 GestureActionType.EXECUTE_SHELL_COMMAND -> ExecuteShellCommand(payload)
                 GestureActionType.RUN_MACRO -> RunMacro(payload)
+                GestureActionType.COMPOSITE -> Composite.parse(payload)
                 GestureActionType.PAGE_SCROLL -> PageScroll
                 GestureActionType.MAGNIFIER -> Magnifier
                 GestureActionType.REALTIME_PINCH -> PointerPinchZoom
@@ -1545,6 +1617,7 @@ sealed class GestureAction {
                 GestureActionType.CLIPBOARD_PICK -> ClipboardPick
                 GestureActionType.CLIPBOARD_PASTE -> ClipboardPaste
                 GestureActionType.FLOATING_POINTER -> FloatingPointer
+                GestureActionType.FLOAT_NAV -> FloatNav
                 GestureActionType.SIMULATE_POINTER_SWIPE -> SimulatePointerSwipe.fromPayload(payload)
                 GestureActionType.POINTER_GESTURE_RECORDER -> PointerGestureRecorder
                 GestureActionType.POINTER_REALTIME_GESTURE -> PointerRealtimeGesture
@@ -1695,6 +1768,7 @@ fun GestureAction.supportsContinuousTracking(trigger: GestureTriggerType): Boole
         GestureAction.AppCarouselSwitcher,
         GestureAction.FingertipRing,
         GestureAction.HoneycombLauncher,
+        GestureAction.FloatNav,
         is GestureAction.QuickLauncher,
         is GestureAction.QuickWheel,
         GestureAction.ShellCommandPanel,

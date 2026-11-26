@@ -41,7 +41,7 @@ fun CornerGestureSlotSettingsScreen(
     onPickMainAction: () -> Unit,
     onSubMenuEnabledChange: (Boolean) -> Unit,
     onRemoveSubMenuItem: (Int) -> Unit,
-    onAddSubMenuShortcut: () -> Unit,
+    onAddSubMenuAction: () -> Unit,
     onImportFromApp: () -> Unit,
     canImportFromHost: Boolean
 ) {
@@ -51,8 +51,8 @@ fun CornerGestureSlotSettingsScreen(
     val subMenuHint = stringResource(R.string.corner_gesture_slot_submenu_hint)
     val subMenuEnabledTitle = stringResource(R.string.corner_gesture_slot_submenu_enabled)
     val subMenuEnabledDesc = stringResource(R.string.corner_gesture_slot_submenu_enabled_desc)
-    val subMenuAddTitle = stringResource(R.string.corner_gesture_slot_submenu_add)
-    val subMenuAddDesc = stringResource(R.string.corner_gesture_slot_submenu_add_desc)
+    val subMenuAddActionTitle = stringResource(R.string.corner_gesture_slot_submenu_add_action)
+    val subMenuAddActionDesc = stringResource(R.string.corner_gesture_slot_submenu_add_action_desc)
     val subMenuImportTitle = stringResource(R.string.corner_gesture_slot_submenu_import)
     val subMenuImportDesc = stringResource(R.string.corner_gesture_slot_submenu_import_desc)
     val subMenuRemoveItem = stringResource(R.string.corner_gesture_slot_submenu_remove_item)
@@ -122,21 +122,33 @@ fun CornerGestureSlotSettingsScreen(
         )
 
         if (subMenuConfig.enabled) {
-            subMenuConfig.items.forEachIndexed { index, shortcut ->
+            subMenuConfig.items.forEachIndexed { index, action ->
                 groupedCardItems(
                     keyPrefix = "corner-slot-submenu-item-$index",
                     items = buildList {
                         add(
                             settingsCardScopeItem("item") {
                                 SettingNavigationRow(
-                                    icon = { _ ->
-                                        Md3PickerLaunchShortcutLeading(
-                                            action = shortcut,
-                                            activityShortcuts = appSettings.activityShortcuts
-                                        )
+                                    icon = { label ->
+                                        if (action is GestureAction.LaunchShortcut) {
+                                            Md3PickerLaunchShortcutLeading(
+                                                action = action,
+                                                activityShortcuts = appSettings.activityShortcuts
+                                            )
+                                        } else {
+                                            GestureSlotActionIcon(
+                                                action = action,
+                                                settings = appSettings,
+                                                contentDescription = label,
+                                            )
+                                        }
                                     },
-                                    title = launchShortcutDisplayLabel(shortcut).ifBlank {
-                                        gestureActionLabel(shortcut, appSettings)
+                                    title = if (action is GestureAction.LaunchShortcut) {
+                                        launchShortcutDisplayLabel(action).ifBlank {
+                                            gestureActionLabel(action, appSettings)
+                                        }
+                                    } else {
+                                        gestureActionLabel(action, appSettings)
                                     },
                                     subtitle = "",
                                     onClick = {},
@@ -158,13 +170,15 @@ fun CornerGestureSlotSettingsScreen(
             groupedCardItems(
                 keyPrefix = "corner-slot-submenu-add",
                 items = buildList {
+                    // 反馈 #11：只留一个「添加项」入口 —— 快捷方式本来就在「选择操作类型」页里，
+                    // 两个入口是重复的。
                     add(
-                        settingsCardScopeItem("add") {
+                        settingsCardScopeItem("add-action") {
                             SettingNavigationRow(
                                 icon = { label -> SymbolsIcon("Add", contentDescription = label) },
-                                title = subMenuAddTitle,
-                                subtitle = subMenuAddDesc,
-                                onClick = onAddSubMenuShortcut
+                                title = subMenuAddActionTitle,
+                                subtitle = subMenuAddActionDesc,
+                                onClick = onAddSubMenuAction
                             )
                         }
                     )

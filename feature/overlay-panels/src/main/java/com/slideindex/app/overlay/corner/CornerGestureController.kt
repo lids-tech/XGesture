@@ -23,6 +23,7 @@ import com.slideindex.app.settings.CornerGestureSettings
 import com.slideindex.app.shell.ShellCommand
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 class CornerGestureController(
     private val context: Context,
@@ -162,8 +163,29 @@ class CornerGestureController(
         runCatching { context.startActivity(intent) }
     }
 
-    fun resumeAfterSlotPicker() {
-        if (!suspendedForExternalActivity) return
+    /**
+     * 编辑模式长按拖动换位后写回（反馈 #9 / #4）。
+     *
+     * 采用**插入**语义（与快捷轮盘一致）：把 from 的动作取出来插到 to，
+     * 区间内其它槽位整体平移一格，而不是两个位置直接交换。
+     * 仓库从既有钩子拿，不新增静态入口；写完由 AppSettings 回流刷新。
+     */
+    private fun moveCornerSlot(anchor: CornerAnchor, from: Int, to: Int) {
+        if (from == to) return
+        val repository = com.slideindex.app.overlay.panels.PanelRuntimeHooks.settingsRepository
+            ?.invoke(context) ?: return
+        val cornerSettings = settings.cornerGestureSettings
+        val isLeft = cornerSettings.unifiedSlots || anchor == CornerAnchor.LEFT
+        val slots = (if (isLeft) cornerSettings.leftSlots else cornerSettings.rightSlots).toMutableList()
+        if (from !in slots.indices || to !in slots.indices) return
+        val moved = slots.removeAt(from)
+        slots.add(to, moved)
+        // 一次事务写完整组槽位：逐槽位写会让轮盘把中间顺序也画出来（图标一个一个挪）。
+        scope.launch {
+            runCatching { repository.setCornerGestureSlots(isLeft, slots) }
+        }
+    }
+    fun resumeAfterSlotPicker() {        if (!suspendedForExternalActivity) return
         resumeOverlayAfterExternalActivity()
     }
 
@@ -293,6 +315,7 @@ class CornerGestureController(
                 },
                 onReleaseCapture = ::restoreCaptureSize,
                 onOpenSlotPicker = ::openSlotPicker,
+                onMoveSlots = ::moveCornerSlot,
                 onShellCommandsPersist = onShellCommandsPersist,
                 gestureRunner = gestureRunner,
                 onMenuVisualActiveChange = ::syncOverlayBackgroundBlur,
