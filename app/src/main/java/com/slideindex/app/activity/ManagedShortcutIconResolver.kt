@@ -16,6 +16,7 @@ import androidx.core.graphics.createBitmap
 import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.gesture.GestureShortcutPayload
 import com.slideindex.app.launcher.QuickLauncherItem
+import com.slideindex.app.launcher.QuickLauncherItemCodec
 import com.slideindex.app.shell.ShellCommandIconResolver
 import com.slideindex.app.launcher.QuickLauncherItemType
 
@@ -27,9 +28,15 @@ object ManagedShortcutIconResolver {
     fun drawableForQuickItem(
         context: Context,
         item: QuickLauncherItem,
-        catalog: List<ActivityShortcut>
+        catalog: List<ActivityShortcut>,
+        surface: String = "unknown",
     ): Drawable? {
         if (item.type != QuickLauncherItemType.SHORTCUT) return null
+        val itemKey = QuickLauncherItemCodec.shortcutItemKey(item)
+        val rawIntent = QuickLauncherItemCodec.parseIntentPayload(item.payload)
+            ?: QuickLauncherItemCodec.parseIntentListPayload(item.payload)?.singleOrNull()
+        drawableForIconPath(context, ShortcutIconOverrideStore.iconPath(context, itemKey))
+            ?.let { return it }
         val managed = catalog.findForQuickLauncherItem(item) ?: return null
         return drawableForManaged(context, managed)
     }
@@ -37,9 +44,13 @@ object ManagedShortcutIconResolver {
     fun drawableForLaunchShortcut(
         context: Context,
         action: GestureAction.LaunchShortcut,
-        catalog: List<ActivityShortcut>
+        catalog: List<ActivityShortcut>,
+        surface: String = "unknown",
     ): Drawable? {
-        val managed = catalog.findForLaunchShortcut(action.payloadKey) ?: return null
+        val overridePath = ShortcutIconOverrideStore.iconPath(context, action.payloadKey)
+        drawableForIconPath(context, overridePath)?.let { return it }
+        val managed = catalog.findForLaunchShortcut(action.payloadKey)
+        if (managed == null) return null
         return drawableForManaged(context, managed)
     }
 
@@ -71,6 +82,11 @@ object ManagedShortcutIconResolver {
                 decoded.intentUris.firstNotNullOfOrNull { packageFromIntentUri(it) }
             null -> null
         }
+    }
+
+    private fun drawableForIconPath(context: Context, path: String?): Drawable? {
+        if (path.isNullOrBlank()) return null
+        return ShortcutIconStorage.loadBitmap(context, path)?.toDrawable(context.resources)
     }
 
     fun drawableForManaged(context: Context, shortcut: ActivityShortcut): Drawable? {

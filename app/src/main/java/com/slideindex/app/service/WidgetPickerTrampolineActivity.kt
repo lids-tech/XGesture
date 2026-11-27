@@ -71,6 +71,12 @@ class WidgetPickerTrampolineActivity : ComponentActivity() {
                 WidgetPickerTrampoline.deliverActionSuccess(action, label)
                 finish()
               },
+              // 上游 d0598134f：Shell 命令复用整页并支持自定义显示名 —— 用调用方给的名字。
+              onActionSelectedWithLabel = { action, label ->
+                delivered = true
+                WidgetPickerTrampoline.deliverActionSuccess(action, label)
+                finish()
+              },
               enableBackHandler = true,
             )
           }

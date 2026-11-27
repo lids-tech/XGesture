@@ -69,7 +69,6 @@ import com.slideindex.app.freezer.FreezerAppState
 import com.slideindex.app.freezer.FreezerOperations
 import com.slideindex.app.launcher.AppTarget
 import com.slideindex.app.overlay.CloneAppsIndex
-import com.slideindex.app.launcher.QuickLauncherItem
 import com.slideindex.app.launcher.QuickLauncherItemCodec
 import com.slideindex.app.ui.compose.rememberAppRepository
 import com.slideindex.app.ui.picker.AppPickerTabRow
@@ -90,13 +89,13 @@ import com.slideindex.app.ui.settings.components.SettingsScreenScaffold
 import com.slideindex.app.ui.picker.appPickerGridItems
 import com.slideindex.app.util.AppShortcutLoader
 import com.slideindex.app.util.PinyinHelper
-import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.widget.InstalledAppEntry
 import com.slideindex.app.widget.ShortcutEntry
 import com.slideindex.app.widget.WidgetAppGroup
 import com.slideindex.app.widget.WidgetCatalog
 import com.slideindex.app.widget.WidgetPreviewLoader
 import com.slideindex.app.widget.WidgetProviderEntry
+import com.slideindex.app.gesture.GestureAction
 import com.slideindex.app.ui.quicklauncher.quickLauncherAddPickerActionItems
 import com.slideindex.app.ui.quicklauncher.rememberQuickLauncherFilteredActions
 import kotlinx.coroutines.Dispatchers
@@ -109,10 +108,9 @@ sealed interface WidgetPickerSubScreen {
   data object Main : WidgetPickerSubScreen
   data class WidgetAppDetail(val group: WidgetAppGroup) : WidgetPickerSubScreen
   data object MyShortcuts : WidgetPickerSubScreen
-  data object PresetShortcuts : WidgetPickerSubScreen
-  data object ActionPick : WidgetPickerSubScreen
-  data object ShellCommand : WidgetPickerSubScreen
+  /** 模拟按键配置页（我方定制：上游把该入口留成空实现）。 */
   data object SimulateKeyEvent : WidgetPickerSubScreen
+  data object PresetShortcuts : WidgetPickerSubScreen
   data object PickApp : WidgetPickerSubScreen
   data class PickActivity(val packageName: String) : WidgetPickerSubScreen
 }
@@ -130,8 +128,9 @@ fun WidgetPickerScreen(
   onToggleAction: ((GestureAction, Boolean) -> Unit)? = null,
   onAppSelected: ((InstalledAppEntry) -> Unit)? = null,
   onShortcutSelected: ((ShortcutEntry) -> Unit)? = null,
-  /** 选中一个「动作」→ 由调用方把它加成面板格子。 */
   onActionSelected: ((GestureAction) -> Unit)? = null,
+  /** 带名称的动作选择（Shell 命令等需要自定义显示名）。 */
+  onActionSelectedWithLabel: ((GestureAction, String) -> Unit)? = null,
   launchCreateShortcut: ((AppShortcutLoader.CreateShortcutHost) -> Unit)? = null,
   enableBackHandler: Boolean = true,
   overlayMode: Boolean = false,
@@ -154,12 +153,53 @@ fun WidgetPickerScreen(
   var searchExpanded by remember { mutableStateOf(false) }
   val searchFocusRequester = remember { FocusRequester() }
   var subScreen by remember { mutableStateOf<WidgetPickerSubScreen>(WidgetPickerSubScreen.Main) }
-  // 「动作」页里带参数的动作：命令 / 模拟按键要各自的配置页。
-  var shellInitialCommand by remember { mutableStateOf("") }
+  val requestComposite = com.slideindex.app.ui.composite.rememberCompositePickRequester()
+  val requestOpenLink = com.slideindex.app.ui.composite.rememberOpenLinkRequester()
+  var pendingMacroPick by remember { mutableStateOf<((GestureAction) -> Unit)?>(null) }
+  var shellPageVisible by remember { mutableStateOf(false) }
+  /** 模拟按键初始值（从动作页带着已有配置进来时可回填）。 */
   var keyEventInitial by remember { mutableStateOf(GestureAction.SimulateKeyEvent()) }
+  val submitConfiguredAction: (GestureAction, String?) -> Unit = { action, label ->
+    val key = QuickLauncherItemCodec.actionKey(action)
+    addedActionKeys = addedActionKeys + key
+    when {
+      onActionSelectedWithLabel != null && !label.isNullOrBlank() ->
+        onActionSelectedWithLabel(action, label)
+      onToggleAction != null -> onToggleAction(action, false)
+      else -> onActionSelected?.invoke(action)
+    }
+  }
+  val macroPick = pendingMacroPick
+  if (macroPick != null) {
+    com.slideindex.app.ui.gesturepicker.MacroPickDialog(
+      show = true,
+      onDismissRequest = { pendingMacroPick = null },
+      onPick = { macro ->
+        pendingMacroPick = null
+        macroPick(GestureAction.RunMacro(macro.id))
+      },
+    )
+  }
+
 
   val settingsRepository = com.slideindex.app.ui.compose.rememberSettingsRepository()
   val appSettings by settingsRepository.settings.collectAsStateWithLifecycle(initialValue = com.slideindex.app.settings.AppSettings())
+  if (shellPageVisible) {
+    com.slideindex.app.ui.GestureExecuteShellCommandScreen(
+      initialCommand = "",
+      shellCommands = appSettings.shellCommands,
+      onBack = { shellPageVisible = false },
+      onConfirm = { command ->
+        val name = appSettings.shellCommands
+          .firstOrNull { it.command.trim() == command.trim() }
+          ?.label
+        shellPageVisible = false
+        submitConfiguredAction(GestureAction.ExecuteShellCommand(command), name)
+      },
+    )
+    return
+  }
+
   val activityShortcuts = appSettings.activityShortcuts
   val appRepository = rememberAppRepository()
 
@@ -168,10 +208,6 @@ fun WidgetPickerScreen(
       loading = true
     }
     withContext(Dispatchers.IO) {
-      // 打开选择器强制重查一遍：分组列表有缓存，而「逐包补捞隐藏 provider」只在
-      // 缓存未命中时执行——不清缓存的话，新装的 / 部分ROM上被过滤的小组件永远进不来，
-      // 表现为「面板里能选的小部件一直比桌面少」。
-      WidgetCatalog.invalidate()
       val loadedGroups = WidgetCatalog.loadGroups(context)
       // force：缓存里可能是上一版「按包名去重」的结果（没有分身），必须重新枚举一次。
       val loadedApps = WidgetCatalog.loadInstalledApps(context, force = true)
@@ -225,13 +261,30 @@ fun WidgetPickerScreen(
       if (result.resultCode != Activity.RESULT_OK || host == null) return@rememberLauncherForActivityResult
       val created = AppShortcutLoader.parseCreateShortcutResult(host.packageName, result.data, context)
         ?: return@rememberLauncherForActivityResult
+      // 和快速启动器一致：先把回传的自定义图标抓下来（位图 extra），存盘并记进覆盖表。
+      val capturedPath = com.slideindex.app.activity.ShortcutIconCapture.captureFromIntent(
+        context,
+        created.iconProviderIntent ?: created.shortcutIntent,
+      )
+      val overrideKey = created.intentUri
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "intent:$it" }
+        ?: created.componentFlat?.takeIf { it.isNotBlank() }
+      com.slideindex.app.activity.ShortcutIconOverrideStore.put(context, overrideKey, capturedPath)
+      val capturedBitmap = capturedPath?.let {
+        com.slideindex.app.activity.ShortcutIconStorage.loadBitmap(context, it)
+      }?.asImageBitmap()
+      val legacyBitmap = created.iconProviderIntent
+        ?.getParcelableExtra<android.graphics.Bitmap>(android.content.Intent.EXTRA_SHORTCUT_ICON)
+        ?: created.shortcutIntent
+          ?.getParcelableExtra<android.graphics.Bitmap>(android.content.Intent.EXTRA_SHORTCUT_ICON)
       val entry = ShortcutEntry(
         packageName = created.hostPackageName,
         shortcutId = "created_${created.label.hashCode()}",
         label = created.label,
         sortKey = created.label,
         initialKey = "",
-        iconBitmap = null,
+        iconBitmap = capturedBitmap ?: legacyBitmap?.asImageBitmap(),
         intentUri = created.intentUri.orEmpty(),
       )
       addedShortcutKeys = addedShortcutKeys + (created.hostPackageName + "/" + created.intentUri.orEmpty())
@@ -269,54 +322,17 @@ fun WidgetPickerScreen(
           overlayMode = overlayMode,
         )
       }
-      WidgetPickerSubScreen.ActionPick -> {
-        // 直接复用快捷轮盘容器编辑用的动作选择页，但**只显示「动作」一页**：
-        // 应用 / 快捷方式已经有独立页签，这里再列一遍是重复。
-        // 该页自带分类（导航与系统 / 开关与调节 / 截屏与识别 / 面板与启动 / 指针与高级 / 其他）、
-        // 搜索、以及带参数动作的配置弹窗（打开链接 / 快捷轮盘 / 快捷启动器 / 小组件面板）。
-        GestureActionPickerScreen(
-          trigger = com.slideindex.app.gesture.GestureTriggerType.SHORT_SWIPE_IN,
-          current = GestureAction.None,
-          catalogPolicy = com.slideindex.app.gesture.ActionPickerCatalogPolicy.Slot(
-            com.slideindex.app.gesture.SlotPickerKind.OverlayTap,
-          ),
-          onlyActionsTab = true,
-          onDismiss = { subScreen = WidgetPickerSubScreen.Main },
-          onSelect = { action ->
-            onActionSelected?.invoke(action)
-            subScreen = WidgetPickerSubScreen.Main
-          },
-          onOpenMyShortcuts = {},
-          onOpenPresetShortcuts = {},
-          onOpenPickApp = {},
-          onOpenExecuteShellCommand = { command ->
-            shellInitialCommand = command
-            subScreen = WidgetPickerSubScreen.ShellCommand
-          },
-          onOpenSimulateKeyEvent = { event ->
-            keyEventInitial = event
-            subScreen = WidgetPickerSubScreen.SimulateKeyEvent
-          },
-        )
-      }
-      WidgetPickerSubScreen.ShellCommand -> {
-        GestureExecuteShellCommandScreen(
-          initialCommand = shellInitialCommand,
-          shellCommands = appSettings.shellCommands,
-          overlayMode = overlayMode,
-          onBack = { subScreen = WidgetPickerSubScreen.ActionPick },
-          onConfirm = { command ->
-            onActionSelected?.invoke(GestureAction.ExecuteShellCommand(command))
-            subScreen = WidgetPickerSubScreen.Main
-          },
-        )
-      }
       WidgetPickerSubScreen.SimulateKeyEvent -> {
         GestureSimulateKeyEventScreen(
           initialAction = keyEventInitial,
-          onBack = { subScreen = WidgetPickerSubScreen.ActionPick },
+          onBack = { subScreen = WidgetPickerSubScreen.Main },
           onConfirm = { action ->
-            onActionSelected?.invoke(action)
+            val label = com.slideindex.app.ui.gesturepicker.gestureActionLabelText(context, action)
+            if (onActionSelectedWithLabel != null) {
+              onActionSelectedWithLabel(action, label)
+            } else {
+              onActionSelected?.invoke(action)
+            }
             subScreen = WidgetPickerSubScreen.Main
           },
         )
@@ -330,7 +346,20 @@ fun WidgetPickerScreen(
           onToggle = { item, added ->
             val key = QuickLauncherItemCodec.shortcutItemKey(item).orEmpty()
             addedShortcutKeys = if (added) addedShortcutKeys - key else addedShortcutKeys + key
-            val entry = shortcutEntryOf(item)
+            // 「我的直达」/预设快捷方式：不能把编码后的 payload 当包名/intent 存，
+            // 要还原成 ActivityShortcut，再用真实包名 / shortcutId / intent URI。
+            val managedShortcut =
+              com.slideindex.app.activity.activityShortcutFromQuickLauncherItem(item)
+            val entry = ShortcutEntry(
+              packageName = managedShortcut?.packageName
+                ?: item.payload.substringBefore('/'),
+              shortcutId = managedShortcut?.shortcutId.orEmpty(),
+              label = managedShortcut?.label ?: item.label,
+              sortKey = item.label,
+              initialKey = "",
+              iconBitmap = null,
+              intentUri = managedShortcut?.intentUris?.firstOrNull().orEmpty(),
+            )
             if (onToggleShortcut != null) {
               onToggleShortcut(entry, added)
             } else if (onShortcutSelected != null) {
@@ -351,7 +380,20 @@ fun WidgetPickerScreen(
           onToggle = { item, added ->
             val key = QuickLauncherItemCodec.shortcutItemKey(item).orEmpty()
             addedShortcutKeys = if (added) addedShortcutKeys - key else addedShortcutKeys + key
-            val entry = shortcutEntryOf(item)
+            // 「我的直达」/预设快捷方式：不能把编码后的 payload 当包名/intent 存，
+            // 要还原成 ActivityShortcut，再用真实包名 / shortcutId / intent URI。
+            val managedShortcut =
+              com.slideindex.app.activity.activityShortcutFromQuickLauncherItem(item)
+            val entry = ShortcutEntry(
+              packageName = managedShortcut?.packageName
+                ?: item.payload.substringBefore('/'),
+              shortcutId = managedShortcut?.shortcutId.orEmpty(),
+              label = managedShortcut?.label ?: item.label,
+              sortKey = item.label,
+              initialKey = "",
+              iconBitmap = null,
+              intentUri = managedShortcut?.intentUris?.firstOrNull().orEmpty(),
+            )
             if (onToggleShortcut != null) {
               onToggleShortcut(entry, added)
             } else if (onShortcutSelected != null) {
@@ -489,15 +531,7 @@ fun WidgetPickerScreen(
               stringResource(R.string.action_picker_tab_actions),
             ),
             selectedTabIndex = selectedTab,
-            onTabSelected = { index ->
-              if (index == 3) {
-                // 「动作」不是一个列表页，直接进自包含的动作选择器；回来停在小部件页。
-                selectedTab = 0
-                subScreen = WidgetPickerSubScreen.ActionPick
-              } else {
-                selectedTab = index
-              }
-            },
+            onTabSelected = { selectedTab = it },
           )
         },
       )
@@ -630,13 +664,29 @@ fun WidgetPickerScreen(
                 },
                 onResult = { created ->
                   if (created != null) {
+                    val createdIcon = created.iconProviderIntent
+                      ?.getParcelableExtra<android.graphics.Bitmap>(android.content.Intent.EXTRA_SHORTCUT_ICON)
+                      ?: created.shortcutIntent
+                        ?.getParcelableExtra<android.graphics.Bitmap>(android.content.Intent.EXTRA_SHORTCUT_ICON)
+                    val overrideKey = created.intentUri
+                      ?.takeIf { it.isNotBlank() }
+                      ?.let { "intent:$it" }
+                      ?: created.componentFlat?.takeIf { it.isNotBlank() }
+                    com.slideindex.app.activity.ShortcutIconOverrideStore.put(
+                      context,
+                      overrideKey,
+                      com.slideindex.app.activity.ShortcutIconCapture.captureFromIntent(
+                        context,
+                        created.iconProviderIntent ?: created.shortcutIntent,
+                      ),
+                    )
                     val entry = ShortcutEntry(
                       packageName = created.hostPackageName,
                       shortcutId = "created_${created.label.hashCode()}",
                       label = created.label,
                       sortKey = created.label,
                       initialKey = "",
-                      iconBitmap = null,
+                      iconBitmap = createdIcon?.asImageBitmap(),
                       intentUri = created.intentUri.orEmpty(),
                     )
                     val scKey = created.hostPackageName + "/" + created.intentUri.orEmpty()
@@ -703,9 +753,14 @@ fun WidgetPickerScreen(
               }
             }
           },
-          onOpenExecuteShellCommand = {},
-          onOpenOpenLink = {},
-          onOpenSimulateKeyEvent = {},
+          onOpenExecuteShellCommand = { shellPageVisible = true },
+          onRequestOpenLink = requestOpenLink,
+          onRequestComposite = requestComposite,
+          onRequestRunMacro = { onPicked -> pendingMacroPick = onPicked },
+          onOpenSimulateKeyEvent = {
+            keyEventInitial = GestureAction.SimulateKeyEvent()
+            subScreen = WidgetPickerSubScreen.SimulateKeyEvent
+          },
           searchQuery = searchQuery,
         )
       }
@@ -981,38 +1036,4 @@ private fun WidgetDetailCard(
       )
     }
   }
-}
-
-/**
- * 把「我的直达 / 预设快捷方式库」里的条目转成面板用的 [ShortcutEntry]。
- *
- * 这些条目的 payload 有三种形态（动态快捷方式 / 组件 / intent），
- * 必须按 `GestureShortcutPayload` 解码后再取包名，否则存进去的 packageName 是
- * 带前缀的整串（`c:pkg/class`），专属图标与应用图标兜底都会失败 → 格子空白。
- */
-private fun shortcutEntryOf(item: QuickLauncherItem): ShortcutEntry {
-  val payload = item.payload
-  val decoded = com.slideindex.app.gesture.GestureShortcutPayload.decode(payload)
-  val dynamicPair = com.slideindex.app.launcher.QuickLauncherItemCodec.parseShortcutPayload(payload)
-  val packageName: String = when (decoded) {
-    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Dynamic -> decoded.packageName
-    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Component ->
-      decoded.componentFlat.substringBefore('/')
-    else -> dynamicPair?.first
-      ?: payload.substringBefore('/').removePrefix("c:").removePrefix("i:").removePrefix("is:")
-  }
-  val shortcutId: String = when (decoded) {
-    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Dynamic -> decoded.shortcutId
-    is com.slideindex.app.gesture.GestureShortcutPayload.Decoded.Component -> decoded.componentFlat
-    else -> dynamicPair?.second ?: payload
-  }
-  return ShortcutEntry(
-    packageName = packageName,
-    shortcutId = shortcutId,
-    label = item.label,
-    sortKey = item.label,
-    initialKey = "",
-    iconBitmap = null,
-    intentUri = payload,
-  )
 }

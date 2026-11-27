@@ -140,6 +140,14 @@ enum class GestureActionType(val id: Int) {
     COMPOSITE(131),
 
     /**
+     * 「组合动作（引用）」：payload = 组合库里的组合 id。
+     *
+     * 与 [COMPOSITE]（内联快照）不同，它**不保存步骤**：执行时实时读库，
+     * 所以改库会同步到所有绑定手势；库里的组合被删掉时按“无动作”处理。
+     */
+    COMPOSITE_REF(132),
+
+    /**
      * 「页面滚动」：打开一个竖排控制条，并用**被持续续接的划动手势**让页面平滑滚动。
      *
      * 松手后继续滚（用控制条改方向 / 调速 / 暂停 / 关闭）；速度 7 档，默认第 3 档。
@@ -847,7 +855,15 @@ sealed class GestureAction {
         override val payload: String = encodeChildren(actions)
 
         companion object {
-            private const val CHILD_SEP = '\u001F'
+            /**
+             * 子动作分隔符。
+             *
+             * ⚠️ 不能用 `\u001F`：它同时是 `GestureRuleCodec`（触钮规则）的字段分隔符，
+             * 组合 2 个以上动作时 payload 会多出分隔符，规则解码按段数判断就会失败，
+             * 动作变成 None（反馈：触钮里配两个动作后“没选中组合动作”）。
+             * `\u0003` 在动作正文里不会被任何编码器使用。
+             */
+            private const val CHILD_SEP = '\u0003'
             private const val FIELD_SEP = '\u001E'
 
             fun encodeChildren(actions: List<GestureAction>): String =
@@ -877,6 +893,18 @@ sealed class GestureAction {
                 return Composite(children)
             }
         }
+    }
+
+    /**
+     * 引用组合库里的组合：payload = 组合 id。
+     *
+     * 执行时按 id 去库里取步骤（改库全局生效）；找不到时按无动作处理。
+     */
+    data class CompositeRef(
+        val presetId: String,
+    ) : GestureAction() {
+        override val type = GestureActionType.COMPOSITE_REF
+        override val payload = presetId
     }
 
     data object PageScroll : GestureAction() {
@@ -1602,6 +1630,7 @@ sealed class GestureAction {
                 GestureActionType.EXECUTE_SHELL_COMMAND -> ExecuteShellCommand(payload)
                 GestureActionType.RUN_MACRO -> RunMacro(payload)
                 GestureActionType.COMPOSITE -> Composite.parse(payload)
+                GestureActionType.COMPOSITE_REF -> CompositeRef(payload)
                 GestureActionType.PAGE_SCROLL -> PageScroll
                 GestureActionType.MAGNIFIER -> Magnifier
                 GestureActionType.REALTIME_PINCH -> PointerPinchZoom

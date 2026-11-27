@@ -143,9 +143,70 @@ private fun enrichIntentUriWithPackage(intentUri: String, packageName: String): 
         intent.toUri(Intent.URI_INTENT_SCHEME)
     }.getOrDefault(intentUri)
 
+
+private fun normalizeIntentUriForMatch(raw: String?): String? {
+    val uri = raw?.takeIf { it.isNotBlank() } ?: return null
+    return runCatching {
+        android.content.Intent.parseUri(uri, android.content.Intent.URI_INTENT_SCHEME)
+            .toUri(android.content.Intent.URI_INTENT_SCHEME)
+    }.getOrNull()
+}
+
+/** intent URI 的 extras 编码顺序/转义差异不影响匹配：先各自规范化再比。 */
+private fun List<ActivityShortcut>.findByIntentEquivalence(rawIntentUri: String?): ActivityShortcut? {
+    val target = normalizeIntentUriForMatch(rawIntentUri) ?: return null
+    return firstOrNull { shortcut ->
+        shortcut.intentUris.any { normalizeIntentUriForMatch(it) == target }
+    }
+}
+
+private fun parseIntentForMatch(raw: String?): android.content.Intent? {
+    val uri = raw?.takeIf { it.isNotBlank() } ?: return null
+    return runCatching {
+        android.content.Intent.parseUri(uri, android.content.Intent.URI_INTENT_SCHEME)
+    }.getOrNull()
+}
+
+private fun isOwnPreviewIntent(intent: android.content.Intent?): Boolean {
+    val component = intent?.component ?: return false
+    if (component.packageName != "com.slideindex.app") return false
+    val name = component.className.orEmpty()
+    return name.contains("ShortcutImagePreviewActivity") ||
+        name.contains("ShortcutFileLaunchActivity")
+}
+
+private fun List<ActivityShortcut>.findByFilterEquals(
+    rawIntentUri: String?,
+): ActivityShortcut? {
+    val target = parseIntentForMatch(rawIntentUri) ?: return null
+    if (isOwnPreviewIntent(target)) return null
+    return firstOrNull { shortcut ->
+        shortcut.intentUris.any { raw ->
+            parseIntentForMatch(raw)?.filterEquals(target) == true
+        }
+    }
+}
+
+private fun List<ActivityShortcut>.findByPreviewPayload(
+    rawIntentUri: String?,
+): ActivityShortcut? {
+    val intent = parseIntentForMatch(rawIntentUri) ?: return null
+    val imageUri = intent.getStringExtra("extra_image_uri")
+    val fileConfig = intent.getStringExtra("extra_file_config")
+    if (imageUri.isNullOrBlank() && fileConfig.isNullOrBlank()) return null
+    return firstOrNull { shortcut ->
+        val image = com.slideindex.app.activity.ActivityShortcutImageSupport
+            .configFrom(shortcut)?.uri
+        (!imageUri.isNullOrBlank() && image == imageUri) ||
+            (!fileConfig.isNullOrBlank() &&
+                com.slideindex.app.activity.ActivityShortcutFileSupport
+                    .isFileShortcut(shortcut))
+    }
+}
+
 fun List<ActivityShortcut>.findForLaunchShortcut(payloadKey: String): ActivityShortcut? {
     val decoded = GestureShortcutPayload.decode(payloadKey) ?: return null
-    return when (decoded) {
+    val exact = when (decoded) {
         is GestureShortcutPayload.Decoded.Dynamic ->
             findByIdentityKey(
                 QuickLauncherItemCodec.shortcutKey(decoded.packageName, decoded.shortcutId)
@@ -163,13 +224,32 @@ fun List<ActivityShortcut>.findForLaunchShortcut(payloadKey: String): ActivitySh
                 }
             )
     }
+    if (exact != null) return exact
+    val rawIntent = when (decoded) {
+        is GestureShortcutPayload.Decoded.IntentShortcut -> decoded.intentUri
+        is GestureShortcutPayload.Decoded.IntentsShortcut -> decoded.intentUris.singleOrNull()
+        else -> null
+    }
+    return findByIntentEquivalence(rawIntent)
+        ?: findByFilterEquals(rawIntent)
+        ?: findByPreviewPayload(rawIntent)
 }
 
 fun List<ActivityShortcut>.findForQuickLauncherItem(item: QuickLauncherItem): ActivityShortcut? {
     if (item.type != QuickLauncherItemType.SHORTCUT) return null
-    val key = QuickLauncherItemCodec.shortcutItemKey(item) ?: return null
-    return findByIdentityKey(key)
+    val key = QuickLauncherItemCodec.shortcutItemKey(item)
+    key?.let { findByIdentityKey(it) }?.let { return it }
+    val rawIntent = QuickLauncherItemCodec.parseIntentPayload(item.payload)
+        ?: QuickLauncherItemCodec.parseIntentListPayload(item.payload)?.singleOrNull()
+    return findByIntentEquivalence(rawIntent)
+        ?: findByFilterEquals(rawIntent)
+        ?: findByPreviewPayload(rawIntent)
 }
+
+/** 按 intent URI（规范化后）在目录里找快捷方式；图片/文件直达的 extras 编码差异也能命中。 */
+
+fun List<ActivityShortcut>.findByIntentUri(rawIntentUri: String?): ActivityShortcut? =
+    findByIntentEquivalence(rawIntentUri)
 
 fun activityShortcutFromQuickLauncherItem(item: QuickLauncherItem): ActivityShortcut? {
     if (item.type != QuickLauncherItemType.SHORTCUT) return null

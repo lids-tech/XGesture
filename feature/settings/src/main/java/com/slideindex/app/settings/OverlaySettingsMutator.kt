@@ -2031,7 +2031,7 @@ class OverlaySettingsMutator @Inject constructor(
             CornerRadialMenuCodec.defaultLeftSlots(),
         )
         val updated = current.toMutableList()
-        if (index in 0 until CornerRadialMenuCodec.SLOT_COUNT) {
+        if (index in 0 until CornerRadialMenuCodec.MAX_SLOT_COUNT) {
             updated[index] = action
             val encoded = CornerRadialMenuCodec.encode(updated)
             prefs[SettingsPreferenceKeys.CORNER_GESTURE_LEFT_SLOTS] = encoded
@@ -2046,7 +2046,7 @@ class OverlaySettingsMutator @Inject constructor(
         index: Int,
         config: CornerSlotSubMenuConfig,
     ) = editor.edit { prefs ->
-        if (index !in 0 until CornerRadialMenuCodec.SLOT_COUNT) return@edit
+        if (index !in 0 until CornerRadialMenuCodec.MAX_SLOT_COUNT) return@edit
         val key = if (isLeft) {
             SettingsPreferenceKeys.CORNER_GESTURE_LEFT_SLOT_SUB_MENUS
         } else {
@@ -2136,7 +2136,7 @@ class OverlaySettingsMutator @Inject constructor(
      * 这里用单个 edit 事务写完，只发一次设置。
      */
     suspend fun setCornerGestureSlots(isLeft: Boolean, actions: List<GestureAction>) = editor.edit { prefs ->
-        if (actions.size != CornerRadialMenuCodec.SLOT_COUNT) return@edit
+        if (actions.isEmpty() || actions.size > CornerRadialMenuCodec.MAX_SLOT_COUNT) return@edit
         val encoded = CornerRadialMenuCodec.encode(actions)
         if (isLeft) {
             prefs[SettingsPreferenceKeys.CORNER_GESTURE_LEFT_SLOTS] = encoded
@@ -2153,7 +2153,7 @@ class OverlaySettingsMutator @Inject constructor(
             CornerRadialMenuCodec.defaultRightSlots(),
         )
         val updated = current.toMutableList()
-        if (index in 0 until CornerRadialMenuCodec.SLOT_COUNT) {
+        if (index in 0 until CornerRadialMenuCodec.MAX_SLOT_COUNT) {
             updated[index] = action
             prefs[SettingsPreferenceKeys.CORNER_GESTURE_RIGHT_SLOTS] = CornerRadialMenuCodec.encode(updated)
         }

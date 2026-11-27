@@ -13,7 +13,9 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
+import androidx.core.graphics.drawable.toBitmap
 import androidx.core.graphics.drawable.toDrawable
+import com.slideindex.app.activity.findByIntentUri
 import androidx.core.view.isNotEmpty
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
@@ -225,6 +227,172 @@ class WidgetCardContainer(
             if (shellBitmap != null) {
               setImageDrawable(shellBitmap.toDrawable(resources))
               return@apply
+            }
+          }
+          // ── 上游新增图标源（f6e7018cf / 3457289f0 / 3253355f1）──
+          // 这些是「我的直达」目录、创建快捷方式时抓的图标覆盖表、以及宿主快捷方式
+          // 在 intent 里内嵌的 `S.iconuri=...`。命中就直接用，避免图片直达显示成
+          // XGesture 自己的图标（上游修的正是这个）。
+          run {
+            val upstreamSettings = com.slideindex.app.overlay.panels.PanelRuntimeHooks
+              .settingsSnapshot?.invoke(context)
+              ?: com.slideindex.app.settings.AppSettings()
+            val upstreamShape = upstreamSettings.widgetPanelIconShape
+              .resolve(upstreamSettings.globalIconShape)
+            val normalizeDrawable = { drawable: android.graphics.drawable.Drawable ->
+              val bitmap = com.slideindex.app.overlay.layout.IconShapeNormalizer
+                .normalizeBitmap(drawable.toBitmap(iconSizePx, iconSizePx), upstreamShape)
+              bitmap.toDrawable(resources)
+            }
+            // ① 动作是「我的直达」里的 LaunchShortcut：按应用内直达目录取图。
+            if (action is com.slideindex.app.gesture.GestureAction.LaunchShortcut) {
+              com.slideindex.app.activity.ManagedShortcutIconResolver
+                .drawableForLaunchShortcut(context, action, upstreamSettings.activityShortcuts, "widget")
+                ?.let { drawable ->
+                  setImageDrawable(normalizeDrawable(drawable))
+                  return@apply
+                }
+            }
+            if (item.itemType == ITEM_TYPE_SHORTCUT) {
+              val rawIntent = item.intentUri
+              // ② 图片直达：intent 里带 extra_image_uri（可能被 URL 编码），按原图 URI 反查目录。
+              val embeddedImageUri = if (rawIntent.contains("extra_image_uri=")) {
+                android.net.Uri.decode(
+                  rawIntent.substringAfter("extra_image_uri=").substringBefore(';'),
+                )
+              } else null
+              if (embeddedImageUri != null) {
+                val imageMatched = upstreamSettings.activityShortcuts.firstOrNull { sc ->
+                  com.slideindex.app.activity.ActivityShortcutImageSupport
+                    .configFrom(sc)?.uri == embeddedImageUri
+                }
+                if (imageMatched != null) {
+                  com.slideindex.app.activity.ManagedShortcutIconResolver
+                    .drawableForManaged(context, imageMatched)
+                    ?.let { drawable ->
+                      setImageDrawable(normalizeDrawable(drawable))
+                      return@apply
+                    }
+                }
+              }
+              // ③ 宿主快捷方式的 iconuri：package: / content:// / file:// 三种形态。
+              val iconRef = Regex("iconuri=([^;]+)")
+                .find(rawIntent)
+                ?.groupValues?.getOrNull(1)
+                ?.let { android.net.Uri.decode(it) }
+              if (!iconRef.isNullOrBlank()) {
+                when {
+                  iconRef.startsWith("package:") -> {
+                    val pkg = iconRef.removePrefix("package:")
+                    if (pkg.isNotBlank()) {
+                      tag = pkg
+                      WidgetAppIconCache.load(context, pkg) { bitmap ->
+                        if (tag == pkg) {
+                          val normalized = com.slideindex.app.overlay.layout.IconShapeNormalizer
+                            .normalizeBitmap(bitmap, upstreamShape)
+                          setImageDrawable(normalized.toDrawable(resources))
+                        }
+                      }
+                      return@apply
+                    }
+                  }
+                  iconRef.startsWith("content://") -> {
+                    val bitmap = runCatching {
+                      com.slideindex.app.util.ImageDecodeGuard.decodeUri(
+                        context,
+                        android.net.Uri.parse(iconRef),
+                        maxSidePx = iconSizePx,
+                      )
+                    }.getOrNull()
+                    if (bitmap != null) {
+                      val normalized = com.slideindex.app.overlay.layout.IconShapeNormalizer
+                        .normalizeBitmap(bitmap, upstreamShape)
+                      return@apply setImageDrawable(normalized.toDrawable(resources))
+                    }
+                  }
+                  iconRef.startsWith("file://") -> {
+                    val path = android.net.Uri.parse(iconRef).path
+                    val bitmap = path?.let { filePath ->
+                      runCatching {
+                        com.slideindex.app.util.ImageDecodeGuard.decodeFile(filePath, iconSizePx)
+                      }.getOrNull()
+                    }
+                    if (bitmap != null) {
+                      val normalized = com.slideindex.app.overlay.layout.IconShapeNormalizer
+                        .normalizeBitmap(bitmap, upstreamShape)
+                      return@apply setImageDrawable(normalized.toDrawable(resources))
+                    }
+                  }
+                }
+              }
+              // ④ 「创建快捷方式」不在应用内直达目录里：查按身份存的图标覆盖表。
+              val overrideKey = item.intentUri.takeIf { it.isNotBlank() }?.let { "intent:$it" }
+                ?: "${item.packageName}/${item.className}"
+              com.slideindex.app.activity.ShortcutIconOverrideStore.iconPath(context, overrideKey)
+                ?.let { path ->
+                  com.slideindex.app.activity.ShortcutIconStorage.loadBitmap(context, path)
+                    ?.let { bitmap ->
+                      val normalized = com.slideindex.app.overlay.layout.IconShapeNormalizer
+                        .normalizeBitmap(bitmap, upstreamShape)
+                      return@apply setImageDrawable(normalized.toDrawable(resources))
+                    }
+                }
+              // ⑤ 应用内直达目录按 intent / shortcutId / 组件 / 名称多路匹配。
+              val managed = upstreamSettings.activityShortcuts
+                .findByIntentUri(item.intentUri)
+                ?: upstreamSettings.activityShortcuts.firstOrNull {
+                  it.packageName == item.packageName &&
+                    it.shortcutId == item.shortcutId &&
+                    item.shortcutId.isNotBlank()
+                }
+                ?: upstreamSettings.activityShortcuts.firstOrNull {
+                  it.packageName == item.packageName &&
+                    item.className.isNotBlank() &&
+                    it.activityClassName == item.className
+                }
+                ?: upstreamSettings.activityShortcuts.firstOrNull {
+                  it.packageName == item.packageName &&
+                    item.label.isNotBlank() &&
+                    it.label == item.label
+                }
+              if (managed != null) {
+                com.slideindex.app.activity.ManagedShortcutIconResolver
+                  .drawableForManaged(context, managed)
+                  ?.let { drawable ->
+                    setImageDrawable(normalizeDrawable(drawable))
+                    return@apply
+                  }
+              }
+              // ⑥ 最后按 launcherApps 查宿主快捷方式图标（含 intent 里的 id 参数）。
+              if (item.shortcutId.isNotEmpty()) {
+                val drawable = runCatching {
+                  val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
+                    as? android.content.pm.LauncherApps
+                  val query = android.content.pm.LauncherApps.ShortcutQuery().apply {
+                    setPackage(item.packageName)
+                    val intentQueryId = runCatching {
+                      android.content.Intent
+                        .parseUri(item.intentUri, android.content.Intent.URI_INTENT_SCHEME)
+                        .data?.getQueryParameter("id")
+                    }.getOrNull()
+                    setShortcutIds(listOf(intentQueryId ?: item.shortcutId))
+                    setQueryFlags(
+                      android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                    )
+                  }
+                  val info = launcherApps?.getShortcuts(query, android.os.Process.myUserHandle())
+                    ?.firstOrNull()
+                  if (info != null) {
+                    launcherApps.getShortcutIconDrawable(info, resources.displayMetrics.densityDpi)
+                  } else null
+                }.getOrNull()
+                if (drawable != null) {
+                  setImageDrawable(normalizeDrawable(drawable))
+                  return@apply
+                }
+              }
             }
           }
           val wheelAction = when {

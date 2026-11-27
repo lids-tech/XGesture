@@ -7,10 +7,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
@@ -33,11 +37,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.width
+import com.slideindex.app.ui.miuix.LocalMiuixPageBackdrop
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.glass.GlassDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 import com.slideindex.app.R
 import com.slideindex.app.data.AppInfo
 import com.slideindex.app.gesture.GestureAction
@@ -66,6 +78,7 @@ import com.slideindex.app.ui.gesturepicker.rememberActionPickerFilteredActions
 import com.slideindex.app.ui.gesturepicker.rememberActionPickerFilteredApps
 import com.slideindex.app.ui.picker.AppPickerTabRow
 import com.slideindex.app.ui.miuix.MiuixExpandableSearchIconAction
+import com.slideindex.app.ui.miuix.MiuixLabeledTextField
 import com.slideindex.app.ui.miuix.MiuixScaffoldSearchTabBottomContent
 import com.slideindex.app.ui.miuix.consumeExpandableSearchBack
 import com.slideindex.app.ui.picker.filterShortcutCatalog
@@ -149,8 +162,7 @@ fun GestureActionPickerScreen(
     }
     var quickWheelConfigVisible by remember { mutableStateOf(false) }
     // 「组合动作」编辑弹窗：按顺序勾选要执行的动作。
-    var compositeVisible by remember { mutableStateOf(false) }
-    var compositeDraft by remember { mutableStateOf<List<GestureAction>>(emptyList()) }
+    var compositePickVisible by remember { mutableStateOf(false) }
     val quickLauncherInitial = remember(current) {
         val ql = current as? GestureAction.QuickLauncher
         Triple(ql?.panelId.orEmpty(), ql?.pinned == true, ql?.pinCurrentApp == true)
@@ -278,7 +290,18 @@ fun GestureActionPickerScreen(
         if (result.resultCode != Activity.RESULT_OK || host == null) return@rememberLauncherForActivityResult
         val created = AppShortcutLoader.parseCreateShortcutResult(host.packageName, result.data, context)
             ?: return@rememberLauncherForActivityResult
-        onSelect(launchShortcutFromCreated(created))
+        val iconPath = com.slideindex.app.activity.ShortcutIconCapture.captureFromIntent(
+            context,
+            created.iconProviderIntent ?: created.shortcutIntent,
+        )
+        val createdAction = launchShortcutFromCreated(created)
+        // 图标跟着这条快捷方式走：按 payloadKey 存覆盖表（不写应用内直达目录）。
+        com.slideindex.app.activity.ShortcutIconOverrideStore.put(
+            context,
+            createdAction.payloadKey,
+            iconPath,
+        )
+        onSelect(createdAction)
     }
 
     var hasSelected by remember { mutableStateOf(false) }
@@ -348,9 +371,7 @@ fun GestureActionPickerScreen(
                         current = current,
                         onSelect = { picked ->
                             if (picked is GestureAction.Composite) {
-                                compositeDraft = (current as? GestureAction.Composite)
-                                    ?.actions.orEmpty()
-                                compositeVisible = true
+                                compositePickVisible = true
                             } else {
                                 safeSelect(picked)
                             }
@@ -424,111 +445,99 @@ fun GestureActionPickerScreen(
         }
 
         if (openLinkConfigVisible) {
-            Dialog(
+            OpenLinkMiuixDialog(
+                initialUrl = openLinkInitial.first,
+                initialLabel = openLinkInitial.second,
                 onDismissRequest = { openLinkConfigVisible = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
-            ) {
-                GestureOpenLinkScreen(
-                    initialUrl = openLinkInitial.first,
-                    initialLabel = openLinkInitial.second,
-                    onBack = { openLinkConfigVisible = false },
-                    onConfirm = { url, label ->
-                        openLinkConfigVisible = false
-                        safeSelect(GestureAction.OpenLink(url = url, label = label))
-                    },
-                    overlayMode = true,
-                )
-            }
+                onConfirm = { url, label ->
+                    openLinkConfigVisible = false
+                    safeSelect(GestureAction.OpenLink(url = url, label = label))
+                },
+            )
         }
 
-        if (compositeVisible) {
-        Dialog(
-            onDismissRequest = { compositeVisible = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp,
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .padding(16.dp),
-            ) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    Text(
-                        text = stringResource(R.string.gesture_action_composite),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.gesture_action_composite_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 360.dp),
-                    ) {
-                        val candidates = filteredActions.filter {
-                            it.type != GestureActionType.NONE && it !is GestureAction.Composite
-                        }
-                        items(candidates.size, key = { candidates[it].payload.ifBlank { candidates[it].type.id.toString() } }) { index ->
-                            val candidate = candidates[index]
-                            val selectedIndex = compositeDraft.indexOfFirst {
-                                it.type == candidate.type && it.payload == candidate.payload
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        compositeDraft = if (selectedIndex >= 0) {
-                                            compositeDraft.toMutableList().also { it.removeAt(selectedIndex) }
-                                        } else {
-                                            compositeDraft + candidate
+        if (compositePickVisible) {
+            val pickContext = LocalContext.current
+            val presets = remember(compositePickVisible) {
+                com.slideindex.app.ui.composite.CompositeActionPresetStore.load(pickContext)
+            }
+
+            val dialogTitle = stringResource(R.string.gesture_action_composite)
+            val body: @Composable () -> Unit = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (presets.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.composite_pick_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            presets.forEach { preset ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            compositePickVisible = false
+                                            safeSelect(GestureAction.CompositeRef(preset.id))
                                         }
-                                    }
-                                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = gestureActionLabel(candidate, appSettings),
-                                    modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                if (selectedIndex >= 0) {
+                                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
                                     Text(
-                                        text = (selectedIndex + 1).toString(),
+                                        text = preset.name.ifBlank {
+                                            stringResource(R.string.composite_library_untitled)
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            R.string.composite_library_action_count,
+                                            preset.actions.size,
+                                        ),
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
                         }
                     }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        androidx.compose.material3.TextButton(onClick = { compositeVisible = false }) {
-                            Text(stringResource(android.R.string.cancel))
-                        }
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                compositeVisible = false
-                                safeSelect(GestureAction.Composite(compositeDraft))
-                            },
-                        ) {
-                            Text(stringResource(R.string.gesture_action_composite_save))
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    top.yukonga.miuix.kmp.basic.TextButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = { compositePickVisible = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            val compositeBackdrop = LocalMiuixPageBackdrop.current
+            if (compositeBackdrop != null) {
+                GlassDialog(
+                    onDismissRequest = { compositePickVisible = false },
+                    show = true,
+                    backdrop = compositeBackdrop,
+                    title = dialogTitle,
+                    content = body,
+                )
+            } else {
+                WindowDialog(
+                    show = true,
+                    title = dialogTitle,
+                    onDismissRequest = { compositePickVisible = false },
+                ) {
+                    body()
                 }
             }
         }
-    }
 
     if (quickWheelConfigVisible) {
             Dialog(
@@ -635,6 +644,89 @@ fun GestureActionPickerScreen(
                     safeSelect(GestureAction.OpenShakeMenu(menu.id))
                 },
             )
+        }
+    }
+}
+
+
+/** 「打开链接」的 Miuix 弹窗：链接 + 名称两个输入框。 */
+@Composable
+private fun OpenLinkMiuixDialog(
+    initialUrl: String,
+    initialLabel: String,
+    onDismissRequest: () -> Unit,
+    onConfirm: (url: String, label: String) -> Unit,
+) {
+    var url by remember(initialUrl) { mutableStateOf(initialUrl) }
+    var label by remember(initialLabel) { mutableStateOf(initialLabel) }
+    val canSave = url.trim().isNotBlank()
+    val dialogTitle = stringResource(R.string.gesture_action_open_link)
+
+    val body: @Composable () -> Unit = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            MiuixLabeledTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = stringResource(R.string.gesture_open_link_url_field),
+                singleLine = false,
+                minLines = 2,
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            MiuixLabeledTextField(
+                value = label,
+                onValueChange = { label = it },
+                label = stringResource(R.string.gesture_open_link_label_field),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                top.yukonga.miuix.kmp.basic.TextButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = onDismissRequest,
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 44.dp),
+                    minHeight = 44.dp,
+                    insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                top.yukonga.miuix.kmp.basic.TextButton(
+                    text = stringResource(R.string.composite_library_save),
+                    onClick = { onConfirm(url.trim(), label.trim()) },
+                    enabled = canSave,
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 44.dp),
+                    minHeight = 44.dp,
+                    insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
+        }
+    }
+
+    val backdrop = LocalMiuixPageBackdrop.current
+    if (backdrop != null) {
+        GlassDialog(
+            onDismissRequest = onDismissRequest,
+            show = true,
+            backdrop = backdrop,
+            title = dialogTitle,
+            content = body,
+        )
+    } else {
+        WindowDialog(
+            show = true,
+            title = dialogTitle,
+            onDismissRequest = onDismissRequest,
+        ) {
+            body()
         }
     }
 }
