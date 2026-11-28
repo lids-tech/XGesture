@@ -61,6 +61,7 @@ data class EdgeTriggerSettings(
     val systemGestureTakeoverSides: Boolean = false,
     /** 由 LSPosed 模块在输入层接管底部触钮区域，覆盖上滑回桌面等系统手势。 */
     val systemGestureTakeoverBottom: Boolean = false,
+    val triggerLayoutPreviewEnabled: Boolean = false,
     val limitMaxInterceptLength: Boolean = false,
     val leftDefaultTriggerMode: GestureTriggerMode = GestureTriggerMode.ON_RELEASE,
     val rightDefaultTriggerMode: GestureTriggerMode = GestureTriggerMode.ON_RELEASE,
@@ -768,8 +769,8 @@ data class OverlayBlurSettings(
     val backdropBlurEnabled: Boolean = true,
     /** 全屏背景模糊半径（dp）；默认 80dp，区间 0..100。 */
     val backdropBlurRadiusDp: Int = 80,
-    /** 全屏背景暗化百分比（%）；默认 35%，区间 0..100。 */
-    val backdropDimPercent: Int = 35,
+    /** 全屏背景暗化百分比（%）；默认 15%，区间 0..100。 */
+    val backdropDimPercent: Int = 15,
     /** 搜索面板模糊模式：0=关闭, 1=仅背景, 2=仅面板。默认仅背景(1)。 */
     val searchPanelBlurModeId: Int = OverlayBlurMode.BACKDROP_ONLY.id,
     /** 扩展面板模糊模式：0=关闭, 1=仅背景, 2=仅面板。默认仅背景(1)。 */
