@@ -5530,12 +5530,6 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="app_carousel_close_all_hint">Release to close all apps</string>
     <string name="app_carousel_cancel_down_hint">Swipe down to close the panel</string>
     <string name="app_carousel_cancel_overshoot_hint">Release to cancel</string>
-    <string name="share_sheet_title">Share to</string>
-    <string name="share_sheet_hint">Long press to pin</string>
-    <string name="share_sheet_empty">No share targets found</string>
-    <string name="share_sheet_toast_pinned">Pinned “%1$s”</string>
-    <string name="share_sheet_toast_unpinned">Unpinned “%1$s”</string>
-    <string name="share_sheet_use_system">System share sheet</string>
     <string name="share_sheet_set_default">Set as default</string>
     <string name="share_sheet_default_badge">Default share target</string>
     <string name="share_sheet_clear_default">Clear default share target</string>
