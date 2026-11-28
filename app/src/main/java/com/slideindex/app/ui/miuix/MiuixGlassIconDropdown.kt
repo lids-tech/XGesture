@@ -15,12 +15,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
 import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
+import top.yukonga.miuix.kmp.glass.GlassPopupSizing
 import top.yukonga.miuix.kmp.glass.glassPopupAnchor
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
@@ -37,6 +39,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * @param capsule 触发器是否用玻璃胶囊。**只有顶栏 / 工具栏里的按钮才该为 true**；列表行、卡片
  *   actions 里的菜单保持普通 `IconButton`（只有浮层是玻璃），避免页面里到处是胶囊。
+ * @param horizontalAlignment 浮层相对锚点的水平对齐（rc01 新增）。默认 [Alignment.End]：
+ *   菜单右边缘贴锚点右边缘，这是顶栏动作键的位置。触发器贴近屏幕左侧时传 [Alignment.Start]，
+ *   否则菜单会被推出左边界再被安全边距压回来，看起来像"错位"。
  */
 @Composable
 fun MiuixGlassIconDropdown(
@@ -46,10 +51,14 @@ fun MiuixGlassIconDropdown(
     modifier: Modifier = Modifier,
     tint: Color = MiuixTheme.colorScheme.onSurface,
     capsule: Boolean = true,
+    horizontalAlignment: Alignment.Horizontal = Alignment.End,
+    /** 浮层尺寸；null 时按项数自动决定（长列表用更高的面板）。 */
+    sizing: GlassPopupSizing? = null,
 ) {
     val anchor = rememberGlassPopupAnchor()
     var expanded by remember { mutableStateOf(false) }
     val pageBackdrop = LocalMiuixPageBackdrop.current
+    val resolvedSizing = sizing ?: rememberAutoGlassPopupSizing(entries.sumOf { it.items.size })
     val triggerModifier = modifier.glassPopupAnchor(
         anchor = anchor,
         cornerRadius = GlassTopAppBarDefaults.ButtonSize / 2,
@@ -102,6 +111,8 @@ fun MiuixGlassIconDropdown(
             },
             entries = entries,
             backdrop = pageBackdrop,
+            horizontalAlignment = horizontalAlignment,
+            sizing = resolvedSizing,
         )
     }
 }

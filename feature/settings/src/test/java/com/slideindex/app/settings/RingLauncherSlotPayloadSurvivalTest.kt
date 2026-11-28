@@ -6,6 +6,7 @@ import com.slideindex.app.launcher.QuickLauncherItem
 import com.slideindex.app.launcher.QuickLauncherItemType
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,6 +53,61 @@ class RingLauncherSlotPayloadSurvivalTest {
 
         val reread = FvRingLauncherSettings.fromPreferences(prefs, FvRingLauncherAxis.VERTICAL)
         assertEquals("写盘再读回必须不丢槽位", realisticSlots.size, reread.slots.size)
+    }
+
+    @Test
+    fun slotCodecKeepsOnlyBlankAppAsTheExplicitNoneMarker() {
+        val none = QuickLauncherItem(QuickLauncherItemType.APP, "", "")
+        val invalidAction = QuickLauncherItem(QuickLauncherItemType.ACTION, "", "")
+        val invalidShortcut = QuickLauncherItem(QuickLauncherItemType.SHORTCUT, "", "")
+        val slots = mapOf(0 to none, 1 to invalidAction, 2 to invalidShortcut)
+
+        assertEquals(mapOf(0 to none), FvRingLauncherSlotCodec.decodeAll(FvRingLauncherSlotCodec.encodeAll(slots)))
+        val legacyEntries = slots.map { (index, item) -> FvRingLauncherSlotCodec.encode(index, item) }.toSet()
+        assertEquals(mapOf(0 to none), FvRingLauncherSlotCodec.decodeAll(legacyEntries))
+    }
+
+    @Test
+    fun selectingNonePersistsWithoutDisablingUntouchedSlots() = runBlocking {
+        val editor = SettingsPreferencesEditor(context)
+        val mutator = OverlaySettingsMutator(editor)
+        editor.edit { prefs ->
+            prefs.remove(SettingsPreferenceKeys.FV_RING_LAUNCHER_SLOTS)
+            prefs.remove(SettingsPreferenceKeys.FV_RING_LAUNCHER_HORIZONTAL_SLOTS)
+            prefs[SettingsPreferenceKeys.FV_RING_LAUNCHER_LINK_SLOT_AXES] = true
+        }.getOrThrow()
+        val none = QuickLauncherItem(QuickLauncherItemType.APP, "", "")
+        mutator.setFvRingLauncherSlot(FvRingLauncherAxis.VERTICAL, 0, none).getOrThrow()
+
+        for (axis in FvRingLauncherAxis.entries) {
+            val reloaded = FvRingLauncherSettings.fromPreferences(editor.readRawPreferences(), axis)
+            assertEquals(none, reloaded.itemAt(0))
+            assertNull(reloaded.itemAt(1))
+        }
+
+        mutator.setFvRingLauncherSlot(FvRingLauncherAxis.VERTICAL, 0, realisticSlots.getValue(0)).getOrThrow()
+        val replaced = FvRingLauncherSettings.fromPreferences(editor.readRawPreferences(), FvRingLauncherAxis.VERTICAL)
+        assertEquals(realisticSlots[0], replaced.itemAt(0))
+    }
+
+    @Test
+    fun removingSlotRestoresAutoFill() = runBlocking {
+        val editor = SettingsPreferencesEditor(context)
+        val mutator = OverlaySettingsMutator(editor)
+        val none = QuickLauncherItem(QuickLauncherItemType.APP, "", "")
+
+        mutator.setFvRingLauncherSlot(FvRingLauncherAxis.VERTICAL, 0, none).getOrThrow()
+        assertEquals(
+            "「透明」应存成空条目",
+            none,
+            FvRingLauncherSettings.fromPreferences(editor.readRawPreferences(), FvRingLauncherAxis.VERTICAL).itemAt(0),
+        )
+
+        mutator.removeFvRingLauncherSlot(FvRingLauncherAxis.VERTICAL, 0).getOrThrow()
+
+        val after = FvRingLauncherSettings.fromPreferences(editor.readRawPreferences(), FvRingLauncherAxis.VERTICAL)
+        assertNull("删除绑定后应回到未配置（自动填充）", after.itemAt(0))
+        assertNull("图标覆盖也要一起清掉", after.iconOverrideAt(0))
     }
 
     @Test

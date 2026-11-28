@@ -22,10 +22,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import com.slideindex.app.design.R
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.glass.GlassDialog
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 @Composable
@@ -43,6 +49,9 @@ fun MiuixConfirmDialog(
     onSecondaryConfirm: (() -> Unit)? = null,
     secondaryDismissOnConfirm: Boolean = true,
 ) {
+    // 玻璃路径的判定要前置：`body` 里的动作行需要知道该用玻璃按钮还是普通 TextButton。
+    val glassBackdrop = LocalMiuixPageBackdrop.current
+    val glassActions = glassBackdrop != null
     val body: @Composable () -> Unit = {
         Column {
             when {
@@ -57,6 +66,7 @@ fun MiuixConfirmDialog(
             }
             Spacer(Modifier.height(20.dp))
             DialogActionsRow(
+                glass = glassActions,
                 dismissText = dismissText,
                 onDismissRequest = onDismissRequest,
                 confirmText = confirmText,
@@ -81,14 +91,13 @@ fun MiuixConfirmDialog(
 
 
     if (!show) return
-    val overlayBackdrop = LocalMiuixPageBackdrop.current
-    if (overlayBackdrop != null) {
+    if (glassBackdrop != null) {
         GlassDialog(
             onDismissRequest = onDismissRequest,
             show = show,
-            backdrop = overlayBackdrop,
+            backdrop = glassBackdrop,
             title = title,
-            content = body,
+            content = { MiuixGlassSurfaceScope { body() } },
         )
         return
     }
@@ -117,6 +126,8 @@ fun MiuixFormDialog(
     secondaryDismissOnConfirm: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val glassBackdrop = LocalMiuixPageBackdrop.current
+    val glassActions = glassBackdrop != null
     val density = LocalDensity.current
     val windowHeightPx = LocalWindowInfo.current.containerSize.height
     val imeBottomPx = WindowInsets.ime.getBottom(density)
@@ -144,6 +155,7 @@ fun MiuixFormDialog(
             Spacer(Modifier.height(16.dp))
             if (dismissText != null) {
                 DialogActionsRow(
+                    glass = glassActions,
                     dismissText = dismissText,
                     onDismissRequest = onDismissRequest,
                     confirmText = confirmText,
@@ -166,7 +178,8 @@ fun MiuixFormDialog(
                     secondaryConfirmEnabled = secondaryConfirmEnabled,
                 )
             } else {
-                TextButton(
+                DialogActionButton(
+                    glass = glassActions,
                     text = confirmText,
                     onClick = {
                         onConfirm()
@@ -174,12 +187,9 @@ fun MiuixFormDialog(
                             onDismissRequest()
                         }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 44.dp),
-                    minHeight = 44.dp,
-                    insideMargin = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    enabled = confirmEnabled,
+                    role = GlassDialogButtonRole.Primary,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -187,14 +197,13 @@ fun MiuixFormDialog(
 
 
     if (!show) return
-    val overlayBackdrop = LocalMiuixPageBackdrop.current
-    if (overlayBackdrop != null) {
+    if (glassBackdrop != null) {
         GlassDialog(
             onDismissRequest = onDismissRequest,
             show = show,
-            backdrop = overlayBackdrop,
+            backdrop = glassBackdrop,
             title = title,
-            content = body,
+            content = { MiuixGlassSurfaceScope { body() } },
         )
         return
     }
@@ -238,6 +247,7 @@ fun MiuixScrollableConfirmDialog(
 
 @Composable
 private fun DialogActionsRow(
+    glass: Boolean,
     dismissText: String,
     onDismissRequest: () -> Unit,
     confirmText: String,
@@ -247,43 +257,63 @@ private fun DialogActionsRow(
     onSecondaryConfirm: (() -> Unit)? = null,
     secondaryConfirmEnabled: Boolean = true,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-    ) {
-        if (secondaryConfirmText != null && onSecondaryConfirm != null) {
-            TextButton(
-                text = secondaryConfirmText,
-                onClick = onSecondaryConfirm,
-                enabled = secondaryConfirmEnabled,
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 44.dp),
-                minHeight = 44.dp,
-                insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    MiuixDialogActionsRow(
+        actions = buildList {
+            secondaryConfirmText?.let {
+                add(MiuixDialogAction(it, onSecondaryConfirm ?: {}, secondaryConfirmEnabled))
+            }
+            add(MiuixDialogAction(dismissText, onDismissRequest))
+            add(MiuixDialogAction(confirmText, onConfirm, confirmEnabled, primary = true))
+        },
+        glass = glass,
+    )
+}
+
+/**
+ * 对话框单颗动作按钮。
+ *
+ * 玻璃对话框（`GlassDialog`）**照 miuix 示例的写法内联** `GlassDialogButton`：
+ * 内容用 miuix `Text` + `MiuixTheme.textStyles.button`，文字色来自按钮下发的
+ * `LocalContentColor`（Primary → onPrimary 白），不会退化成 material3 的默认黑色。
+ * 角色只用 `Normal`（取消）与 `Primary`（确认）—— 示例 app 里全部对话框都是这两种，
+ * 没有 `Destructive`。
+ * 非玻璃路径（浮层窗口里的 `WindowDialog`）仍用 miuix `TextButton`，因为那层是不透明底。
+ */
+@Composable
+private fun DialogActionButton(
+    glass: Boolean,
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    role: GlassDialogButtonRole = GlassDialogButtonRole.Normal,
+) {
+    if (glass) {
+        GlassDialogButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            role = role,
+        ) {
+            MiuixText(
+                text = text,
+                style = MiuixTheme.textStyles.button,
+                maxLines = 1,
             )
-            Spacer(Modifier.width(12.dp))
         }
+    } else {
         TextButton(
-            text = dismissText,
-            onClick = onDismissRequest,
-            modifier = Modifier
-                .weight(1f)
-                .defaultMinSize(minHeight = 44.dp),
+            text = text,
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier.defaultMinSize(minHeight = 44.dp),
             minHeight = 44.dp,
             insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        TextButton(
-            text = confirmText,
-            onClick = onConfirm,
-            enabled = confirmEnabled,
-            modifier = Modifier
-                .weight(1f)
-                .defaultMinSize(minHeight = 44.dp),
-            minHeight = 44.dp,
-            insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            colors = ButtonDefaults.textButtonColorsPrimary(),
+            colors = if (role == GlassDialogButtonRole.Primary) {
+                ButtonDefaults.textButtonColorsPrimary()
+            } else {
+                ButtonDefaults.textButtonColors()
+            },
         )
     }
 }

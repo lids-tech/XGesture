@@ -177,6 +177,11 @@ object RingLauncherOverlayWindow {
                                 ?.invoke(axis, slotIndex, itemToSet)
                             settingsScope.launch { refreshFromSettings() }
                         },
+                        onRemoveSlot = {
+                            com.slideindex.app.overlay.panels.PanelRuntimeHooks.persistRingLauncherSlot
+                                ?.invoke(axis, slotIndex, null)
+                            settingsScope.launch { refreshFromSettings() }
+                        },
                         onOpenCustomIconEditor = {
                             suspendForSlotIconEditor()
                             val intent =
@@ -769,9 +774,8 @@ object RingLauncherOverlayWindow {
         }
 
         return List(slotCount) { index ->
-            explicitSlots[index] ?: run {
-                if (!autoFill) return@run null
-                val autoApp = autoFillQueue.removeFirstOrNull() ?: return@run null
+            selectRingLauncherSlot(fvSettings, index, explicitSlots[index], autoFill) {
+                val autoApp = autoFillQueue.removeFirstOrNull() ?: return@selectRingLauncherSlot null
                 val item = QuickLauncherItem(
                     type = QuickLauncherItemType.APP,
                     payload = autoApp.packageName,

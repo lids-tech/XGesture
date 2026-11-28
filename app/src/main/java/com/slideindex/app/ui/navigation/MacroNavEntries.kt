@@ -176,10 +176,7 @@ fun NavEntryBuilder.macroNavEntries(ctx: MainNavContext) {
             onNameChange = { text -> current.name = text },
             onPickTargetApp = { ctx.navigate(AppNavKey.MacroTargetApp(current.id)) },
             onStartRecording = { startMacroRecording(ctx, context, current) },
-            onTestRun = {
-                MacroEngine(context.applicationContext)
-                    .run(MacroStore.byId(context, current.id) ?: current.toMacro())
-            },
+            onTestRun = { testRunDraft(ctx, context, current) },
             onSave = { saveDraftAndBack(ctx, context, current) },
             onBack = {
                 // 「取消」= 丢掉草稿：没保存过的东西磁盘上本来就没有，什么都不用删。
@@ -196,7 +193,16 @@ fun NavEntryBuilder.macroNavEntries(ctx: MainNavContext) {
             selectedTarget = draft?.targetPackage
                 ?: MacroStore.byId(context, key.macroId)?.targetPackage.orEmpty(),
             onBack = { ctx.navigateBackTo(AppNavKey.MacroEdit(key.macroId)) },
-            onSelect = { app -> applyMacroTargetApp(ctx, context, key.macroId, app) },
+            onSelect = { app ->
+                applyMacroTarget(
+                    ctx,
+                    context,
+                    key.macroId,
+                    com.slideindex.app.launcher.AppTarget.encode(app.packageName, app.cloneUserId),
+                )
+            },
+            // 选「不指定应用」= 清空目标（全局宏：不拉起 App，从当前界面开始）。
+            onClearSelection = { applyMacroTarget(ctx, context, key.macroId, "") },
         )
     }
 }
@@ -217,23 +223,28 @@ private fun createMacroDraftAndOpen(ctx: MainNavContext) {
     ctx.navigate(AppNavKey.MacroEdit(macroDraft!!.id))
 }
 
-/** 选目标 App：写回**草稿**（不落盘），然后回编辑页。 */
-private fun applyMacroTargetApp(
+/**
+ * 写回目标应用（选一个 App，或传空串 = 不指定 = 全局宏）：只改**草稿**（不落盘），然后回编辑页。
+ *
+ * 两个入口（选具体应用 / 选「不指定应用」）共用这一条路径，避免清空目标时漏掉作用域推导。
+ */
+private fun applyMacroTarget(
     ctx: MainNavContext,
     context: Context,
     macroId: String,
-    app: com.slideindex.app.data.AppInfo,
+    targetPackage: String,
 ) {
     val draft = macroDraft?.takeIf { it.id == macroId }
     if (draft != null) {
-        draft.targetPackage = com.slideindex.app.launcher.AppTarget.encode(app.packageName, app.cloneUserId)
+        draft.targetPackage = targetPackage
     } else {
         // 兜底（没有草稿时，例如异常路径）：直接按旧行为写盘，别让选择丢掉。
         val current = MacroStore.byId(context, macroId) ?: return
         MacroStore.upsert(
             context,
             current.copy(
-                targetPackage = com.slideindex.app.launcher.AppTarget.encode(app.packageName, app.cloneUserId),
+                targetPackage = targetPackage,
+                scope = scopeFor(targetPackage),
                 updatedAtMs = System.currentTimeMillis(),
             ),
         )
@@ -242,14 +253,18 @@ private fun applyMacroTargetApp(
     ctx.navigateBackTo(AppNavKey.MacroEdit(macroId))
 }
 
+/**
+ * 作用域推导：目标应用为空 = 全局宏（从当前界面开始），否则应用内宏。
+ *
+ * 「保存」和「试运行」共用这一条规则，避免两边对"没选目标"的理解跑偏。
+ */
+private fun scopeFor(targetPackage: String): MacroScope =
+    if (targetPackage.isBlank()) MacroScope.GLOBAL else MacroScope.APP
+
 /** 把草稿写进磁盘（保存 / 开始录制时调用）。 */
 private fun persistDraft(context: Context, draft: MacroDraft) {
     // 作用域不再让用户手选：不指定目标应用 = 全局宏（从当前界面开始）。
-    draft.scope = if (draft.targetPackage.isBlank()) {
-        MacroScope.GLOBAL
-    } else {
-        MacroScope.APP
-    }
+    draft.scope = scopeFor(draft.targetPackage)
     val existing = MacroStore.byId(context, draft.id)
     val base = existing ?: draft.toMacro()
     MacroStore.upsert(
@@ -286,6 +301,32 @@ private fun saveDraftAndBack(
     persistDraft(context, draft)
     macroDraft = null
     ctx.navigateBackTo(AppNavKey.MacroList)
+}
+
+/**
+ * 「试运行」的**调用点**：不绑手势，当场跑一遍。
+ *
+ * 步骤只能来自磁盘（录制器自己落盘，草稿里不带 steps）；名字 / 目标应用 / 作用域取草稿里的
+ * **最新值** —— 所以预览的就是「保存」之后的样子，而不是上次落盘的旧值。
+ *
+ * 未选目标应用（全局宏）同样能跑：`MacroEngine` 不拉起任何 App，直接从当前界面回放。
+ * 还没有任何步骤时给一句明确提示，而不是让执行器对一条空宏报"执行完成"。
+ */
+private fun testRunDraft(ctx: MainNavContext, context: Context, draft: MacroDraft) {
+    val onDisk = MacroStore.byId(context, draft.id)
+    if (onDisk == null || onDisk.steps.isEmpty()) {
+        ctx.deps.userMessageBus.showError(
+            context.getString(R.string.macro_recording_empty),
+        )
+        return
+    }
+    MacroEngine(context.applicationContext).run(
+        onDisk.copy(
+            name = MacroValidation.normalizeName(draft.name).ifBlank { Macro.FALLBACK_NAME },
+            targetPackage = draft.targetPackage,
+            scope = scopeFor(draft.targetPackage),
+        ),
+    )
 }
 
 /**

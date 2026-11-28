@@ -58,6 +58,7 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.glass.ChevronBackward
 import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassCardDefaults
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -155,6 +156,14 @@ fun MiuixListScaffold(
     bottomContent: @Composable () -> Unit = {},
     userScrollEnabled: Boolean = true,
     listState: LazyListState? = null,
+    /**
+     * 外部注入的顶栏滚动行为；null 时内部自建（默认，行为不变）。
+     *
+     * 需要「打开后用程序化滚动定位，再把顶栏折叠态同步过去」的页面传入：程序化滚动
+     * 不经过 nestedScroll，`TopAppBarState.heightOffset` 不会跟着变，而玻璃顶栏的
+     * 材质带 alpha 恰好等于 `collapsedFraction`，见 `GestureActionPickerScreen`。
+     */
+    scrollBehavior: ScrollBehavior? = null,
     bottomContentPadding: Dp = 0.dp,
     /** 悬浮按钮需要预留的底部空间，见 [MiuixSettingsFabInset]；默认 0 = 不做任何预留。 */
     fabInset: Dp = 0.dp,
@@ -162,7 +171,7 @@ fun MiuixListScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val resolvedListState = listState ?: rememberLazyListState()
-    val scrollBehavior = MiuixScrollBehavior()
+    val resolvedScrollBehavior = scrollBehavior ?: MiuixScrollBehavior()
     val barBackdrop = rememberMiuixBlurBackdrop()
     // 供顶栏内的玻璃组件（如 GlassSegmentedTabRow）决定 surfaceAlpha：内容滚到栏下才升起玻璃。
     val contentUnderBar = remember(resolvedListState) {
@@ -179,7 +188,7 @@ fun MiuixListScaffold(
             topBar = {
                 MiuixGlassTopBar(
                     title = title,
-                    scrollBehavior = scrollBehavior,
+                    scrollBehavior = resolvedScrollBehavior,
                     backdrop = barBackdrop,
                     contentUnderBar = contentUnderBar.value,
                     navigationIcon = { navigationIcon?.invoke() },
@@ -201,8 +210,8 @@ fun MiuixListScaffold(
                     .then(barBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier)
                     .horizontalCutoutPadding()
                     .scrollEndHaptic()
-                    .miuixOverScrollVertical(scrollBehavior)
-                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                    .miuixOverScrollVertical(resolvedScrollBehavior)
+                    .nestedScroll(resolvedScrollBehavior.nestedScrollConnection),
                 contentPadding = innerPadding.withListContentPadding(layoutDirection),
                 overscrollEffect = null,
                 userScrollEnabled = userScrollEnabled,
@@ -374,6 +383,9 @@ fun MiuixGlassBackNavigationIcon(onBack: () -> Unit) {
 
 /**
  * 分组圆角卡片行背景：每行独立 LazyColumn item，保持虚拟化。
+ *
+ * 玻璃浮层内自动换成 `GlassCardDefaults.color()` 的半透明填充（与 `CardSegment` 同口径），
+ * 普通页面保持不透明 `surfaceContainer`。
  */
 @Composable
 fun Modifier.miuixGroupedCardItem(
@@ -382,12 +394,17 @@ fun Modifier.miuixGroupedCardItem(
     outerHorizontalPadding: Dp = 12.dp,
     outerTopPadding: Dp = 0.dp,
     outerBottomPadding: Dp = 0.dp,
-    color: androidx.compose.ui.graphics.Color = MiuixTheme.colorScheme.surfaceContainer,
+    color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
 ): Modifier {
     val r = CardDefaults.CornerRadius
     val z = 0.dp
     val top = index == 0
     val bottom = index == count - 1
+    val resolvedColor = when {
+        color != androidx.compose.ui.graphics.Color.Unspecified -> color
+        LocalMiuixGlassSurface.current -> GlassCardDefaults.color()
+        else -> MiuixTheme.colorScheme.surfaceContainer
+    }
     return fillMaxWidth()
         .padding(
             start = outerHorizontalPadding,
@@ -396,7 +413,7 @@ fun Modifier.miuixGroupedCardItem(
             bottom = if (bottom) outerBottomPadding else 0.dp,
         )
         .miuixSquircleSurface(
-            color = color,
+            color = resolvedColor,
             topStart = if (top) r else z,
             topEnd = if (top) r else z,
             bottomEnd = if (bottom) r else z,

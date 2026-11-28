@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,6 +74,8 @@ fun SearchPanelAppSearchSettingsScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    // 弹窗回调里要取文案：用 LocalResources（跟随 Configuration），别用 LocalContext 取资源。
+    val resources = LocalResources.current
     val appRepository = rememberAppRepository()
     var apps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
     var query by remember { mutableStateOf("") }
@@ -176,37 +179,40 @@ fun SearchPanelAppSearchSettingsScreen(
         }
     }
 
+    // show 由状态驱动、对话框常驻组合；editing 可空，内容与动作里做安全访问。
     val editing = aliasTarget
-    if (editing != null) {
-        MiuixFormDialog(
-            show = true,
-            title = stringResource(R.string.search_app_settings_alias_title),
-            onDismissRequest = { aliasTarget = null },
-            onConfirm = {
+    MiuixFormDialog(
+        show = editing != null,
+        title = stringResource(R.string.search_app_settings_alias_title),
+        onDismissRequest = { aliasTarget = null },
+        onConfirm = {
+            editing?.let { target ->
                 SearchAppPrefs.setAlias(
                     context,
-                    editing.packageName,
-                    editing.cloneUserId,
+                    target.packageName,
+                    target.cloneUserId,
                     aliasText,
                 )
                 revision++
                 Toast.makeText(
                     context,
-                    context.getString(R.string.search_app_settings_alias_saved, editing.label),
+                    resources.getString(R.string.search_app_settings_alias_saved, target.label),
                     Toast.LENGTH_SHORT,
                 ).show()
-            },
-            confirmEnabled = true,
-        ) {
-            MiuixLabeledTextField(
-                value = aliasText,
-                onValueChange = { aliasText = it },
-                label = stringResource(R.string.search_app_settings_alias_label),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            }
+        },
+        confirmEnabled = true,
+    ) {
+        MiuixLabeledTextField(
+            value = aliasText,
+            onValueChange = { aliasText = it },
+            label = stringResource(R.string.search_app_settings_alias_label),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        editing?.let { target ->
             Text(
-                text = editing.label,
+                text = target.label,
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )

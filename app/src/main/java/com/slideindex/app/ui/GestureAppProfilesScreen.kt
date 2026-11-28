@@ -124,6 +124,7 @@ fun GestureAppProfilesScreen(
         managedAppListAddRow(
             key = "gesture-app-profiles-add",
             title = { stringResource(R.string.gesture_app_profiles_new) },
+            subtitle = { stringResource(R.string.gesture_app_profiles_new_desc) },
             onClick = { showCreateDialog = true },
         )
     }

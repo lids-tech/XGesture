@@ -76,7 +76,7 @@ private const val PICK_PREVIEW_ALPHA_MIN = 0.25f
  * Independent from [FloatingPointerOverlayWindow] (edge-gesture virtual pointer).
  */
 @SuppressLint("StaticFieldLeak")
-object FloatBallOverlay {
+object FloatBallOverlay : PickGuardSession {
     internal const val TAG = "FloatBallOverlay"
     private const val EDGE_MARGIN_DP = 8f
 
@@ -3205,6 +3205,29 @@ object FloatBallOverlay {
         lineTouchHost?.unlockPickFromPause()
     }
 
+    /**
+     * 取词挡层是否还需要存在。
+     *
+     * 悬浮球的触摸窗在拖动时**只有球区那么大**（扩全屏那条只管圆环接管），
+     * 所以第二根手指落在屏幕中间会命中下面的 App —— 和边缘触控条、悬浮指针是同一个问题。
+     */
+    override fun isPickGuardNeeded(): Boolean =
+        cursorPausedState?.value == true || regionalPickActive
+
+    /**
+     * 第二根手指：取消黄框/区域选择，回到红十字；**不**重新锁黄。
+     *
+     * 检测器自己会在第二指按下时清掉暂停锁定并抑制抬手提交，[onSelectionCancel] 还会把暂停计时
+     * 基线挪到当前锚点——不动就保持红，移动超过取消容差才重新计时。这里不能再调 [onCursorPaused]，
+     * 否则会立刻重新变黄，和 FV 的手感相反。
+     */
+    private fun cancelBallPickSelection(): Boolean =
+        if (dragOriginatedFromLine) {
+            lineTouchHost?.cancelPickSelection() == true
+        } else {
+            touchHost?.cancelPickSelection() == true
+        }
+
     private fun onCursorPaused() {
         if (cursorVisibleState?.value != true) return
         if (cursorPausedState?.value == true) return
@@ -3229,6 +3252,12 @@ object FloatBallOverlay {
         selectionStartState?.value = anchor
         cursorPausedState?.value = true
         lockActivePickGestureFromPause()
+        // 黄框一出现就挂挡层：球窗在拖动中只有球区大小，第二根手指否则会漏到下面的 App。
+        PickTouchGuard.arm(
+            owner = this,
+            context = appContext,
+            onExtraFinger = { cancelBallPickSelection() }
+        )
         val settings = settingsState?.value
         val editableForPaste = if (settings?.floatBallDragPasteEnabled == true) {
             FloatBallPreviewBoundsCache.hitTestEditableAt(anchor.x, anchor.y)

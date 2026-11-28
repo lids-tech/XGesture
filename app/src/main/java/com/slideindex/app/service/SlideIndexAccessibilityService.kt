@@ -99,7 +99,8 @@ class SlideIndexAccessibilityService : AccessibilityService() {
     }
 
     /** 当前由输入层接管并转发过来的目标（SIDE_* / TARGET_*），用于会话结束时精确取消。 */
-    private var activeForwardedTarget: Int = NO_FORWARDED_TARGET
+    @Volatile private var activeForwardedTarget: Int = NO_FORWARDED_TARGET
+    @Volatile private var activeForwardedSessionId: Long = -1L
 
     private lateinit var foregroundTracker: SlideIndexAccessibilityForegroundTracker
     private lateinit var watchdog: SlideIndexAccessibilityWatchdog
@@ -273,6 +274,7 @@ class SlideIndexAccessibilityService : AccessibilityService() {
             }
             if (action == android.view.MotionEvent.ACTION_DOWN) {
                 service.activeForwardedTarget = sideId
+                service.activeForwardedSessionId = sessionId
             }
             EdgeDiag.log(
                 "module",
@@ -296,10 +298,21 @@ class SlideIndexAccessibilityService : AccessibilityService() {
             return true
         }
 
+        fun cancelModuleRegionalPickSelection(sessionId: Long, sideId: Int): Boolean {
+            val service = instance ?: return false
+            if (sideId.toPanelSideOrNull() == null || service.activeForwardedSessionId != sessionId ||
+                service.activeForwardedTarget != sideId ||
+                !com.slideindex.app.overlay.RegionalPickOverlay.isConsumingEdgeGestureTouch()
+            ) return false
+            mainHandler.post { com.slideindex.app.overlay.RegionalPickOverlay.cancelContinuedSelection() }
+            return true
+        }
+
         fun handleModuleGestureSessionEnd(sessionId: Long, reason: Int) {
             val service = instance ?: return
             val target = service.activeForwardedTarget
             service.activeForwardedTarget = NO_FORWARDED_TARGET
+            service.activeForwardedSessionId = -1L
             // 「正常终止」与「流被打断」必须分开处理：
             //
             // 模块只有在手指抬起/系统取消（ACTION_UP / ACTION_CANCEL）时才会发 REASON_UP / REASON_CANCEL，
@@ -317,7 +330,7 @@ class SlideIndexAccessibilityService : AccessibilityService() {
                 "module",
                 "模块会话结束 sessionId=$sessionId reason=${moduleEndReasonName(reason)} target=$target → " +
                     if (gracefulEnd) {
-                        "正常终止：边缘触钮不再强制复位（驻留面板留在屏幕上；悬浮球/角轮盘照旧收窗）"
+                        "正常终止：边缘触钮与已钉住的角轮盘不再强制复位（驻留面板/轮盘留在屏幕上；悬浮球照旧收窗）"
                     } else {
                         "异常终止：强制复位，收回可能卡住的全屏直触"
                     }
@@ -334,7 +347,8 @@ class SlideIndexAccessibilityService : AccessibilityService() {
                 if (side != null) {
                     service.edgeOverlayHost?.cancelForwardedTouch(side)
                 } else if (cornerAnchor != null) {
-                    CornerGestureHost.instanceOrNull()?.cancelForwardedTouch(cornerAnchor)
+                    // 正常松手 ≠ 关轮盘：已钉住的角轮盘要留住，否则「滑到圆心 / edit 按钮松手」会在 1ms 后消失。
+                    CornerGestureHost.instanceOrNull()?.cancelForwardedTouch(cornerAnchor, keepPinned = gracefulEnd)
                 } else if (target.isFloatBallTarget()) {
                     // 多指/桥断等非正常结束：先清选中态再收手势，避免线条侧“cancel 变提交”。
                     com.slideindex.app.overlay.FloatBallOverlay.cancelForwardedTouch(

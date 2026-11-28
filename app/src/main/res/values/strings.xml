@@ -144,6 +144,7 @@
     <string name="gesture_app_profiles_restore_confirm_title">Restore from global?</string>
     <string name="gesture_app_profiles_restore_confirm_message">Every change in this profile will be replaced by the current global settings. This cannot be undone.</string>
     <string name="gesture_app_profiles_new">New profile</string>
+    <string name="gesture_app_profiles_new_desc">Give one app its own gesture setup</string>
     <string name="gesture_app_profiles_new_title">New profile</string>
     <string name="gesture_app_profiles_name_hint">Profile name (leave empty to auto-name)</string>
     <string name="gesture_app_profiles_default_name">Profile %1$d</string>
@@ -4481,6 +4482,7 @@ Questions: open a GitHub Issue on the project repository.</string>
     <string name="clipboard_float_blacklist_empty">No blocked apps</string>
     <string name="clipboard_float_blacklist_remove">Remove</string>
     <string name="clipboard_float_blacklist_section_add">Add app</string>
+    <string name="clipboard_float_blacklist_section_add_desc">Pick apps that never show in the floating clipboard</string>
     <string name="clipboard_float_opacity_title">Floating window opacity</string>
     <string name="clipboard_float_blur_title">Background blur</string>
     <string name="clipboard_float_blur_desc">Blurs the content behind the floating window (Android 12+); falls back to a solid background where blur is unavailable</string>
@@ -5501,4 +5503,10 @@ or revoke permanent Root for Shell in APatch.</string>
     <string name="quick_launcher_panel_delete_confirm_named">删除「%1$s」？删除后，绑定此面板的手势将改为打开默认面板。</string>
     <string name="composite_pick_empty">还没有组合，请到 扩展 → 组合动作库 新建</string>
     <string name="composite_library_delete_confirm">删除后，已绑定此组合的手势会变成「无动作」。</string>
+    <string name="ring_slot_none_transparent">Transparent (always blank)</string>
+    <string name="ring_slot_none_auto_fill">Auto-fill (recent apps)</string>
+    <string name="trigger_passthrough_title">Edge passthrough</string>
+    <string name="trigger_passthrough_desc">Swipes starting in this area go to the current app. Requires the LSPosed module.</string>
+    <string name="trigger_passthrough_module_checking">Checking LSPosed module status…</string>
+    <string name="trigger_passthrough_module_inactive">LSPosed module isn\'t active. Turn this off to restore the original gestures.</string>
 </resources>

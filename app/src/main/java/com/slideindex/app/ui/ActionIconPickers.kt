@@ -1,5 +1,6 @@
 package com.slideindex.app.ui
 
+import com.slideindex.app.ui.miuix.MiuixFormDialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -511,56 +512,54 @@ internal fun ActionTextIconDialog(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf(ActionIconKeyCodec.textOf(initial).orEmpty()) }
-    // 放开字数限制：最多 8 个字符（够写"录音""截图"这类词，长文本靠自动缩小完整显示）。
     var scalePercent by remember { mutableStateOf(ActionIconKeyCodec.textScaleOf(initial)) }
-    androidx.compose.material3.AlertDialog(
+    MiuixFormDialog(
+        show = true,
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.action_icon_text_title)) },
-        text = {
-            androidx.compose.foundation.layout.Column {
-                MiuixLabeledTextField(
-                    value = text,
-                    onValueChange = { text = it.take(8) },
-                    label = stringResource(R.string.action_icon_text_hint),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                QuickWheelSliderRow(
-                    title = stringResource(R.string.action_icon_text_size),
-                    value = scalePercent.toFloat(),
-                    range = 40f..200f,
-                    unit = "%",
-                    onValueChange = { scalePercent = it.toInt() },
-                )
-                // 实时预览：改文字/字号立刻能看到效果
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    ActionIconView(
-                        action = GestureAction.None,
-                        iconKey = text.takeIf { it.isNotBlank() }?.let {
-                            ActionIconKeyCodec.text(it.trim(), scalePercent)
-                        },
-                        sizeDp = 44,
-                    )
-                }
+        title = stringResource(R.string.action_icon_text_title),
+        onConfirm = {
+            if (text.isNotBlank()) {
+                onPick(ActionIconKeyCodec.text(text.trim(), scalePercent))
             }
         },
-        confirmButton = {
-            TextButton(onClick = {
-                if (text.isNotBlank()) {
-                    onPick(ActionIconKeyCodec.text(text.trim(), scalePercent))
-                }
-            }) {
-                Text(stringResource(R.string.confirm))
+        confirmEnabled = text.isNotBlank(),
+        confirmText = stringResource(R.string.confirm),
+        dismissText = stringResource(R.string.cancel),
+    ) {
+        androidx.compose.foundation.layout.Column {
+            MiuixLabeledTextField(
+                value = text,
+                // 我方定制：放开字数限制到 8（上游收紧为 2）；长文本靠自动缩小完整显示。
+                onValueChange = { text = it.take(8) },
+                label = stringResource(R.string.action_icon_text_hint),
+                singleLine = true,
+                useLabelAsPlaceholder = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            QuickWheelSliderRow(
+                title = stringResource(R.string.action_icon_text_size),
+                value = scalePercent.toFloat(),
+                range = 40f..200f,
+                unit = "%",
+                onValueChange = { scalePercent = it.toInt() },
+            )
+            // 实时预览：改文字/字号立刻能看到效果。
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                ActionIconView(
+                    action = GestureAction.None,
+                    iconKey = text.takeIf { it.isNotBlank() }?.let {
+                        ActionIconKeyCodec.text(it.trim(), scalePercent)
+                    },
+                    sizeDp = 44,
+                )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
+        }
+    }
 }
 
 internal data class InstalledAppIcon(

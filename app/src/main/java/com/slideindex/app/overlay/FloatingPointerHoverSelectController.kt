@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
 internal class FloatingPointerHoverSelectController(
     private val session: FloatingPointerSession,
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
-) {
+) : PickGuardSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var active = false
     private var paused = false
@@ -43,6 +43,8 @@ internal class FloatingPointerHoverSelectController(
     val hasPickIntent: Boolean
         get() = paused || selectionStart != null || regionalActive
 
+    override fun isPickGuardNeeded(): Boolean = active
+
     fun begin() {
         reset()
         active = true
@@ -55,6 +57,13 @@ internal class FloatingPointerHoverSelectController(
         scheduleInitialPreviewBoundsCache()
         applyPreviewBoundsFromCache()
         publishChrome()
+        // 主指在指针触摸层（一个小圆窗）里，第二根手指落到别处会命中下面的 App ——
+        // 必须自己挡一层全屏窗，才可能收到"又有一根手指按下"。
+        PickTouchGuard.arm(
+            owner = this,
+            context = SlideIndexAccessibilityService.accessibilityInstance(),
+            onExtraFinger = { cancelPickToActive() }
+        )
     }
 
     fun onPointerMoved(pointerX: Float, pointerY: Float, density: Float) {
@@ -87,6 +96,8 @@ internal class FloatingPointerHoverSelectController(
         if (!regionalActive) {
             ensurePreviewBoundsForPick()
         }
+        // 先撤挡层：结果面板是另一扇窗，挡层盖在上面会吃掉它的点击。
+        PickTouchGuard.disarm(this)
         val submitted = submitPick(host, settings)
         reset()
         return submitted
@@ -129,6 +140,35 @@ internal class FloatingPointerHoverSelectController(
             launchPreviewBoundsLookupFallback(anchor)
         }
         publishChrome()
+    }
+
+    /**
+     * 第二根手指按下：取消当前暂停态/区域选择，回到红色未暂停态。
+     *
+     * 不动就保持红（取消暂停计时、把计时基线设到当前锚点）；移动后重新走
+     * 悬停 → 暂停 → 选区 的常规流程。取消后 [hasPickIntent] 为 false，抬手不会提交。
+     *
+     * @return true 表示确实取消了一次暂停/选区（此时事件应当被消费）。
+     */
+    fun cancelPickToActive(): Boolean {
+        if (!active) return false
+        if (!paused && selectionStart == null && !regionalActive) return false
+        android.util.Log.i(
+            "HoverSelect",
+            "cancelPickToActive active=$active regional=$regionalActive paused=$paused"
+        )
+        regionalActive = false
+        paused = false
+        selectionStart = null
+        selectionPreviewBounds = null
+        cancelPauseTimer()
+        boundsLookupGeneration++
+        PickPrefetchCache.invalidate()
+        val anchor = pickAnchor
+        lastPauseScheduleX = anchor.x
+        lastPauseScheduleY = anchor.y
+        publishChrome()
+        return true
     }
 
     private fun launchPreviewBoundsLookupFallback(anchor: Offset) {
@@ -327,6 +367,7 @@ internal class FloatingPointerHoverSelectController(
     }
 
     private fun reset() {
+        PickTouchGuard.disarm(this)
         cancelPauseTimer()
         cancelInitialCacheRefresh()
         boundsLookupGeneration++

@@ -235,6 +235,8 @@ class SettingsRepository @Inject constructor(
         landscape: Boolean = false,
     ) = edge.applyTriggerDesignPreset(side, handleId, preset, landscape)
     suspend fun setInterceptSystemBackGesture(enabled: Boolean) = edge.setInterceptSystemBackGesture(enabled)
+    suspend fun setTriggerPassthrough(side: PanelSide, handleId: String, enabled: Boolean, landscape: Boolean) =
+        edge.setTriggerPassthrough(side, handleId, enabled, landscape)
 
     suspend fun setSystemGestureTakeoverTop(enabled: Boolean) = edge.setSystemGestureTakeoverTop(enabled)
 
@@ -528,6 +530,9 @@ class SettingsRepository @Inject constructor(
         index: Int,
         item: com.slideindex.app.launcher.QuickLauncherItem,
     ) = overlay.setFvRingLauncherSlot(axis, index, item)
+
+    suspend fun removeFvRingLauncherSlot(axis: FvRingLauncherAxis, index: Int) =
+        overlay.removeFvRingLauncherSlot(axis, index)
 
     suspend fun setFvRingLauncherSlotIconOverride(
         axis: FvRingLauncherAxis,
